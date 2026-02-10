@@ -33,7 +33,8 @@ Produce a functional application that serves as an all-in-one book club manageme
 
 
 Some nice-to-have features are:
--**Book Locator** : Find where to get an available book (libraries, bookstores, etc.)
+
+- **Book Locator** : Find where to get an available book (libraries, bookstores, etc.)
 
 
 
@@ -41,6 +42,6 @@ Some nice-to-have features are:
 ## Data Sources
 
 
--**SerpAPI API**: Search Seattle book club on MeetUp.com (Info: name of club, link to listing, snippet about club)
+- **SerpAPI API**: Search Seattle book club on MeetUp.com (Info: name of club, link to listing, snippet about club)
 -  **Goodreads**: Book popularity, ratings, reviews, and genre metadata 
 - **Seattle Public Library (SPL) Data**: Book availability, location info, and "readers who borrowed this also borrowed…" insights 
