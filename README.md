@@ -6,7 +6,7 @@
 
 - **Ha Tien Nguyen**
 - **Sarah Mathison**
-- **Maanya Bharath**
+- **Maanya Cola Bharath**
 
 
 ## Project Type
