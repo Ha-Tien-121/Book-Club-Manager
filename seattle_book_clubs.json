@@ -1,0 +1,371 @@
+{
+  "search_metadata": {
+    "id": "6986e9b171ff8c590caf9067",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/sjIpeaKOqO3FmWCTWtMIbA/6986e9b171ff8c590caf9067.json",
+    "created_at": "2026-02-07 07:28:49 UTC",
+    "processed_at": "2026-02-07 07:28:49 UTC",
+    "google_events_url": "https://www.google.com/search?q=book+clubs+Seattle&ibp=htl;events&uule=w+CAIQICIgU2VhdHRsZSxXYXNoaW5ndG9uLFVuaXRlZCBTdGF0ZXM&hl=en&gl=us&chips=[\"book_club\",\"this_month\"]",
+    "raw_html_file": "https://serpapi.com/searches/sjIpeaKOqO3FmWCTWtMIbA/6986e9b171ff8c590caf9067.html",
+    "total_time_taken": 7.27
+  },
+  "search_parameters": {
+    "q": "book clubs Seattle",
+    "engine": "google_events",
+    "location_requested": "Seattle, Washington, United States",
+    "location_used": "Seattle,Washington,United States",
+    "htichips": "[\"book_club\",\"this_month\"]",
+    "hl": "en",
+    "gl": "us"
+  },
+  "search_information": {
+    "events_results_state": "Results for exact spelling"
+  },
+  "events_results": [
+    {
+      "title": "Sheryl Wiser: Bushwick Book Club Seattle",
+      "date": {
+        "start_date": "Feb 14",
+        "when": "Sat, Feb 14, 7:30 \u2013 11:30 PM"
+      },
+      "address": [
+        "Hugo House, 1634 11th Ave",
+        "Seattle, WA"
+      ],
+      "link": "https://www.425magazine.com/local-events/?_evDiscoveryPath=/event/107565292n-sheryl-wiser-bushwick-book-club-seattle",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=gnoxIvzswxo7XLE_dacnxEwYPw1GJoh3yq1yB8mR7-q6JUpfyzh9iQ6e1IaJDu1VNG7Bm4nuI7w7yCW_boKkGrUqm2PNfWSFgMjirc0G1ssQCKB8b3c",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54906acd0c141287:0x3863dc9041be7d2?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIAxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54906acd0c141287%3A0x3863dc9041be7d2&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Original music inspired by Emily Henry\u2019s Beach Read Acclaimed Seattle-based singer, songwriter and guitarist Sheryl Wiser has crafted a soulful and uniquely compelling style of music combining...",
+      "ticket_info": [
+        {
+          "source": "425 Magazine",
+          "link": "https://www.425magazine.com/local-events/?_evDiscoveryPath=/event/107565292n-sheryl-wiser-bushwick-book-club-seattle",
+          "link_type": "more info"
+        },
+        {
+          "source": "Seattle PI",
+          "link": "https://www.seattlepi.com/thingstodo/?_evDiscoveryPath=/event%2F107565292n-sheryl-wiser-bushwick-book-club-seattle",
+          "link_type": "more info"
+        },
+        {
+          "source": "Source ONE News",
+          "link": "https://www.yoursourceone.com/local-events/?_evDiscoveryPath=/event/107565292n-sheryl-wiser-bushwick-book-club-seattle",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Hugo House",
+        "rating": 4.7,
+        "reviews": 119,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Hugo+House&ludocid=253958362559670226&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnzqF5EKiSQMDw1fx0ZaWJEcxrxapt_NJvE4aWbcw&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRINkBaBg7OwrLPOYtZ2ze4OxG5bjdQufsk6yNyxGmL8g&s"
+    },
+    {
+      "title": "Tool Library Book Club",
+      "date": {
+        "start_date": "Feb 18",
+        "when": "Wed, Feb 18, 7:00 \u2013 8:30 PM"
+      },
+      "address": [
+        "NE Seattle Tool Library, 10228 Fischer Pl NE",
+        "Seattle, WA"
+      ],
+      "link": "https://www.eventbrite.com/e/tool-library-book-club-tickets-1980022610930",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=JmufSbDXmmW9mOi-4Mm5nt2-JzXwLZhKjgj1VXnBHI6RnTrYg_o87eDPN6i5o9eA9I9KJfrpq6ZCxzZYHLm_tzIEHi5tuCsVlyQaju7bourVwg1CinE",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x5490138b83356cfd:0x4780621ae43241bd?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQICxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x5490138b83356cfd%3A0x4780621ae43241bd&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Join us for the tenth edition of the NE Seattle Tool Library's book club! We\u2019ll be reading the Hollow Kingdom by Kira Jane Buxton. All are welcome at bookclub! We hope to see you there for some...",
+      "ticket_info": [
+        {
+          "source": "Eventbrite.com",
+          "link": "https://www.eventbrite.com/e/tool-library-book-club-tickets-1980022610930",
+          "link_type": "tickets"
+        }
+      ],
+      "venue": {
+        "name": "NE Seattle Tool Library",
+        "rating": 5.0,
+        "reviews": 112,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=NE+Seattle+Tool+Library&ludocid=5152225841349018045&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQedlmxu_RvyHorsdeFBamr7KLTlJQEInthIfIgZjJj4jet8ZHpjjQ03SQ&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ1E9EAsToJG6lfLsfSEk69bj-nQoTRvPU6gs9nF9CTrQ&s=10"
+    },
+    {
+      "title": "Radical Romance Book Club",
+      "date": {
+        "start_date": "Feb 9",
+        "when": "Mon, Feb 9, 7 PM"
+      },
+      "address": [
+        "Third Place Books Ravenna, 6504 20th Ave NE",
+        "Seattle, WA"
+      ],
+      "link": "https://do206.com/events/2026/2/9/radical-romance-book-club-tickets",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=M1Am7CNwJQa4re3R1k83Q7k9MumHhc5ZjFLNK96J47TSS9Tn0o1eKcGeI5Zevs9WYXNMq-tSsiNJ2DBPoqaLTGNJwcH9ldfk_8Ifk0y-9BLayJARL8Y",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x5490147a1bbc93e3:0x569e0bee1bc358d5?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIExAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x5490147a1bbc93e3%3A0x569e0bee1bc358d5&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Check out Radical Romance Book Club at Third Place Books - Ravenna in Seattle on February 09, 2026 and get detailed info for the event - tickets, photos, video and reviews.",
+      "ticket_info": [
+        {
+          "source": "Do206",
+          "link": "https://do206.com/events/2026/2/9/radical-romance-book-club-tickets",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Third Place Books Ravenna",
+        "rating": 4.7,
+        "reviews": 1102,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Third+Place+Books+Ravenna&ludocid=6241439250877995221&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://www.google.com/maps/vt/data=M1Am7CNwJQa4re3R1k83Q7k9MumHhc5ZjFLNK96J47TSS9Tn0o1eKcGeI5Zevs9WYXNMq-tSsiNJ2DBPoqaLTGNJwcH9ldfk_8Ifk0y-9BLayJARL8Y",
+      "image": "https://www.google.com/maps/vt/data=M1Am7CNwJQa4re3R1k83Q7k9MumHhc5ZjFLNK96J47TSS9Tn0o1eKcGeI5Zevs9WYXNMq-tSsiNJ2DBPoqaLTGNJwcH9ldfk_8Ifk0y-9BLayJARL8Y"
+    },
+    {
+      "title": "Romance Trivia with Silent Book Club Capitol Hill and Freeze Tag",
+      "date": {
+        "start_date": "Feb 19",
+        "when": "Thu, Feb 19, 6:30 \u2013 9:00 PM"
+      },
+      "address": [
+        "a/stir, 818 E Pike St",
+        "Seattle, WA"
+      ],
+      "link": "https://www.eventbrite.com/e/bookish-romance-trivia-with-silent-book-club-capitol-hill-and-freeze-tag-tickets-1980232109546",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=fROTr_AeFgyXSi1xK6m5zOYNbNPL0P8IOkecyXVDpnHGwNk6c2F47bb95sqXx4JEwm21zkadjLulWjhvcUI6FFym6D1YeolF5dQapQYNPjXth1CrpxU",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54906acc7b2bb76d:0xcfcedc3007997aaf?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIGxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54906acc7b2bb76d%3A0xcfcedc3007997aaf&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Test your knowledge with some bookish trivia, romance edition.",
+      "ticket_info": [
+        {
+          "source": "Eventbrite.com",
+          "link": "https://www.eventbrite.com/e/romance-trivia-with-silent-book-club-capitol-hill-and-freeze-tag-tickets-1980232109546",
+          "link_type": "tickets"
+        },
+        {
+          "source": "The Ticket Seattle - The Seattle Times",
+          "link": "https://theticket.seattletimes.com/calendar/?_evDiscoveryPath=/event/3430587-romance-trivia-with-silent-book-club-capitol-hill-and-freeze-tag",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "a/stir",
+        "rating": 4.4,
+        "reviews": 2767,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=a/stir&ludocid=14974147909897517743&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2UpcWk0NQKD9wfrF5Q28ucRSsdukHPmzBR4l_p7743GE2DM1vt2j2_iE&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjox5l0aHxzlWv1lvkK7e2tisgMXhWQM1oJ8YC5iUjOA&s=10"
+    },
+    {
+      "title": "EnGAYging with Sapphistry Book Club",
+      "date": {
+        "start_date": "Feb 7",
+        "when": "Fri, Feb 6, 10 AM \u2013 12 PM"
+      },
+      "address": [
+        "Redmond Library, 15990 NE 85th St",
+        "Redmond, WA"
+      ],
+      "link": "https://www.eventbrite.com/e/engayging-with-sapphistry-book-club-tickets-1979200236185",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=lsOoseQ8pd90WwQqJpDiSztvDrl8jaWsHMGziIh3-lV6ZJ5SbvpqIByYzwgkF8D3HNTegfOBOA96UEZnRUgPl2cM5Q41nNHmVMBwoZllnORIO9vXehI",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54900d4d5c384747:0x8d071c2fe5aa28c6?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIIxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54900d4d5c384747%3A0x8d071c2fe5aa28c6&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "A sapphic-focused book club for folks 18+",
+      "ticket_info": [
+        {
+          "source": "Eventbrite.com",
+          "link": "https://www.eventbrite.com/e/engayging-with-sapphistry-book-club-tickets-1979200236185",
+          "link_type": "tickets"
+        }
+      ],
+      "venue": {
+        "name": "Redmond Library",
+        "rating": 4.6,
+        "reviews": 420,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Redmond+Library&ludocid=10162122076226988230&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-b35x_Tp3kybkmSe7Ysbp6cCTtQJrQHx7Gin_79IG0_w6Yti_qSCC3ak&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSG1qfVd8lTrY-a30a55b6eDyOjuzv6uc1XFxuK_BUt0w&s=10"
+    },
+    {
+      "title": "Silent Book Club",
+      "date": {
+        "start_date": "Apr 16",
+        "when": "Thu, Apr 16, 6 \u2013 8 PM"
+      },
+      "address": [
+        "Populus Seattle, 100 S King St",
+        "Seattle, WA"
+      ],
+      "link": "https://populusseattle.com/event/silent-book-club/2026-04-16/",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=Ykc_CIt2byaock4rlWYS99U0Hzqp-fMccX_fp6Rc0cyy4tTzRryeYkggqfNLB3S9QglSmHG-SnBGXdul4wv_YF_EkM537BVerfTSeA0W92oJYLYBWEw",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54906be9c45f2ccb:0xd95892be8fb88507?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIKxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54906be9c45f2ccb%3A0xd95892be8fb88507&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Populus Seattle welcomes the global phenomenon Silent Book Club to Pioneer Square. Guests are invited to enjoy a free evening of quiet reading, soft music, and cozy connection in one \u2026 Continued\\n",
+      "ticket_info": [
+        {
+          "source": "Silent Book Club \u2013 Populus Seattle",
+          "link": "https://populusseattle.com/event/silent-book-club/2026-04-16/",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Populus Seattle",
+        "rating": 4.8,
+        "reviews": 91,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Populus+Seattle&ludocid=15661429051333575943&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiyeN8OiJzCZS7hIcMfDRvlOrrFmmwV87QYzitRYWJgJ7i07eNkLPzV54&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR59CJNbt0YgENBAZfX47RbWTUZuq3Iy3sezOLQvcaFyA&s=10"
+    },
+    {
+      "title": "Obec Book Club \u2014 Ballard Brewed Coalition",
+      "date": {
+        "start_date": "Feb 23",
+        "when": "Mon, Feb 23, 6 \u2013 8 PM"
+      },
+      "address": [
+        "Obec Brewing, 1144 NW 52nd St",
+        "Seattle, WA"
+      ],
+      "link": "https://www.ballardbrewed.com/events/nhq3ga7q0u6s02f4dxzhytqdp0o61d-hyd43-zzxm7-339ge-a8myz-nk9az-eaat5-eatwa-cg9xe-2y764-xcs7p-2azln-rhhnp-a22jj-ew8zg-2ehbb-3hpcg-jhmw6-pw54h-7kkjw",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=tjrCzKF3jwqjGa1oR8GfJll2UZVRd0OmoJhtlwHJbSpS8iuyMHuzL-NYKUzsHQLUINymO4cZzPIBTRPt2AvCGXbpooX3GlmA53TY9yymgTwf4FZIljY",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x549015b6221ea865:0xa32b98689fae92b1?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIMxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x549015b6221ea865%3A0xa32b98689fae92b1&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Obec Book Club The book for February will be selected at the January meetup.",
+      "ticket_info": [
+        {
+          "source": "Ballard Brewed Coalition",
+          "link": "https://www.ballardbrewed.com/events/nhq3ga7q0u6s02f4dxzhytqdp0o61d-hyd43-zzxm7-339ge-a8myz-nk9az-eaat5-eatwa-cg9xe-2y764-xcs7p-2azln-rhhnp-a22jj-ew8zg-2ehbb-3hpcg-jhmw6-pw54h-7kkjw",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Obec Brewing",
+        "rating": 4.6,
+        "reviews": 327,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Obec+Brewing&ludocid=11757658827303850673&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoo3c5BOz0EabYHtE22YhvXJRzsNp8hWBfjAbJvTg&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRor3m_ufoox90v78i5vKvkQ21kVcoIwcXv2IDkobTb5A&s"
+    },
+    {
+      "title": "SJCC Book Club",
+      "date": {
+        "start_date": "Feb 17",
+        "when": "Tue, Feb 17, 6:30 \u2013 8:00 PM"
+      },
+      "address": [
+        "Stroum Jewish Community Center, 3801 E Mercer Way",
+        "Mercer Island, WA"
+      ],
+      "link": "https://sjcc.org/event/sjcc-book-club/",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=i1-KWMdJU6puhNaHcD64LxDjbzyGUKLT-L66R6KknRMGkJQsExs06ZnoMoMOtUnC8UfGD4wQfDRD2V_FMZA4OOq8CthGMTdr9CqtXUWkidvP5ryJDsE",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54906bdd5a44e6c5:0xca283b932c5f7398?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIOxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54906bdd5a44e6c5%3A0xca283b932c5f7398&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Join us as we launch a new SJCC Book Club, a space for thoughtful reading, meaningful discussion, and connection across our SJCC community. Our first selection is \u201cHostage,\u201d by Eli Sharabi, a...",
+      "ticket_info": [
+        {
+          "source": "Stroum Jewish Community Center",
+          "link": "https://sjcc.org/event/sjcc-book-club/",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Stroum Jewish Community Center",
+        "rating": 4.4,
+        "reviews": 50,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Stroum+Jewish+Community+Center&ludocid=14566958498020553624&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRVSlsImCm5Wd9ysMvYcRk2gAfw3NWCOV7dhjGihEHGgtAjrqZplv-k85Y&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTbRjGm1QG8LCAxaLHrWew0FJSQhEoqVVsf2q5kQhE0jNeycRYSUNc-d2c2QA&s=10"
+    },
+    {
+      "title": "Wheelock Book Club",
+      "date": {
+        "start_date": "Feb 7",
+        "when": "Sat, Feb 7, 11 AM \u2013 12 PM"
+      },
+      "address": [
+        "Tacoma Public Library Wheelock Branch, 3722 N 26th St",
+        "Tacoma, WA"
+      ],
+      "link": "https://tacoma.bibliocommons.com/events/6877073e85662d08198cc27c",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=UDh4UpyVawVP2jC_-7HbGq_5OxEsUuv4oGYCMdwmFjDGYGxJTngWKPiP6S0S3RsJTBFNHKYSgzeGuavqVY6n81WgWay3HPmYmyWqfh-FNFrlzGvw6Yg",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x549054ef742763c5:0xc474a5b989da514?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQIQxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x549054ef742763c5%3A0xc474a5b989da514&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "Join fellow book lovers for our monthly book club! Each month, we dive into a captivating new read and come together to share thoughts, insights, and lively conversation. Whether you\u2019re a...",
+      "ticket_info": [
+        {
+          "source": "Tacoma Public Library | BiblioCommons",
+          "link": "https://tacoma.bibliocommons.com/events/6877073e85662d08198cc27c",
+          "link_type": "more info"
+        }
+      ],
+      "venue": {
+        "name": "Tacoma Public Library Wheelock Branch",
+        "rating": 4.7,
+        "reviews": 100,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Tacoma+Public+Library+Wheelock+Branch&ludocid=884757609064539412&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQFqcZR8FtWEvgR7IAsBUwyTNzklJmlWb_FQgikk0L5PVrlWBK7q2HRFDc&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS1gg3dnwgessRhcRnWg9yN0pivaPPYhpGbGFO4yHVdvw&s=10"
+    },
+    {
+      "title": "ASYLUM BOOK CLUB",
+      "date": {
+        "start_date": "Feb 24",
+        "when": "Tue, Feb 24, 6 \u2013 8 PM"
+      },
+      "address": [
+        "Asylum, 108 S Jackson St ste b",
+        "Seattle, WA"
+      ],
+      "link": "https://www.eventbrite.com/e/asylum-book-club-tickets-1956751980849?aff=ebdssbcategorybrowse",
+      "event_location_map": {
+        "image": "https://www.google.com/maps/vt/data=5t7TXrFRXhfEgplA8IJdBvuL5gl-o1GIAOZJGjWPHCgqVF3U5CyATe7j9T88ukIkvJ3W_fVU2-jIsHhFhmrtD8qvm4reV0xrqIzp3T1fiHy0jUCOV7Q",
+        "link": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x54906b6ab578c083:0xf25c3ebfaff32ffb?sa=X&ved=2ahUKEwiK2are7caSAxX3KFkFHTlDKWoQ9eIBegQISxAA&hl=en&gl=us",
+        "serpapi_link": "https://serpapi.com/search.json?data=%214m2%213m1%211s0x54906b6ab578c083%3A0xf25c3ebfaff32ffb&engine=google_maps&gl=us&google_domain=google.com&hl=en&location=Seattle%2C+Washington%2C+United+States&q=book+clubs+Seattle&type=place"
+      },
+      "description": "ASYLUM BOOK CLUB, VOL 1 ALL AGES / FREE! Giovanni\u2019s Room by James Baldwin Join us for an intimate evening of queer literature andconversation as we read James Baldwin\u2019s Giovanni\u2019sRoom, a...",
+      "ticket_info": [
+        {
+          "source": "Eventbrite.com",
+          "link": "https://www.eventbrite.com/e/asylum-book-club-tickets-1956751980849",
+          "link_type": "tickets"
+        }
+      ],
+      "venue": {
+        "name": "Asylum",
+        "rating": 4.2,
+        "reviews": 18,
+        "link": "https://www.google.com/search?sca_esv=fe945298706393bb&hl=en&gl=us&q=Asylum&ludocid=17463902448047566843&ibp=gwp%3B0,7"
+      },
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT_sjdvObns5VbQOZnq5q8YhW4_tF8DR1QCb1uoZSfydRF6cyftyMt58PI&s",
+      "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgCfjIwQwxh19l8ewMkZpxncDAHjKaq_lkF1gaz3_qyblbHjYDJIfDoTqf8g&s=10"
+    }
+  ]
+}
