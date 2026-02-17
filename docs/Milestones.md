@@ -1,7 +1,6 @@
 # Milestones
 This section details a preliminary timeline for the project. It includes milestones with lists of tasks in priority order, expected deliverables, and their deadlines.
 
-—
 ## Milestone 1: Data Cleaning and Processing
 **Deadline**: Feb 20, 2026
 
@@ -22,7 +21,6 @@ Save cleaned datasets to `/data/processed/`
 Running local backend
 Cleaned datasets + reproducible scripts
 
-—
 ## Milestone 2: Feature Selection + Recommender Systems
 **Deadline**: Feb 27, 2026
 
@@ -39,7 +37,6 @@ Test recommender systems
 Finalized datasets (e.g. unified books dataset)
 Working recommender prototypes
 
-—
 ## Milestone 3: Backend Infrastructure
 **Deadline**: Mar 6, 2026
 
@@ -58,7 +55,6 @@ AWS backend deployed
 Database connected
 Backend endpoints working
 
-—
 ## Milestone 4: UI Integration
 **Deadline**: Mar 6, 2026
 
@@ -74,7 +70,6 @@ Run usability tests
 ### Deliverables
 Functional UI prototype connected to backend
 
-—
 ## Milestone 5: Website Deployment
 **Deadline**: Mar 16, 2026
 
@@ -92,7 +87,6 @@ Write documentation
 Live website
 Final documentation
 
-—
 ## Milestone 6: Final Presentation  
 **Deadline**: Mar 17, 2026
 
