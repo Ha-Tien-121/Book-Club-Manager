@@ -2,6 +2,7 @@ import ast
 import csv
 import os
 import re
+import html
 from datetime import datetime
 
 import pandas as pd
@@ -12,6 +13,25 @@ RAW_INPUT_PATH = os.getenv(
 CLEAN_OUTPUT_PATH = os.getenv(
     "BOOKCLUBS_CLEAN_PATH", "data/processed/bookclubs_seattle_clean.csv"
 )
+
+# Keyword map for genre/affinity tagging
+TAG_KEYWORDS = {
+    "fantasy": ["fantasy", "urban fantasy", "epic fantasy", "sword & sorcery", "sword and sorcery"],
+    "sci-fi": ["sci-fi", "science fiction", "sf", "speculative", "time travel", "time-travel", "dystopian"],
+    "historical": ["historical", "history", "wwii", "world war", "period"],
+    "mystery": ["mystery", "thriller", "suspense", "crime", "whodunit", "detective", "noir"],
+    "romance": ["romance", "rom-com", "rom com", "romantic"],
+    "horror": ["horror", "gothic", "spooky", "ghost", "haunted"],
+    "literary": ["literary", "fiction", "novel"],
+    "nonfiction": ["nonfiction", "non-fiction", "nf", "essay", "essays", "biography", "bio"],
+    "lgbtq": ["lgbt", "lgbtq", "lgbtq+", "queer", "sapphic", "trans", "nonbinary", "non-binary", "gay", "lesbian"],
+    "ya": ["young adult", "teen", "teens", "teenager", "teenagers", "tween", "tweens", "tweenager", "tweenagers", "ya"],
+    "kids": ["kids", "kid", "children", "childrens", "children's", "family", "families", "youth", "toddler", "toddlers"],
+    "graphic": ["graphic novel", "graphic novels", "comic", "comics", "manga"],
+    "poetry": ["poetry", "poem", "poems", "poet"],
+    "classics": ["classic", "classics", "canon", "canonical"],
+    "finance": ["bookkeeping", "finance", "financial", "budget", "budgeting"],
+}
 
 
 def clean_events(df: pd.DataFrame) -> pd.DataFrame:
@@ -171,6 +191,9 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
     end_date_col = []
     day_of_week_start_col = []
     day_of_week_end_col = []
+    book_title_col = []
+    book_author_col = []
+    tags_col = []
 
     for when_str in df.get("when", []):
         when_str = str(when_str or "")
@@ -229,6 +252,222 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         start_time_col.append(_fmt_12h(start_t_val))
         end_time_col.append(_fmt_12h(end_t_val))
 
+    # Extract book title/author from title then description
+    def _strip_emphasis(val: str) -> str:
+        return re.sub(r"[*_`]+", "", val or "")
+
+    def _clean_token(val: str) -> str:
+        return val.strip(" \t\r\n\"'`*_-–—.,;:").strip()
+
+    def _is_valid(val: str, require_capital: bool = True) -> bool:
+        if not val:
+            return False
+        if "book club" in val.lower():
+            # allow if "book club" is inside quotes OR not at the start
+            if re.search(r"[\"“”'][^\"“”']*book\s*club[^\"“”']*[\"“”']", val, flags=re.IGNORECASE):
+                pass
+            elif not re.match(r"(?i)^\s*book\s*club\b", val):
+                pass
+            else:
+                return False
+        if require_capital and not re.match(r"^[A-Z]", val):
+            return False
+        return True
+
+    def _trim_author_tail(val: str) -> str:
+        """
+        Stop at strong boundaries, allowing hyphens in names.
+        """
+        val = re.split(r"[!?;,\n]", val, 1)[0]  # keep periods to allow initials (e.g., M.L. Wang)
+        # If this looks like initials + surname (e.g., "M.L. Wang"), don't split on the period.
+        if not re.match(r"^(?:[A-Z]\.){1,3}\s+[A-Z]", val):
+            # split on period+Capital with or without a space (sentence break), preserving initials
+            val = re.split(r"\.(?![A-Z]\b)\s*(?=[A-Z])", val, 1)[0]
+        val = re.split(
+            r"\b(join|welcome|registration|register|discussion|club|reading|book|event|tickets)\b",
+            val,
+            1,
+            flags=re.IGNORECASE,
+        )[0]
+        return _clean_token(val)
+
+    def _trim_title_tail(val: str) -> str:
+        """
+        Trim trailing punctuation and, if a suffix has >=3 consecutive lowercase-start
+        words, drop that suffix (and anything after it).
+        """
+        val = val.rstrip("!.?;,:")
+        tokens = val.split()
+        n = len(tokens)
+        cut_idx = None
+        for i in range(n - 1, 1, -1):
+            # check run ending at i of length 3
+            if i - 2 >= 0 and tokens[i][:1].islower() and tokens[i - 1][:1].islower() and tokens[i - 2][:1].islower():
+                cut_idx = i - 2  # drop from this run start onward
+                break
+        if cut_idx is not None:
+            tokens = tokens[:cut_idx]
+        return " ".join(tokens).strip("!.?;,: ")
+
+    def _strip_book_club_prefix(val: str) -> str:
+        """
+        If "book club" appears, drop everything up to and including it to keep the actual title.
+        Skip stripping if the phrase appears inside quotes.
+        """
+        # If the phrase is inside quotes, leave it
+        if re.search(r"[\"“”']\s*[^\"“”']*book\s*club[^\"“”']*[\"“”']", val, flags=re.IGNORECASE):
+            return val
+        # Otherwise strip the first unquoted occurrence
+        m = re.search(r"(?i)\bbook\s*club\b", val)
+        if m and m.end() < len(val):
+            stripped = val[m.end():].lstrip(" -:–—").strip(" -:–—\t\r\n")
+            stripped = re.sub(r"^[^A-Za-z0-9]+", "", stripped)
+            return stripped
+        return val
+
+    def _trim_title_lead(val: str) -> str:
+        """
+        Drop leading filler before the actual title:
+        - keep the tail after the last strong separator or cue words
+        - then remove leading run of lowercase-start words (e.g., "this month we will be reading")
+        """
+        # split on common separators (exclude colon to keep subtitles); keep the last chunk
+        parts = re.split(
+            r"[.!?;]|\b(reading|discussion|discuss|discussing|will discuss|will be discussing|our book|this month|we will be reading|selection|first selection is|our selection is)\b",
+            val,
+            flags=re.IGNORECASE,
+        )
+        tail = parts[-1] if parts else val
+        tokens = tail.split()
+        # remove leading run of lowercase-start tokens
+        while tokens and tokens[0][:1].islower():
+            tokens.pop(0)
+        return " ".join(tokens).strip(" \t\r\n-–—:;,.!")
+
+    def _match_title_author(text: str) -> tuple[str, str]:
+        """
+        Attempt book title/author extraction using ordered strategies:
+        1) by-split
+        2) possessive
+        3) quoted "Title" by Author
+        4) loose possessive fallback (last occurrence)
+        """
+        if not text:
+            return "", ""
+        text = _strip_emphasis(text)
+        # drop zero-width/non-breaking spaces, normalize whitespace
+        text = re.sub(r"[\u200b\u200c\u200d\uFEFF]", "", text)
+        text = re.sub(r"\s+", " ", text)
+
+        def _by_split(src: str) -> tuple[str, str]:
+            matches = list(re.finditer(r"\sby\s", src, flags=re.IGNORECASE))
+            if not matches:
+                return "", ""
+            for m in matches:  # left-to-right
+                left = src[: m.start()].strip()
+                right = src[m.end() :].strip()
+                q = re.search(r"[\"“”']\s*([^\"“”']{2,200}?)\s*[\"“”']", left)
+                if q:
+                    left = q.group(1)
+                t_raw = _trim_title_tail(_strip_book_club_prefix(_trim_title_lead(_clean_token(left))))
+                a_raw = _trim_author_tail(right)
+                if "book club" in t_raw.lower() and not q:
+                    continue
+                if not (t_raw and a_raw):
+                    continue
+                if not re.match(r"^[A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,3}$", a_raw):
+                    continue
+                if _is_valid(t_raw, require_capital=True) and _is_valid(a_raw, require_capital=True):
+                    return t_raw, a_raw
+            return "", ""
+
+        def _possessive(src: str) -> tuple[str, str]:
+            mpos = re.search(
+                r"([A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,3})['’]s\s+([^,:;\n]{2,160})",
+                src,
+            )
+            if not mpos:
+                return "", ""
+            a_raw = _trim_author_tail(_clean_token(mpos.group(1)))
+            t_raw = _trim_title_tail(_strip_book_club_prefix(_trim_title_lead(_clean_token(mpos.group(2)))))
+            if "book club" in t_raw.lower():
+                return "", ""
+            if not (t_raw and a_raw):
+                return "", ""
+            if not re.match(r"^[A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,3}$", a_raw):
+                return "", ""
+            if _is_valid(t_raw, require_capital=True) and _is_valid(a_raw, require_capital=True):
+                return t_raw, a_raw
+            return "", ""
+
+        def _quoted_by(src: str) -> tuple[str, str]:
+            m = re.search(
+                r"[\"“”']\s*([^\"“”']{2,160}?)\s*[\"“”']\s+by\s+([A-Z][^\n]{1,80})",
+                src,
+                flags=re.IGNORECASE,
+            )
+            if not m:
+                return "", ""
+            t_raw = _trim_title_tail(_trim_title_lead(_clean_token(m.group(1))))
+            a_raw = _trim_author_tail(m.group(2))
+            if not (t_raw and a_raw):
+                return "", ""
+            if not re.match(r"^[A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,3}$", a_raw):
+                return "", ""
+            if _is_valid(t_raw, require_capital=True) and _is_valid(a_raw, require_capital=True):
+                return t_raw, a_raw
+            return "", ""
+
+        def _loose_possessive(src: str) -> tuple[str, str]:
+            mpos_all = list(
+                re.finditer(
+                    r"([A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,4})['’]s\s+([^.!?;\n]{2,200})",
+                    src,
+                )
+            )
+            if not mpos_all:
+                return "", ""
+            mpos = mpos_all[-1]
+            a_raw = _trim_author_tail(_clean_token(mpos.group(1)))
+            t_raw = _trim_title_tail(_strip_book_club_prefix(_trim_title_lead(_clean_token(mpos.group(2)))))
+            if "book club" in t_raw.lower():
+                return "", ""
+            if a_raw and t_raw and _is_valid(t_raw, require_capital=True) and _is_valid(a_raw, require_capital=True):
+                return t_raw, a_raw
+            return "", ""
+
+        for extractor in (_by_split, _possessive, _quoted_by, _loose_possessive):
+            t_raw, a_raw = extractor(text)
+            if t_raw and a_raw:
+                return t_raw, a_raw
+        return "", ""
+
+    for title, desc in zip(df.get("title", []), df.get("description", [])):
+        t_found = a_found = ""
+        title_text = html.unescape(str(title or ""))
+        desc_text = html.unescape(str(desc or ""))
+
+        t_found, a_found = _match_title_author(title_text)
+        if not (t_found and a_found):
+            t_found, a_found = _match_title_author(desc_text)
+
+        book_title_col.append(t_found)
+        book_author_col.append(a_found)
+
+        # Tag extraction from title + description
+        text_lower = f"{title_text} {desc_text}".lower()
+
+        def _term_hit(term: str, corpus: str) -> bool:
+            return bool(re.search(rf"\b{re.escape(term.lower())}\b", corpus))
+
+        row_tags = []
+        for tag, terms in TAG_KEYWORDS.items():
+            for term in terms:
+                if _term_hit(term, text_lower):
+                    row_tags.append(tag)
+                    break
+        tags_col.append(sorted(set(row_tags)))
+
     if "when" in df.columns:
         df["start_date"] = start_date_col
         df["end_date"] = end_date_col
@@ -238,6 +477,9 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         df["end_iso"] = end_iso
         df["start_time"] = start_time_col
         df["end_time"] = end_time_col
+        df["book_title"] = book_title_col
+        df["book_author"] = book_author_col
+        df["tags"] = tags_col
 
     # expand venue dict-like strings into explicit columns
     venue_name = []
@@ -328,6 +570,9 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
             "venue_reviews",
             "venue_search_link",
             "thumbnail",
+            "book_title",
+            "book_author",
+            "tags",
         )
         if c in df.columns
     ]
