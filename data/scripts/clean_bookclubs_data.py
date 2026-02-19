@@ -69,6 +69,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
     # "Mon, Feb 16, 7 PM"
     # "Thu, Apr 1, 7 – 8 PM"
     date_pat = re.compile(r"(?P<month>[A-Za-z]+)\s+(?P<day>\d{1,2})(?:\s+(?P<year>\d{4}))?")
+    date_pat_dmy = re.compile(r"(?P<day>\d{1,2})\s+(?P<month>[A-Za-z]+)(?:\s+(?P<year>\d{4}))?")
     current_year = datetime.now().year
 
     def _parse_date_match(match_obj) -> datetime | None:
@@ -88,7 +89,16 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         token = token.strip()
         if not token:
             return None
-        for fmt in ("%b %d %Y", "%B %d %Y", "%b %d", "%B %d"):
+        for fmt in (
+            "%b %d %Y",
+            "%B %d %Y",
+            "%b %d",
+            "%B %d",
+            "%d %b %Y",
+            "%d %B %Y",
+            "%d %b",
+            "%d %B",
+        ):
             try:
                 dt = datetime.strptime(token, fmt)
                 if "%Y" not in fmt:
@@ -96,8 +106,8 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
                 return dt
             except ValueError:
                 continue
-        # last resort: regex for month/day
-        return _parse_date_match(date_pat.search(token))
+        # last resort: regex for month/day or day/month
+        return _parse_date_match(date_pat.search(token) or date_pat_dmy.search(token))
 
     def _parse_time_token(t: str, default_ampm: str | None = None):
         """

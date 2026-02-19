@@ -14,9 +14,13 @@ if not API_KEY:
 SERP_URL = "https://serpapi.com/search.json"
 
 # Event-centric queries for Seattle book clubs
-QUERIES = ["book club events Seattle"]
+# Keep this small to reduce token usage; we’ll rotate across runs if needed.
+QUERIES = [
+    "book club Seattle",
+    "book discussion Seattle"
+]
 LOCATION = "Seattle, WA"
-MAX_REQUESTS = 10  # cap total SerpAPI calls per run
+MAX_REQUESTS = 12  # slight increase to pull more events while staying moderate
 RAW_OUTPUT_PATH = os.getenv(
     "BOOKCLUBS_RAW_PATH", "data/raw/bookclubs_seattle_raw.csv"
 )
@@ -94,10 +98,17 @@ def fetch_events(
                     }
                 )
             time.sleep(sleep_s)
+        # Early stop if we hit the cap
         if request_count >= max_requests:
             break
 
-    df = pd.DataFrame(results).drop_duplicates(subset="link")
+    df = pd.DataFrame(results)
+    if df.empty:
+        return df, request_count
+
+    # Dedupe by link only (less aggressive to keep more distinct events)
+    df = df.drop_duplicates(subset="link")
+
     return df, request_count
 
 
