@@ -1,0 +1,10 @@
+name: bookish
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - nodejs=25.*
+  - pip
+  - pip:
+    - requests
