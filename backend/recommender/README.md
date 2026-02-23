@@ -3,7 +3,7 @@
 This folder contains the recommendation logic used by the Bookish backend.
 
 The system provides:
-- Book club event recommendations (implemented)
+- Book club event recommendations (in progress)
 - Book recommendations (in progress)
 
 The recommender receives user preferences from the backend API and returns
@@ -20,6 +20,18 @@ a ranked list of results based on relevance.
 
 The events recommender suggests book club events using data from sources
 such as SerpAPI and library datasets.
+
+### Ranking Rules (current notebook logic)
+- Keep only upcoming events.
+- Normalize `tags` to lowercase; user inputs are `user_tags` plus optional `preferred_city`.
+- Per-event scoring:
+  - `tag_overlap` = shared tags; `tag_score = min(3, tag_overlap)`.
+  - `recency_score`: strong boost for next ~14 days, tapers to ~0 by ~45 days, penalizes beyond.
+  - `city_score`: +2 if `preferred_city` is in `city_state`.
+  - `venue_score`: `0.2 * venue_rating` when numeric.
+  - `score = 0.5 + 1.5*recency_score + 1.0*city_score + 0.75*tag_score + 0.2*venue_score`.
+- Ordering: sort by `score` desc, then earlier `start_iso`; if the top item is tagged `trivia`, swap in the first non-trivia item when available.
+- Exploration: every 3rd slot, try to inject a zero-overlap event; then backfill from the explore pool and the ranked list until `top_k`.
 
 ### Inputs
 - User genres or keywords  

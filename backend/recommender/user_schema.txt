@@ -1,0 +1,21 @@
+user_genres
+genre (str)
+rank (int)
+user_id (str) (primary key)
+
+
+user_books_read
+user_id (str) (primary key)
+books_read (list: str) 
+
+books
+book_id (str)(primary key)
+title (str)
+author (str)
+genre (list: str)
+
+
+
+UI: 
+- top genres (rank would be the same)
+- input books (would influence rankings after)

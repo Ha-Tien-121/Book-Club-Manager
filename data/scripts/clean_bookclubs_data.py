@@ -16,21 +16,22 @@ CLEAN_OUTPUT_PATH = os.getenv(
 
 # Keyword map for genre/affinity tagging
 TAG_KEYWORDS = {
-    "fantasy": ["fantasy", "urban fantasy", "epic fantasy", "sword & sorcery", "sword and sorcery"],
+    "fantasy": ["fantasy", "magic", "sorcery", "magical"],
     "sci-fi": ["sci-fi", "science fiction", "sf", "speculative", "time travel", "time-travel", "dystopian"],
     "historical": ["historical", "history", "wwii", "world war", "period"],
     "mystery": ["mystery", "thriller", "suspense", "crime", "whodunit", "detective", "noir"],
     "romance": ["romance", "rom-com", "rom com", "romantic"],
     "horror": ["horror", "gothic", "spooky", "ghost", "haunted"],
-    "literary": ["literary", "fiction", "novel"],
+    "literature": ["literary", "fiction", "novel"],
     "nonfiction": ["nonfiction", "non-fiction", "nf", "essay", "essays", "biography", "bio"],
     "lgbtq": ["lgbt", "lgbtq", "lgbtq+", "queer", "sapphic", "trans", "nonbinary", "non-binary", "gay", "lesbian"],
-    "ya": ["young adult", "teen", "teens", "teenager", "teenagers", "tween", "tweens", "tweenager", "tweenagers", "ya"],
+    "young adult": ["young adult", "teen", "teens", "teenager", "teenagers", "tween", "tweens", "tweenager", "tweenagers", "ya"],
     "kids": ["kids", "kid", "children", "childrens", "children's", "family", "families", "youth", "toddler", "toddlers"],
     "graphic": ["graphic novel", "graphic novels", "comic", "comics", "manga"],
     "poetry": ["poetry", "poem", "poems", "poet"],
     "classics": ["classic", "classics", "canon", "canonical"],
     "finance": ["bookkeeping", "finance", "financial", "budget", "budgeting"],
+    "trivia": ["trivia", "quiz", "quiz night", "quiznight", "trivia night"],
 }
 
 
