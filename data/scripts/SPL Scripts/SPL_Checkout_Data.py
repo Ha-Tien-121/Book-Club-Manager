@@ -1,3 +1,25 @@
+"""
+Cleans and aggregates the SPL books checkout data by 
+(1) only looking at checkouts from last year (to the month)
+(2) only looking at items with MaterialType of BOOK, EBOOK, or EAUDIOBOOK
+(3) excluding unnecessary columns
+(3) cleans title, creator columns, and converts Checkouts to numeric
+(4) extracts a 10-digit ISBN from ISBN column if one exists
+(5) aggregates checkouts by ISBN (if available) or by Title and Author (if no ISBN)
+
+Args:
+    Library Collection Inventory json: The input dataset of Seattle Public Library collection 
+    inventory json API call (SODA2).
+
+Returns:
+    seattle_library_catalog.csv: The cleaned dataset as csv. 
+    Columns: Title (str), Author (str: "last, first"), ISBN (int: 10 digits), 
+    branch_counts (str: json dict{branch: count})
+    
+    * Note if ISBN exists, Title and Author will be None (this is fine since we can link to the 
+    Amazon books dataset by ISBN). If no ISBN, then we keep Title and Author and set ISBN to None.
+"""
+
 import pandas as pd
 import requests
 import os
@@ -68,7 +90,7 @@ for year in [current_year - 1, current_year]:
 checkouts_df_all = pd.concat(chunks, axis=0, ignore_index=True)
 checkouts_df_all.rename(columns={'Creator': 'Author'}, inplace=True)
 
-grouped_isbn = checkouts_df_all.groupby(['ISBN', 'Title', 'Author'], as_index=False)['Checkouts'].sum()
+grouped_isbn = checkouts_df_all[pd.notna(checkouts_df_all["ISBN"])].groupby(['ISBN'], as_index=False)['Checkouts'].sum()
 grouped_no_isbn = checkouts_df_all[pd.isna(checkouts_df_all["ISBN"])].groupby(['Title', 'Author'], as_index=False)['Checkouts'].sum()
 
 
