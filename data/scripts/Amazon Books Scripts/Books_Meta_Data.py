@@ -7,6 +7,7 @@ output_file = "meta_Books_cleaned.csv"
 columns_to_remove = ['main_category', 'features', 'price', 'videos', 'store', 'details', 'bought_together', 'subtitle']
 
 # Taken from top 20 most common categories, covering about 70% of books in dataset. 
+# LGTQ+ tag
 top_categories = {
     'Literature & Fiction', "Children's Books", 'Genre Fiction', 
     'Mystery, Thriller & Suspense', 'Arts & Photography', 'History', 
@@ -22,6 +23,12 @@ with open(input_file, 'r') as fp, open(output_file, 'w', newline='', encoding='u
     for line in fp:
         book = json.loads(line)
 
+        if isinstance(book.get("author"), dict):
+             book["author_name"] = book["author"].get("name")
+        else:
+             book["author_name"] = None
+        book.pop("author", None)
+        
         book['categories'] = [cat for cat in book['categories'] if cat in top_categories]
 
         for col in columns_to_remove:
