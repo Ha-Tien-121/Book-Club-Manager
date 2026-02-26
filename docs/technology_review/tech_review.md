@@ -21,6 +21,9 @@ With all these considerations in mind, we ultimately decided to stick with `requ
 
 Some drawbacks for `requests` are that it cannot execute JavaScript or render dynamic pages since it only retrieves the raw HTTP response. This makes it bad for sites where content loads after page render or requires user interactions such as clicking, scrolling, or navigating login flows. In comparison, `selenium` and `playwright` are more effective at scraping interactive or JavaScript-heavy web applications when no direct API is available. 
 
+### Demo
+Provided in this folder is a snippet of where we use the `requests` library in `data/scripts/get_seattle_bookclubs_data.py`. Through SERPAPI, we are able to use `requests` to extract google events relevant to our queries (e.g. book club Seattle). It is then outputted in `data/raw/bookclubs_seattle_raw.csv`. For `selenium` and `playwright`, we did not benchmark them against `requests` on websites such as Meetup because those platforms explicitly restrict automated access in their Terms of Service and implement anti-bot protections. Rather than risk violating usage policies, we limited our comparison to controlled test environments and publicly accessible pages. This constraint means performance results are shown only for `requests` in the real-world example, while `selenium` and `playwright` are discussed conceptually and evaluated in sandbox settings.
+
 
 ## scikit-learn vs Tensorflow
 
