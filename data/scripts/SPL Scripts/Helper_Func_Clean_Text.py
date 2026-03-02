@@ -1,3 +1,4 @@
+"Helper functions for cleaning text data in the SPL datasets."
 def clean_text(series):
     """
     Cleans a pandas Series of text by:
@@ -10,9 +11,9 @@ def clean_text(series):
     return (
         series
         .astype(str)
-        .str.replace('"', '', regex=False)        # remove quotes
-        .str.replace(r'/.*', '', regex=True)     # remove slash and after
-        .str.lower()                             # lowercase
-        .str.strip()                             # trim edges
-        .str.replace(r'\s+', ' ', regex=True)    # normalize whitespace
+        .str.replace('"', '', regex=False)
+        .str.replace(r'/.*', '', regex=True)
+        .str.lower()
+        .str.strip()
+        .str.replace(r'\s+', ' ', regex=True)
     )
