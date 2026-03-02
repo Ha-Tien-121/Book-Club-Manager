@@ -7,6 +7,7 @@
 - **Ha Tien Nguyen**
 - **Sarah Mathison**
 - **Maanya Cola Bharath**
+- **Elsie Wang**
 
 
 ## Project Type

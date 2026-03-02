@@ -1,3 +1,23 @@
+"""
+Cleans the SPL physical books catalog data by 
+(1) only looking at the most recent report date (most recent snapshot of branch inventories)
+(2) only looking at items with ItemType ending in "bk" (books)
+(3) excluding unnecessary columns
+(3) cleans title, author columns, and converts ItemCount to numeric
+(4) extracts a 10-digit ISBN from ISBN column if one exists
+(5) reformats data so there is one row for each book and all library branches with that book are in 
+a single column (branch_counts = dict{branch: count})
+
+Args:
+    Library Collection Inventory json: The input dataset of Seattle Public Library collection 
+    inventory json API call (SODA2).
+
+Returns:
+    seattle_library_catalog.csv: The cleaned dataset as csv. 
+    Columns: Title (str), Author (str: "last, first"), ISBN (int: 10 digits), 
+    branch_counts (str: json dict{branch: count})
+"""
+
 import pandas as pd
 import requests
 import json
@@ -5,7 +25,7 @@ import os
 from Helper_Func_Clean_Text import clean_text
 
 
-output_file = "seattle_library_catalog_last_year.csv"
+output_file = "seattle_library_catalog.csv"
 
 APP_TOKEN = os.getenv("SPL_TOKEN")
 BASE_URL = "https://data.seattle.gov/resource/6vkj-f5xf.json"
@@ -81,4 +101,4 @@ pivot_catalog['branch_counts'] = pivot_catalog.apply(
 
 pivot_catalog.reset_index(inplace=True)
 
-pivot_catalog[['Title', 'Author', 'ISBN', 'branch_counts']].to_csv("seattle_library_catalog_last_year.csv", index=False)
+pivot_catalog[['Title', 'Author', 'ISBN', 'branch_counts']].to_csv(output_file, index=False)
