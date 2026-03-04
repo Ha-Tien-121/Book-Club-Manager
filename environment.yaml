@@ -7,4 +7,5 @@ dependencies:
   - nodejs=25.*
   - pip
   - pip:
+    - build
     - requests
