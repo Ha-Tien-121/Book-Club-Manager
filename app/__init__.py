@@ -1,0 +1,1 @@
+"""Bookish Streamlit app package."""
