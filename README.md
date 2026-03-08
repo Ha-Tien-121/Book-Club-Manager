@@ -1,48 +1,148 @@
 # Bookish: A Book Club Manager
 
+This repository contains the code and data processing scripts used to build **Bookish**, a platform for discovering books, organizing book clubs, and
+connecting with reading communities in the Seattle area.
 
-## Project Contributors
+---
 
+## Project Group Members
+- Ha Tien Nguyen  
+- Sarah Mathison  
+- Maanya Cola Bharath  
+- Elsie Wang  
 
-- **Ha Tien Nguyen**
-- **Sarah Mathison**
-- **Maanya Cola Bharath**
-- **Elsie Wang**
-
+---
 
 ## Project Type
 
+Bookish is a data-driven web application built using **Streamlit** for the frontend interface.
 
-App or Website
+# Questions of Interest
 
+This project explores several questions related to book discovery and reading communities:
 
-## Questions of Interest
+- How can user reviews data and book meta data be combined to recommend books that readers are likely to enjoy?
+- How can public library data help users locate books available in their local area?
+- How can users discover book clubs and reading communities that match their interests?
 
+---
 
-How can we build a dedicated platform that centralizes everything book clubs need — from formation to coordinating book club logistics and finding new books?
+## Project Output
 
+The final output of the project will be a **web platform** that allows users to:
 
-## Project Goal
+- search for books
+- receive personalized book recommendations based on genre preferences and reading history
+- find books available through the Seattle Public Library
+- discover book clubs and reading events in the Seattle area tailored to preferences
+- organize and manage book club activities
 
+The project will also produce cleaned and transformed datasets, indexed for efficient lookup 
+and easy use in the recommendation algorithm.
 
-Produce a functional application that serves as an all-in-one book club management tool. The core features include:
-
-
-- **Calendar** : Schedule and track meetings, reading deadlines, and local events.
-- **Forum** : Host discussions around books, chapters, and club decisions.
-- **Recommendation System** : Suggest books, events, and groups tailored to user preferences. 
-
-
-Some nice-to-have features are:
-
-- **Book Locator** : Find where to get an available book (libraries, bookstores, etc.)
-
-
-
+---
 
 ## Data Sources
 
+This project uses the following data sources:
 
-- **SerpAPI API**: Search Seattle book club on MeetUp.com (Info: name of club, link to listing, snippet about club)
--  **Goodreads**: Book popularity, ratings, reviews, and genre metadata 
-- **Seattle Public Library (SPL) Data**: Book availability, location info, and "readers who borrowed this also borrowed…" insights 
+1. **Amazon Reviews Dataset** (2023 by McAuley Lab)
+2. **Seattle Public Library API**
+   - Library Collection Inventory
+   - Checkouts by Title
+4. **Seattle-area Book Club Event Data**
+
+   *Scraped from Google events with SeprAPI
+
+These datasets are processed using scripts in the `data/scripts` directory to generate cleaned datasets used by the application.
+
+### Usage
+
+1. **Amazon Reviews Dataset** (2023 by McAuley Lab)
+
+Amazon book metadata provides information displayed in the user interface, including title, author, description, genres, average ratings, and cover 
+images. Metadata features such as average rating, genre, and popularity are also used in the recommender to help rank recommended books. 
+
+Amazon review data is used to construct sample user reading histories by converting reviews into a user-book interaction matrices. These interactions 
+represent users’ book and genre preferences and are split in to training and test sets. The training (input) data is used to compute a cosine similarity matrix 
+between books, a feature in our reccomendation algorithm.
+
+2. **Library Collection Inventory**
+
+The SPL catalog dataset provides the Seattle Public Library (SPL) branch a book is avaible at, displayed in the user interface.
+
+3. **Checkouts by Title**
+
+The SPL checkouts dataset provides a measure of local popularity that can be used to recomend books from SPL catalogue if a user toggles on SPL book reccomendations.
+
+4. **Seattle-area Book Club Event Data**
+
+The book events dataset provides information displayed in the user interface including name of bookclub, link to bookclub, thumbnail image, description, location, 
+time, and books and genres the club is reading (most book clubs will not have all info). Bookclub features such as location, time, and genre are also used in bookclub 
+recomender to rank recommended bookclubs
+
+
+### Setup to Run Data Processing Scripts
+
+#### Amazon Reviews Dataset
+
+Dataset download page: https://amazon-reviews-2023.github.io/
+
+Directions:
+Under "Grouped by Category" download books `review` and `meta`. 
+
+From Gzip file extract the following files and place in `data/raw`
+- `Books.jsonl`
+- `meta_Books.jsonl`
+
+#### SPL API
+
+Seattle Open Data portal: https://data.seattle.gov/
+
+Directions:
+1. create an account for Tyler's Data & Insights
+2. go to "Developer Settings"
+3. create new API Key and new App Token
+4. make .env in spl_data containing SPL_TOKEN = "your_app_token"
+
+#### SerpAPI
+SerpAPI Dashboard: https://serpapi.com/dashboard
+
+Directions:
+1. create SerpAPI account 
+2. in account you should see "Your Private API Key"
+3. make .env in scripts containing api_key = "your_private_api_key"
+
+
+## Repository Structure
+
+`Book-Club-Manager`
+
+│
+
+├── `backend/`                Backend server code
+
+│  ├── `recommender/`        recommender scripts
+
+├── `frontend/`               Frontend UI
+
+├── `data/`
+
+│   ├── `raw/`                Raw input datasets (Large files not stored in repo)
+
+│   ├── `processed/`          Data processing scripts write the output files to this folder. Currently includes small snippets of cleaned datasets. 
+
+│   └── `scripts/`            Data cleaning and preprocessing scripts
+
+│
+├── `docs/`                   Documentation
+
+│   ├── `technology_review/`  Compare Requests vs. Selenium vs. Playwright (chose Requests) and scikit-learn vs Tensorflow (chose scikit-learn)
+
+├── `environment.yaml`       Conda environment configuration
+
+├── `README.md`
+
+└── `.gitignore`
+
+
