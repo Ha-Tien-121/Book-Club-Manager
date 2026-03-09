@@ -14,6 +14,7 @@ import streamlit.components.v1 as components
 BASE_DIR = Path(__file__).resolve().parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
 USER_DB_PATH = PROCESSED_DIR / "user_accounts.json"
+FORUM_DB_PATH = PROCESSED_DIR / "forum_posts.json"
 
 
 def inject_styles() -> None:
@@ -117,7 +118,60 @@ def ensure_user_schema(user_record: dict) -> dict:
     )
     user_record.setdefault("club_ids", [])
     user_record.setdefault("forum_posts", [])
+    user_record.setdefault("saved_forum_post_ids", [])
     return user_record
+
+
+def load_forum_store(seed_posts: list[dict]) -> dict:
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    if not FORUM_DB_PATH.exists():
+        initial_posts = []
+        for idx, post in enumerate(seed_posts, start=1):
+            initial_posts.append(
+                {
+                    "id": idx,
+                    "title": post["title"],
+                    "author": post["author"],
+                    "genre": post.get("genre"),
+                    "club": post.get("club"),
+                    "club_id": None,
+                    "visibility": "club" if post.get("club") else "public",
+                    "replies": post.get("replies", 0),
+                    "likes": post.get("likes", 0),
+                    "liked_by": [],
+                    "time_ago": post.get("time_ago", "recently"),
+                    "preview": post["preview"],
+                    "comments": [],
+                }
+            )
+        store = {"next_post_id": len(initial_posts) + 1, "posts": initial_posts}
+        FORUM_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
+        return store
+
+    with FORUM_DB_PATH.open("r", encoding="utf-8") as f:
+        try:
+            store = json.load(f)
+        except json.JSONDecodeError:
+            store = {"next_post_id": 1, "posts": []}
+    if "posts" not in store or not isinstance(store["posts"], list):
+        store["posts"] = []
+    if "next_post_id" not in store or not isinstance(store["next_post_id"], int):
+        store["next_post_id"] = len(store["posts"]) + 1
+    for post in store["posts"]:
+        post.setdefault("liked_by", [])
+        post.setdefault("comments", [])
+        post.setdefault("visibility", "public")
+        post.setdefault("club", None)
+        post.setdefault("club_id", None)
+        for c in post["comments"]:
+            c.setdefault("liked_by", [])
+            c.setdefault("likes", 0)
+    return store
+
+
+def save_forum_store(store: dict) -> None:
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    FORUM_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
 
 
 @st.cache_data
@@ -176,7 +230,12 @@ def load_data() -> dict:
                 tags = _parse_tags(row.get("tags", ""))
                 genre = tags[0].title() if tags else "General"
                 key = f"{(row.get('book_title') or '').strip().lower()}|{(row.get('book_author') or '').strip().lower()}"
-                current_book_id = title_author_to_id.get(key, books[(idx - 1) % len(books)]["id"])
+                current_book_id = title_author_to_id.get(key)
+                current_book_title = (
+                    books_by_id[current_book_id]["title"]
+                    if current_book_id in books_by_id
+                    else "NA"
+                )
                 clubs.append(
                     {
                         "id": idx,
@@ -188,6 +247,7 @@ def load_data() -> dict:
                         "meeting_time": row.get("start_time") or "TBD",
                         "members": 10 + (idx * 3 % 45),
                         "current_book_id": current_book_id,
+                        "current_book_title": current_book_title,
                         "thumbnail": row.get("thumbnail") or "https://placehold.co/600x360?text=Club",
                         "is_external": True,
                         "external_link": row.get("link") or "",
@@ -197,7 +257,7 @@ def load_data() -> dict:
                     break
 
     if not clubs:
-        clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "members": 20, "current_book_id": books[0]["id"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
+        clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "members": 20, "current_book_id": books[0]["id"], "current_book_title": books[0]["title"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
 
     user_club_ids = [c["id"] for c in clubs[: min(4, len(clubs))]]
     library = {"in_progress": [b["id"] for b in books[0:4]], "saved": [b["id"] for b in books[4:8]], "finished": [b["id"] for b in books[8:12]]}
@@ -217,11 +277,24 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("user_name", "")
     st.session_state.setdefault("selected_book_id", books[0]["id"])
     st.session_state.setdefault("jump_to_book_detail", False)
+    st.session_state.setdefault("selected_forum_post_id", None)
+    st.session_state.setdefault("jump_to_forum_detail", False)
 
 
-def handle_query_navigation(books_by_id: dict[int, dict]) -> None:
+def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[int]) -> None:
     book_param = st.query_params.get("book_id")
     if st.query_params.get("open") != "detail" or not book_param:
+        post_param = st.query_params.get("post_id")
+        if st.query_params.get("open") == "forum" and post_param:
+            try:
+                post_id = int(post_param)
+            except (TypeError, ValueError):
+                return
+            if post_id in forum_post_ids:
+                st.session_state["selected_forum_post_id"] = post_id
+                st.session_state["jump_to_forum_detail"] = True
+                st.query_params.clear()
+                st.rerun()
         return
     try:
         book_id = int(book_param)
@@ -306,6 +379,17 @@ def render_book_card(book: dict, key_prefix: str) -> None:
         st.rerun()
 
 
+def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
+    if post.get("visibility") != "club":
+        return True
+    if current_user is None:
+        return False
+    club_id = post.get("club_id")
+    if club_id is None:
+        return bool(post.get("club"))
+    return club_id in current_user.get("club_ids", [])
+
+
 def main() -> None:
     st.set_page_config(page_title="Bookish", page_icon="ðŸ“š", layout="wide")
     inject_styles()
@@ -317,10 +401,8 @@ def main() -> None:
     neighborhoods = data["neighborhoods"]
     library = data["library"]
     forum_posts = data["forum_posts"]
-    default_user_club_ids = data["user_club_ids"]
 
     init_session(books)
-    handle_query_navigation(books_by_id)
     st.sidebar.title("Bookish")
     auth_panel()
     store = load_user_store()
@@ -336,26 +418,57 @@ def main() -> None:
             st.rerun()
         current_user = ensure_user_schema(current_user)
 
+    forum_store = load_forum_store(forum_posts)
+    forum_posts_data = forum_store["posts"]
+    forum_post_ids = {int(p["id"]) for p in forum_posts_data if "id" in p}
+
     tabs = st.tabs(["Feed", "Explore Clubs", "My Clubs", "Library", "Book Detail", "Forum"])
+    handle_query_navigation(books_by_id, forum_post_ids)
     if st.session_state.get("jump_to_book_detail"):
         components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Book Detail"){t.click();break;}}</script>""", height=0)
         st.session_state["jump_to_book_detail"] = False
+    if st.session_state.get("jump_to_forum_detail"):
+        components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Forum"){t.click();break;}}</script>""", height=0)
+        st.session_state["jump_to_forum_detail"] = False
 
     with tabs[0]:
         st.title("Discover your next read")
         selected_genres = st.multiselect("Filter by genre", genres)
         filtered = [b for b in books if not selected_genres or any(g in selected_genres for g in b["genres"])]
-        trending = sorted(books, key=lambda b: b["checkouts"], reverse=True)[:4]
+        trending_source = filtered if selected_genres else books
+        trending = sorted(trending_source, key=lambda b: b["checkouts"], reverse=True)[:4]
         st.subheader("Trending in Seattle")
-        cols = st.columns(4)
-        for i, book in enumerate(trending):
-            with cols[i]:
-                render_book_card(book, f"trend_{i}")
+        if trending:
+            cols = st.columns(4)
+            for i, book in enumerate(trending):
+                with cols[i]:
+                    render_book_card(book, f"trend_{i}")
+        else:
+            st.caption("No trending books match this genre filter.")
         st.subheader("Recommended for you")
         cols = st.columns(3)
         for i, book in enumerate(filtered):
             with cols[i % 3]:
                 render_book_card(book, f"rec_{i}")
+
+        st.subheader("Suggested book clubs")
+        clubs_source = clubs
+        if selected_genres:
+            clubs_source = [
+                c for c in clubs_source if c.get("genre", "").lower() in {g.lower() for g in selected_genres}
+            ]
+        top_clubs = sorted(clubs_source, key=lambda c: int(c.get("members", 0)), reverse=True)[:5]
+        if not top_clubs:
+            st.caption("No suggested clubs for this filter.")
+        for club in top_clubs:
+            st.markdown(f"**{club['name']}**")
+            st.caption(
+                f"{club.get('genre', 'General')} | {club.get('location', 'Seattle, WA')} | Members: {club.get('members', 0)}"
+            )
+            st.write((club.get("description", "") or "")[:180] + ("..." if len(club.get("description", "")) > 180 else ""))
+            if club.get("external_link"):
+                st.link_button("Open club", club["external_link"], use_container_width=False)
+            st.divider()
 
     with tabs[1]:
         st.title("Explore Clubs")
@@ -397,7 +510,25 @@ def main() -> None:
         for club in [c for c in clubs if c["id"] in (current_user["club_ids"] if current_user else [])]:
             st.subheader(club["name"])
             st.caption(f"{club['members']} members | {club['location']}")
-            st.write(f"Currently reading: **{books_by_id[club['current_book_id']]['title']}**")
+            btn_col_1, btn_col_2 = st.columns([1, 1])
+            if btn_col_1.button("Details", key=f"details_club_{club['id']}"):
+                toggle_key = f"show_club_details_{club['id']}"
+                st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
+                st.rerun()
+            if current_user is not None and btn_col_2.button("Remove Club", key=f"remove_club_{club['id']}"):
+                current_user["club_ids"] = [
+                    cid for cid in current_user.get("club_ids", []) if int(cid) != int(club["id"])
+                ]
+                save_user_store(store)
+                st.success(f"Removed {club['name']} from My Clubs.")
+                st.rerun()
+
+            if st.session_state.get(f"show_club_details_{club['id']}", False):
+                st.markdown(f"**Genre:** {club.get('genre', 'General')}")
+                st.markdown(
+                    f"**Meeting:** {club.get('meeting_day', 'TBD')} at {club.get('meeting_time', 'TBD')}"
+                )
+                st.write(club.get("description", ""))
             st.divider()
         if st.session_state["signed_in"] and current_user is not None and not current_user["club_ids"]:
             st.info("You have not joined any clubs yet.")
@@ -408,8 +539,8 @@ def main() -> None:
             st.info("Sign in to see your books.")
         else:
             user_library = current_user["library"]
-            ltabs = st.tabs(["In Progress", "Saved", "Finished"])
-            for key, tab in zip(["in_progress", "saved", "finished"], ltabs):
+            ltabs = st.tabs(["Saved", "In Progress", "Finished"])
+            for key, tab in zip(["saved", "in_progress", "finished"], ltabs):
                 with tab:
                     book_ids = [bid for bid in user_library[key] if bid in books_by_id]
                     if not book_ids:
@@ -422,12 +553,8 @@ def main() -> None:
 
     with tabs[4]:
         st.title("Book Detail")
-        options = {f"{b['title']} - {b['author']}": b["id"] for b in books}
-        labels = list(options.keys())
-        values = list(options.values())
-        idx = values.index(st.session_state["selected_book_id"]) if st.session_state["selected_book_id"] in values else 0
-        selected_label = st.selectbox("Select a book", labels, index=idx)
-        st.session_state["selected_book_id"] = options[selected_label]
+        if st.session_state["selected_book_id"] not in books_by_id:
+            st.session_state["selected_book_id"] = books[0]["id"]
         book = books_by_id[st.session_state["selected_book_id"]]
         c1, c2 = st.columns([1, 2])
         with c1:
@@ -467,49 +594,199 @@ def main() -> None:
 
     with tabs[5]:
         st.title("Forum")
-        view = st.radio("View", ["All", "Public", "Club Discussions"], horizontal=True)
-        posts = list(forum_posts)
-        if current_user is not None:
-            posts = list(current_user.get("forum_posts", [])) + posts
-        if view == "Public":
-            posts = [p for p in posts if not p["club"]]
-        elif view == "Club Discussions":
-            posts = [p for p in posts if p["club"]]
-        if st.session_state["signed_in"] and current_user is not None:
-            with st.form("new_forum_post"):
-                st.subheader("Create a forum post")
-                post_title = st.text_input("Title")
-                post_text = st.text_area("Post")
-                submitted = st.form_submit_button("Post")
-            if submitted:
-                if post_title.strip() and post_text.strip():
-                    current_user["forum_posts"].insert(
-                        0,
-                        {
-                            "title": post_title.strip(),
-                            "author": st.session_state["user_name"],
-                            "genre": None,
-                            "club": None,
-                            "replies": 0,
-                            "likes": 0,
-                            "time_ago": "just now",
-                            "preview": post_text.strip(),
-                        },
-                    )
-                    save_user_store(store)
-                    st.success("Posted to forum.")
+        if st.session_state.get("selected_forum_post_id") is not None:
+            selected_post = next(
+                (p for p in forum_posts_data if int(p.get("id", -1)) == int(st.session_state["selected_forum_post_id"])),
+                None,
+            )
+            if selected_post is not None and can_view_forum_post(selected_post, current_user):
+                st.markdown("### Discussion")
+                if st.button("Back to posts"):
+                    st.session_state["selected_forum_post_id"] = None
                     st.rerun()
+                st.markdown(f"## {selected_post['title']}")
+                tags = [x for x in [selected_post.get("genre"), selected_post.get("club")] if x]
+                st.caption(f"{selected_post['author']} | {selected_post['time_ago']} | {' | '.join(tags)}")
+                st.write(selected_post["preview"])
+
+                # Post actions
+                a1, a2 = st.columns(2)
+                if current_user is not None:
+                    email = st.session_state["user_email"]
+                    liked_by = selected_post.get("liked_by", [])
+                    liked = email in liked_by
+                    if a1.button("Unlike post" if liked else "Like post", key=f"like_post_{selected_post['id']}"):
+                        if liked:
+                            selected_post["liked_by"] = [u for u in liked_by if u != email]
+                            selected_post["likes"] = max(0, int(selected_post.get("likes", 0)) - 1)
+                        else:
+                            selected_post.setdefault("liked_by", []).append(email)
+                            selected_post["likes"] = int(selected_post.get("likes", 0)) + 1
+                        save_forum_store(forum_store)
+                        st.rerun()
+                    saved_ids = current_user.get("saved_forum_post_ids", [])
+                    is_saved = int(selected_post["id"]) in saved_ids
+                    if a2.button("Unsave post" if is_saved else "Save post", key=f"save_post_{selected_post['id']}"):
+                        if is_saved:
+                            current_user["saved_forum_post_ids"] = [
+                                pid for pid in saved_ids if int(pid) != int(selected_post["id"])
+                            ]
+                        else:
+                            current_user["saved_forum_post_ids"].append(int(selected_post["id"]))
+                        save_user_store(store)
+                        st.rerun()
                 else:
-                    st.warning("Please add both title and post content.")
-        else:
-            st.caption("Sign in to create and save forum posts.")
-        for post in posts:
-            st.markdown(f"### {post['title']}")
-            tags = [x for x in [post.get("genre"), post.get("club")] if x]
-            st.caption(f"{post['author']} | {post['time_ago']} | {' | '.join(tags)}")
-            st.write(post["preview"])
-            st.caption(f"Likes: {post['likes']} | Replies: {post['replies']}")
-            st.divider()
+                    a1.caption("Sign in to like posts.")
+                    a2.caption("Sign in to save posts.")
+
+                st.caption(f"Likes: {selected_post.get('likes', 0)}")
+                st.markdown("#### Comments")
+                comments = selected_post.get("comments", [])
+                if not comments:
+                    st.caption("No comments yet.")
+                for idx, comment in enumerate(comments):
+                    st.markdown(f"**{comment.get('author','User')}**")
+                    st.write(comment.get("text", ""))
+                    if current_user is not None:
+                        email = st.session_state["user_email"]
+                        c_liked_by = comment.get("liked_by", [])
+                        c_liked = email in c_liked_by
+                        if st.button(
+                            f"{'Unlike' if c_liked else 'Like'} comment ({comment.get('likes', 0)})",
+                            key=f"like_comment_{selected_post['id']}_{idx}",
+                        ):
+                            if c_liked:
+                                comment["liked_by"] = [u for u in c_liked_by if u != email]
+                                comment["likes"] = max(0, int(comment.get("likes", 0)) - 1)
+                            else:
+                                comment.setdefault("liked_by", []).append(email)
+                                comment["likes"] = int(comment.get("likes", 0)) + 1
+                            save_forum_store(forum_store)
+                            st.rerun()
+                    else:
+                        st.caption(f"Likes: {comment.get('likes', 0)}")
+                    st.divider()
+
+                if current_user is not None:
+                    with st.form(f"reply_form_{selected_post['id']}"):
+                        reply = st.text_area("Write a reply")
+                        submit_reply = st.form_submit_button("Reply")
+                    if submit_reply:
+                        if reply.strip():
+                            selected_post.setdefault("comments", []).append(
+                                {
+                                    "author": st.session_state["user_name"],
+                                    "text": reply.strip(),
+                                    "likes": 0,
+                                    "liked_by": [],
+                                }
+                            )
+                            selected_post["replies"] = len(selected_post.get("comments", []))
+                            save_forum_store(forum_store)
+                            st.rerun()
+                        else:
+                            st.warning("Please write a reply before submitting.")
+                else:
+                    st.caption("Sign in to reply to comments.")
+            else:
+                st.session_state["selected_forum_post_id"] = None
+
+        if st.session_state.get("selected_forum_post_id") is None:
+            if st.session_state["signed_in"] and current_user is not None:
+                joined_clubs = [
+                    c for c in clubs if c["id"] in current_user.get("club_ids", [])
+                ]
+                with st.form("new_forum_post"):
+                    st.subheader("Create a forum post")
+                    post_title = st.text_input("Title")
+                    post_text = st.text_area("Post")
+                    c1, c2 = st.columns(2)
+                    visibility = c1.selectbox(
+                        "Visibility",
+                        ["Public", "Club Members"],
+                        help="Public posts are visible to everyone. Club posts are only for one club.",
+                    )
+                    selected_club_name = None
+                    selected_club_id = None
+                    if visibility == "Club Members":
+                        club_options = [f"{c['id']}::{c['name']}" for c in joined_clubs]
+                        selected_club_name = c2.selectbox(
+                            "Club",
+                            [c.split("::", 1)[1] for c in club_options] if club_options else ["No joined clubs"],
+                            disabled=not club_options,
+                        )
+                        if club_options:
+                            selected_club_id = [
+                                int(c.split("::", 1)[0])
+                                for c in club_options
+                                if c.split("::", 1)[1] == selected_club_name
+                            ][0]
+                    submitted = st.form_submit_button("Post")
+                if submitted:
+                    if post_title.strip() and post_text.strip():
+                        if visibility == "Club Members" and not joined_clubs:
+                            st.warning("Join a club first to create club-only posts.")
+                        else:
+                            forum_store["posts"].insert(
+                                0,
+                                {
+                                    "id": int(forum_store["next_post_id"]),
+                                    "title": post_title.strip(),
+                                    "author": st.session_state["user_name"],
+                                    "genre": None,
+                                    "club": selected_club_name if visibility == "Club Members" else None,
+                                    "club_id": selected_club_id if visibility == "Club Members" else None,
+                                    "visibility": "club" if visibility == "Club Members" else "public",
+                                    "replies": 0,
+                                    "likes": 0,
+                                    "liked_by": [],
+                                    "time_ago": "just now",
+                                    "preview": post_text.strip(),
+                                    "comments": [],
+                                },
+                            )
+                            forum_store["next_post_id"] = int(forum_store["next_post_id"]) + 1
+                            save_forum_store(forum_store)
+                            st.success("Posted to forum.")
+                            st.rerun()
+                    else:
+                        st.warning("Please add both title and post content.")
+            else:
+                st.caption("Sign in to create and save forum posts.")
+
+            view = st.radio(
+                "View",
+                ["All", "Public", "Club Discussions", "Saved"],
+                horizontal=True,
+            )
+            posts = [p for p in forum_posts_data if can_view_forum_post(p, current_user)]
+            if view == "Public":
+                posts = [p for p in posts if p.get("visibility") != "club"]
+            elif view == "Club Discussions":
+                posts = [p for p in posts if p.get("visibility") == "club"]
+            elif view == "Saved":
+                if current_user is None:
+                    posts = []
+                else:
+                    saved_ids = {int(pid) for pid in current_user.get("saved_forum_post_ids", [])}
+                    posts = [p for p in posts if int(p.get("id", -1)) in saved_ids]
+
+            if view == "Saved" and current_user is None:
+                st.info("Sign in to view saved forum posts.")
+            elif view == "Saved" and not posts:
+                st.caption("No saved posts yet.")
+
+            for post in posts:
+                st.markdown(f"### {post['title']}")
+                tags = [x for x in [post.get("genre"), post.get("club")] if x]
+                meta = f"{post['author']} | {post['time_ago']} | {' | '.join(tags)}"
+                st.caption(meta)
+                st.write(post["preview"])
+                st.caption(f"Likes: {int(post.get('likes',0))} | Replies: {int(post.get('replies',0))}")
+                if st.button("Open discussion", key=f"open_forum_post_{int(post['id'])}"):
+                    st.session_state["selected_forum_post_id"] = int(post["id"])
+                    st.rerun()
+                st.divider()
 
 
 if __name__ == "__main__":

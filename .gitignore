@@ -208,3 +208,4 @@ __marimo__/
 
 # Local app user accounts/state
 data/processed/user_accounts.json
+data/processed/forum_posts.json
