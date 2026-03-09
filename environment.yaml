@@ -1,11 +1,19 @@
-name: bookish
+name: bookish-env
 channels:
   - conda-forge
   - defaults
+
 dependencies:
-  - python=3.13
-  - nodejs=25.*
+  - python=3.11
+  - pandas
+  - numpy
+  - scipy
+  - requests
+  - python-dotenv
+  - pylint=4.0.4
   - pip
+  - build
+
   - pip:
-    - build
-    - requests
+      - isbnlib
+      - sodapy
