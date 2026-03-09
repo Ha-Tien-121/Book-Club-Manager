@@ -1,39 +1,32 @@
-"""Bookish Streamlit application."""
+"""Bookish Streamlit application backed by data/processed files."""
+
+from __future__ import annotations
+
+import ast
+import csv
+import html
+import json
+from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
-from app.mock_data import (
-    books,
-    books_by_id,
-    clubs,
-    forum_posts,
-    genres,
-    library,
-    neighborhoods,
-    user_club_ids,
-)
+BASE_DIR = Path(__file__).resolve().parent
+PROCESSED_DIR = BASE_DIR / "data" / "processed"
+USER_DB_PATH = PROCESSED_DIR / "user_accounts.json"
 
 
 def inject_styles() -> None:
     st.markdown(
         """
         <style>
-        .block-container {padding-top: 1.25rem; max-width: 1100px;}
-        .book-card {
-            border: 1px solid #e7dfd1;
-            border-radius: 14px;
-            background: #fbf8f3;
-            padding: 0.9rem;
-            margin-bottom: 0.75rem;
+        .block-container {padding-top: 3.75rem; max-width: 1100px;}
+        .stTabs [data-baseweb="tab-list"] {
+            margin-top: 0.5rem;
+            position: relative;
+            z-index: 2;
+            background: transparent;
         }
-        .club-card {
-            border: 1px solid #e7dfd1;
-            border-radius: 14px;
-            background: #fefdfb;
-            padding: 1rem;
-            margin-bottom: 0.9rem;
-        }
-        .muted {color: #7f7468; font-size: 0.92rem;}
         .pill {
             display: inline-block;
             padding: 2px 8px;
@@ -51,11 +44,194 @@ def inject_styles() -> None:
     )
 
 
-def init_session() -> None:
+def _read_jsonl_dict_lines(path: Path) -> list[dict]:
+    rows = []
+    if not path.exists():
+        return rows
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rows.append(json.loads(line))
+    return rows
+
+
+def _read_isbn_index_file(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    out = set()
+    for row in data:
+        val = str(row.get("0", "")).strip()
+        if val:
+            out.add(val.upper())
+    return out
+
+
+def _parse_tags(text: str) -> list[str]:
+    if not text:
+        return []
+    try:
+        raw = ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip().lower() for x in raw if str(x).strip()]
+    return []
+
+
+def load_user_store() -> dict:
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    if not USER_DB_PATH.exists():
+        default_store = {"users": {}}
+        USER_DB_PATH.write_text(json.dumps(default_store, indent=2), encoding="utf-8")
+        return default_store
+
+    with USER_DB_PATH.open("r", encoding="utf-8") as f:
+        try:
+            store = json.load(f)
+        except json.JSONDecodeError:
+            store = {"users": {}}
+    if "users" not in store or not isinstance(store["users"], dict):
+        store = {"users": {}}
+    return store
+
+
+def save_user_store(store: dict) -> None:
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    USER_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
+
+
+def ensure_user_schema(user_record: dict) -> dict:
+    user_record.setdefault("name", "")
+    user_record.setdefault("password", "")
+    user_record.setdefault(
+        "library",
+        {
+            "in_progress": [],
+            "saved": [],
+            "finished": [],
+        },
+    )
+    user_record.setdefault("club_ids", [])
+    user_record.setdefault("forum_posts", [])
+    return user_record
+
+
+@st.cache_data
+def load_data() -> dict:
+    books_parent = _read_jsonl_dict_lines(PROCESSED_DIR / "first_100_books_by_parent_asin.jsonl")
+    catalog_isbns = _read_isbn_index_file(PROCESSED_DIR / "first_100_spl_catalog_by_isbn.json")
+    checkout_isbns = _read_isbn_index_file(PROCESSED_DIR / "first_100_spl_checkouts_by_isbn.json")
+
+    branch_pool = ["Central Library", "Ballard", "Capitol Hill", "Fremont", "University", "West Seattle"]
+    books = []
+    for idx, row in enumerate(books_parent, start=1):
+        source_id, meta = next(iter(row.items()))
+        cats = meta.get("categories") or []
+        genres = [str(c) for c in cats[:3]] or ["General"]
+        desc = meta.get("description") or []
+        description = " ".join(str(x) for x in desc[:3]).strip() if isinstance(desc, list) else str(desc).strip()
+        if not description:
+            description = "No description available."
+
+        cover = meta.get("images") or "https://placehold.co/220x330?text=Book"
+        rating_number = int(meta.get("rating_number") or 0)
+        rating = float(meta.get("average_rating") or 0.0)
+        in_spl = source_id.upper() in catalog_isbns or source_id.upper() in checkout_isbns
+        branches = []
+        if in_spl:
+            branches = branch_pool[: 1 + (sum(ord(ch) for ch in source_id) % 3)]
+
+        books.append(
+            {
+                "id": idx,
+                "source_id": source_id,
+                "title": str(meta.get("title") or "Untitled"),
+                "author": str(meta.get("author_name") or "Unknown"),
+                "cover": cover,
+                "rating": round(rating, 1),
+                "rating_count": rating_number,
+                "genres": genres,
+                "description": description,
+                "spl_available": in_spl,
+                "spl_branches": branches,
+                "checkouts": rating_number + (200 if in_spl else 20),
+                "clubs_reading": 1 + (idx % 6),
+            }
+        )
+
+    books = books[:36]
+    books_by_id = {b["id"]: b for b in books}
+    title_author_to_id = {f"{b['title'].strip().lower()}|{b['author'].strip().lower()}": b["id"] for b in books}
+
+    clubs = []
+    clubs_path = PROCESSED_DIR / "bookclubs_seattle_clean.csv"
+    if clubs_path.exists():
+        with clubs_path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for idx, row in enumerate(reader, start=1):
+                tags = _parse_tags(row.get("tags", ""))
+                genre = tags[0].title() if tags else "General"
+                key = f"{(row.get('book_title') or '').strip().lower()}|{(row.get('book_author') or '').strip().lower()}"
+                current_book_id = title_author_to_id.get(key, books[(idx - 1) % len(books)]["id"])
+                clubs.append(
+                    {
+                        "id": idx,
+                        "name": row.get("title") or f"Book Club {idx}",
+                        "description": (row.get("description") or "No description provided.").strip(),
+                        "genre": genre,
+                        "location": row.get("city_state") or "Seattle, WA",
+                        "meeting_day": row.get("day_of_week_start") or "TBD",
+                        "meeting_time": row.get("start_time") or "TBD",
+                        "members": 10 + (idx * 3 % 45),
+                        "current_book_id": current_book_id,
+                        "thumbnail": row.get("thumbnail") or "https://placehold.co/600x360?text=Club",
+                        "is_external": True,
+                        "external_link": row.get("link") or "",
+                    }
+                )
+                if idx >= 24:
+                    break
+
+    if not clubs:
+        clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "members": 20, "current_book_id": books[0]["id"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
+
+    user_club_ids = [c["id"] for c in clubs[: min(4, len(clubs))]]
+    library = {"in_progress": [b["id"] for b in books[0:4]], "saved": [b["id"] for b in books[4:8]], "finished": [b["id"] for b in books[8:12]]}
+    forum_posts = [
+        {"title": f"What do you think about {books[0]['title']}?", "author": "Community Mod", "genre": books[0]["genres"][0], "club": clubs[0]["name"] if clubs else None, "replies": 8, "likes": 15, "time_ago": "2 hours ago", "preview": f"Share your thoughts about {books[0]['title']} by {books[0]['author']}."},
+        {"title": f"Top picks this week: {books[1]['title']}", "author": "Bookish Team", "genre": books[1]["genres"][0], "club": None, "replies": 5, "likes": 12, "time_ago": "1 day ago", "preview": f"This week's recommendation highlight is {books[1]['title']}."},
+    ]
+    genres = sorted({g for b in books for g in b["genres"]})
+    neighborhoods = sorted({(c["location"].split(",")[0]).strip() for c in clubs})
+
+    return {"books": books, "books_by_id": books_by_id, "clubs": clubs, "forum_posts": forum_posts, "genres": genres, "library": library, "neighborhoods": neighborhoods, "user_club_ids": user_club_ids}
+
+
+def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("signed_in", False)
+    st.session_state.setdefault("user_email", "")
     st.session_state.setdefault("user_name", "")
     st.session_state.setdefault("selected_book_id", books[0]["id"])
-    st.session_state.setdefault("nav_page", "Feed")
+    st.session_state.setdefault("jump_to_book_detail", False)
+
+
+def handle_query_navigation(books_by_id: dict[int, dict]) -> None:
+    book_param = st.query_params.get("book_id")
+    if st.query_params.get("open") != "detail" or not book_param:
+        return
+    try:
+        book_id = int(book_param)
+    except (TypeError, ValueError):
+        return
+    if book_id in books_by_id:
+        st.session_state["selected_book_id"] = book_id
+        st.session_state["jump_to_book_detail"] = True
+        st.query_params.clear()
+        st.rerun()
 
 
 def auth_panel() -> None:
@@ -64,212 +240,276 @@ def auth_panel() -> None:
         st.sidebar.success(f"Signed in as {st.session_state['user_name']}")
         if st.sidebar.button("Sign out"):
             st.session_state["signed_in"] = False
+            st.session_state["user_email"] = ""
             st.session_state["user_name"] = ""
             st.rerun()
         return
-
     with st.sidebar.form("sign_in_form"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Sign in")
-    if submitted:
-        if email.strip() and password.strip():
-            st.session_state["signed_in"] = True
-            st.session_state["user_name"] = email.split("@")[0]
-            st.sidebar.success("Signed in")
-            st.rerun()
-        else:
-            st.sidebar.error("Please enter email and password.")
+        c1, c2 = st.columns(2)
+        sign_in = c1.form_submit_button("Sign in")
+        sign_up = c2.form_submit_button("Create Account")
+    if not (sign_in or sign_up):
+        return
+
+    email = email.strip().lower()
+    password = password.strip()
+    if not email or not password:
+        st.sidebar.error("Please enter email and password.")
+        return
+
+    store = load_user_store()
+    users = store["users"]
+    if sign_up:
+        if email in users:
+            st.sidebar.error("Account already exists. Please sign in.")
+            return
+        users[email] = ensure_user_schema(
+            {
+                "name": email.split("@")[0],
+                "password": password,
+            }
+        )
+        save_user_store(store)
+        st.session_state["signed_in"] = True
+        st.session_state["user_email"] = email
+        st.session_state["user_name"] = users[email]["name"]
+        st.sidebar.success("Account created and signed in.")
+        st.rerun()
+        return
+
+    # sign in flow
+    record = users.get(email)
+    if not record or record.get("password") != password:
+        st.sidebar.error("Invalid email or password.")
+        return
+    ensure_user_schema(record)
+    st.session_state["signed_in"] = True
+    st.session_state["user_email"] = email
+    st.session_state["user_name"] = record.get("name", email.split("@")[0])
+    st.sidebar.success("Signed in.")
+    st.rerun()
 
 
 def render_book_card(book: dict, key_prefix: str) -> None:
-    st.image(book["cover"], width=145)
-    st.markdown(f"**{book['title']}**")
-    st.caption(book["author"])
-    st.caption(
-        f"Rating: {book['rating']} ({book['rating_count']:,}) | Clubs: {book['clubs_reading']}"
-    )
-    st.markdown("".join([f"<span class='pill'>{g}</span>" for g in book["genres"]]), unsafe_allow_html=True)
+    href = f"?book_id={book['id']}&open=detail"
+    stats = f"Rating: {book['rating']} ({book['rating_count']:,}) | Clubs: {book['clubs_reading']}"
+    st.markdown(f'<a href="{href}" target="_self"><img src="{book["cover"]}" alt="{html.escape(book["title"])}" style="width:145px;max-width:100%;border-radius:8px;" /></a>', unsafe_allow_html=True)
+    st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;"><strong>{html.escape(book["title"])}</strong></a>', unsafe_allow_html=True)
+    st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;">{html.escape(book["author"])}</a>', unsafe_allow_html=True)
+    st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;">{html.escape(stats)}</a>', unsafe_allow_html=True)
+    st.markdown("".join([f"<span class='pill'>{html.escape(g)}</span>" for g in book["genres"]]), unsafe_allow_html=True)
     if st.button("View details", key=f"{key_prefix}_details_{book['id']}"):
         st.session_state["selected_book_id"] = book["id"]
-        st.session_state["nav_page"] = "Book Detail"
+        st.session_state["jump_to_book_detail"] = True
         st.rerun()
 
 
-def feed_page() -> None:
-    st.title("Discover your next read")
-    st.write(
-        "Personalized book recommendations based on your preferences and Seattle reading trends."
-    )
-    selected_genres = st.multiselect("Filter by genre", genres)
-    filtered = books
-    if selected_genres:
-        filtered = [b for b in books if any(g in selected_genres for g in b["genres"])]
-
-    trending = sorted(books, key=lambda b: b["checkouts"], reverse=True)[:4]
-    st.subheader("Trending in Seattle")
-    trend_cols = st.columns(4)
-    for idx, book in enumerate(trending):
-        with trend_cols[idx]:
-            render_book_card(book, key_prefix=f"trend_{idx}")
-
-    st.subheader("Recommended for you")
-    rec_cols = st.columns(3)
-    for idx, book in enumerate(filtered):
-        with rec_cols[idx % 3]:
-            render_book_card(book, key_prefix=f"rec_{idx}")
-
-
-def explore_clubs_page() -> None:
-    st.title("Explore Clubs")
-    st.write("Find active clubs by genre, location, and availability.")
-    search = st.text_input("Search clubs")
-    genre_filter = st.selectbox("Genre", ["All"] + genres)
-    neighborhood_filter = st.selectbox("Neighborhood", ["All"] + neighborhoods)
-
-    filtered = clubs
-    if search.strip():
-        q = search.strip().lower()
-        filtered = [
-            c
-            for c in filtered
-            if q in c["name"].lower() or q in c["description"].lower()
-        ]
-    if genre_filter != "All":
-        filtered = [c for c in filtered if c["genre"] == genre_filter]
-    if neighborhood_filter != "All":
-        filtered = [
-            c for c in filtered if neighborhood_filter.lower() in c["location"].lower()
-        ]
-
-    if not filtered:
-        st.info("No clubs match these filters.")
-        return
-
-    for club in filtered:
-        current = books_by_id[club["current_book_id"]]
-        st.markdown("<div class='club-card'>", unsafe_allow_html=True)
-        c1, c2 = st.columns([1, 2.3])
-        with c1:
-            st.image(club["thumbnail"], width="stretch")
-        with c2:
-            st.markdown(f"### {club['name']}")
-            st.caption(f"{club['genre']} | {club['location']}")
-            st.write(club["description"])
-            st.markdown(
-                f"**Meetings:** {club['meeting_day']} at {club['meeting_time']} | "
-                f"**Members:** {club['members']}"
-            )
-            st.markdown(f"**Currently reading:** {current['title']}")
-            st.button("Join", key=f"join_{club['id']}")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-def my_clubs_page() -> None:
-    st.title("My Clubs")
-    my_clubs = [c for c in clubs if c["id"] in user_club_ids]
-    for club in my_clubs:
-        book = books_by_id[club["current_book_id"]]
-        st.markdown(f"### {club['name']}")
-        st.caption(f"{club['members']} members | {club['location']}")
-        st.write(f"Currently reading: **{book['title']}**")
-        st.divider()
-
-
-def library_page() -> None:
-    st.title("Library")
-    tabs = st.tabs(["In Progress", "Saved", "Finished"])
-    tab_to_key = [("in_progress", tabs[0]), ("saved", tabs[1]), ("finished", tabs[2])]
-    for key, tab in tab_to_key:
-        with tab:
-            ids = library[key]
-            if not ids:
-                st.info("No books in this category yet.")
-                continue
-            cols = st.columns(3)
-            for idx, book_id in enumerate(ids):
-                with cols[idx % 3]:
-                    render_book_card(books_by_id[book_id], key_prefix=f"{key}_{idx}")
-
-
-def book_detail_page() -> None:
-    st.title("Book Detail")
-    options = {f"{b['title']} - {b['author']}": b["id"] for b in books}
-    selected_label = st.selectbox(
-        "Select a book",
-        options=list(options.keys()),
-        index=list(options.values()).index(st.session_state["selected_book_id"]),
-    )
-    st.session_state["selected_book_id"] = options[selected_label]
-    book = books_by_id[st.session_state["selected_book_id"]]
-
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        st.image(book["cover"], width="stretch")
-    with c2:
-        st.subheader(book["title"])
-        st.caption(book["author"])
-        st.write(
-            f"Rating: **{book['rating']}** ({book['rating_count']:,} ratings)  "
-            f"|  Clubs reading: **{book['clubs_reading']}**"
-        )
-        st.write(book["description"])
-        status = st.selectbox("Save to library as", ["Saved", "In Progress", "Finished"])
-        st.button(f"Update status to {status}")
-
-    if book["spl_available"]:
-        st.markdown("#### Seattle Public Library availability")
-        st.write(", ".join(book["spl_branches"]))
-        st.caption(f"Checked out {book['checkouts']:,} times in the past year")
-
-
-def forum_page() -> None:
-    st.title("Forum")
-    view = st.radio("View", ["All", "Public", "Club Discussions"], horizontal=True)
-    posts = forum_posts
-    if view == "Public":
-        posts = [p for p in posts if not p["club"]]
-    elif view == "Club Discussions":
-        posts = [p for p in posts if p["club"]]
-
-    for post in posts:
-        st.markdown("### " + post["title"])
-        tags = []
-        if post["genre"]:
-            tags.append(post["genre"])
-        if post["club"]:
-            tags.append(post["club"])
-        st.caption(f"{post['author']} | {post['time_ago']} | {' | '.join(tags)}")
-        st.write(post["preview"])
-        st.caption(f"Likes: {post['likes']} | Replies: {post['replies']}")
-        st.divider()
-
-
 def main() -> None:
-    st.set_page_config(page_title="Bookish", page_icon="📚", layout="wide")
+    st.set_page_config(page_title="Bookish", page_icon="ðŸ“š", layout="wide")
     inject_styles()
-    init_session()
-    auth_panel()
+    data = load_data()
+    books = data["books"]
+    books_by_id = data["books_by_id"]
+    clubs = data["clubs"]
+    genres = data["genres"]
+    neighborhoods = data["neighborhoods"]
+    library = data["library"]
+    forum_posts = data["forum_posts"]
+    default_user_club_ids = data["user_club_ids"]
 
+    init_session(books)
+    handle_query_navigation(books_by_id)
     st.sidebar.title("Bookish")
-    page = st.sidebar.radio(
-        "Navigate",
-        ["Feed", "Explore Clubs", "My Clubs", "Library", "Book Detail", "Forum"],
-        key="nav_page",
-    )
+    auth_panel()
+    store = load_user_store()
+    users = store["users"]
+    current_user = None
+    if st.session_state["signed_in"]:
+        email = st.session_state["user_email"]
+        current_user = users.get(email)
+        if current_user is None:
+            st.session_state["signed_in"] = False
+            st.session_state["user_email"] = ""
+            st.session_state["user_name"] = ""
+            st.rerun()
+        current_user = ensure_user_schema(current_user)
 
-    if page == "Feed":
-        feed_page()
-    elif page == "Explore Clubs":
-        explore_clubs_page()
-    elif page == "My Clubs":
-        my_clubs_page()
-    elif page == "Library":
-        library_page()
-    elif page == "Book Detail":
-        book_detail_page()
-    else:
-        forum_page()
+    tabs = st.tabs(["Feed", "Explore Clubs", "My Clubs", "Library", "Book Detail", "Forum"])
+    if st.session_state.get("jump_to_book_detail"):
+        components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Book Detail"){t.click();break;}}</script>""", height=0)
+        st.session_state["jump_to_book_detail"] = False
+
+    with tabs[0]:
+        st.title("Discover your next read")
+        selected_genres = st.multiselect("Filter by genre", genres)
+        filtered = [b for b in books if not selected_genres or any(g in selected_genres for g in b["genres"])]
+        trending = sorted(books, key=lambda b: b["checkouts"], reverse=True)[:4]
+        st.subheader("Trending in Seattle")
+        cols = st.columns(4)
+        for i, book in enumerate(trending):
+            with cols[i]:
+                render_book_card(book, f"trend_{i}")
+        st.subheader("Recommended for you")
+        cols = st.columns(3)
+        for i, book in enumerate(filtered):
+            with cols[i % 3]:
+                render_book_card(book, f"rec_{i}")
+
+    with tabs[1]:
+        st.title("Explore Clubs")
+        search = st.text_input("Search clubs")
+        gfilter = st.selectbox("Genre", ["All"] + genres)
+        nfilter = st.selectbox("Neighborhood", ["All"] + neighborhoods)
+        filtered = clubs
+        if search.strip():
+            q = search.strip().lower()
+            filtered = [c for c in filtered if q in c["name"].lower() or q in c["description"].lower()]
+        if gfilter != "All":
+            filtered = [c for c in filtered if c["genre"] == gfilter]
+        if nfilter != "All":
+            filtered = [c for c in filtered if nfilter.lower() in c["location"].lower()]
+        for club in filtered:
+            st.subheader(club["name"])
+            st.caption(f"{club['genre']} | {club['location']}")
+            summary = club["description"][:280] + ("..." if len(club["description"]) > 280 else "")
+            st.write(summary)
+            st.write(f"Meetings: {club['meeting_day']} at {club['meeting_time']} | Members: {club['members']}")
+            if club.get("external_link"):
+                st.link_button("Open club listing", club["external_link"], use_container_width=False)
+            if st.session_state["signed_in"] and current_user is not None:
+                joined = club["id"] in current_user["club_ids"]
+                if joined:
+                    st.success("Joined")
+                elif st.button("Join club", key=f"join_club_{club['id']}"):
+                    current_user["club_ids"].append(club["id"])
+                    save_user_store(store)
+                    st.rerun()
+            else:
+                st.caption("Sign in to join clubs.")
+            st.divider()
+
+    with tabs[2]:
+        st.title("My Clubs")
+        if not st.session_state["signed_in"] or current_user is None:
+            st.info("Sign in to see your clubs.")
+        for club in [c for c in clubs if c["id"] in (current_user["club_ids"] if current_user else [])]:
+            st.subheader(club["name"])
+            st.caption(f"{club['members']} members | {club['location']}")
+            st.write(f"Currently reading: **{books_by_id[club['current_book_id']]['title']}**")
+            st.divider()
+        if st.session_state["signed_in"] and current_user is not None and not current_user["club_ids"]:
+            st.info("You have not joined any clubs yet.")
+
+    with tabs[3]:
+        st.title("Library")
+        if not st.session_state["signed_in"] or current_user is None:
+            st.info("Sign in to see your books.")
+        else:
+            user_library = current_user["library"]
+            ltabs = st.tabs(["In Progress", "Saved", "Finished"])
+            for key, tab in zip(["in_progress", "saved", "finished"], ltabs):
+                with tab:
+                    book_ids = [bid for bid in user_library[key] if bid in books_by_id]
+                    if not book_ids:
+                        st.caption("No books in this list yet.")
+                        continue
+                    cols = st.columns(3)
+                    for i, bid in enumerate(book_ids):
+                        with cols[i % 3]:
+                            render_book_card(books_by_id[bid], f"{key}_{i}")
+
+    with tabs[4]:
+        st.title("Book Detail")
+        options = {f"{b['title']} - {b['author']}": b["id"] for b in books}
+        labels = list(options.keys())
+        values = list(options.values())
+        idx = values.index(st.session_state["selected_book_id"]) if st.session_state["selected_book_id"] in values else 0
+        selected_label = st.selectbox("Select a book", labels, index=idx)
+        st.session_state["selected_book_id"] = options[selected_label]
+        book = books_by_id[st.session_state["selected_book_id"]]
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            st.image(book["cover"], width="stretch")
+        with c2:
+            st.subheader(book["title"])
+            st.caption(book["author"])
+            st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,}) | Clubs: **{book['clubs_reading']}**")
+            st.write(book["description"])
+            save_option = st.selectbox(
+                "Save to library as",
+                ["Saved", "In Progress", "Finished"],
+                disabled=not st.session_state["signed_in"],
+            )
+            if st.button("Update status", disabled=not st.session_state["signed_in"]):
+                if current_user is None:
+                    st.warning("Sign in to save books.")
+                else:
+                    status_key_map = {
+                        "Saved": "saved",
+                        "In Progress": "in_progress",
+                        "Finished": "finished",
+                    }
+                    target_key = status_key_map[save_option]
+                    for key in ["saved", "in_progress", "finished"]:
+                        current_user["library"][key] = [
+                            bid for bid in current_user["library"][key] if bid != book["id"]
+                        ]
+                    current_user["library"][target_key].append(book["id"])
+                    save_user_store(store)
+                    st.success(f"Saved to {save_option}.")
+            if not st.session_state["signed_in"]:
+                st.caption("Sign in to save books.")
+        if book["spl_available"]:
+            st.markdown("#### Seattle Public Library availability")
+            st.write(", ".join(book["spl_branches"]))
+
+    with tabs[5]:
+        st.title("Forum")
+        view = st.radio("View", ["All", "Public", "Club Discussions"], horizontal=True)
+        posts = list(forum_posts)
+        if current_user is not None:
+            posts = list(current_user.get("forum_posts", [])) + posts
+        if view == "Public":
+            posts = [p for p in posts if not p["club"]]
+        elif view == "Club Discussions":
+            posts = [p for p in posts if p["club"]]
+        if st.session_state["signed_in"] and current_user is not None:
+            with st.form("new_forum_post"):
+                st.subheader("Create a forum post")
+                post_title = st.text_input("Title")
+                post_text = st.text_area("Post")
+                submitted = st.form_submit_button("Post")
+            if submitted:
+                if post_title.strip() and post_text.strip():
+                    current_user["forum_posts"].insert(
+                        0,
+                        {
+                            "title": post_title.strip(),
+                            "author": st.session_state["user_name"],
+                            "genre": None,
+                            "club": None,
+                            "replies": 0,
+                            "likes": 0,
+                            "time_ago": "just now",
+                            "preview": post_text.strip(),
+                        },
+                    )
+                    save_user_store(store)
+                    st.success("Posted to forum.")
+                    st.rerun()
+                else:
+                    st.warning("Please add both title and post content.")
+        else:
+            st.caption("Sign in to create and save forum posts.")
+        for post in posts:
+            st.markdown(f"### {post['title']}")
+            tags = [x for x in [post.get("genre"), post.get("club")] if x]
+            st.caption(f"{post['author']} | {post['time_ago']} | {' | '.join(tags)}")
+            st.write(post["preview"])
+            st.caption(f"Likes: {post['likes']} | Replies: {post['replies']}")
+            st.divider()
 
 
 if __name__ == "__main__":
