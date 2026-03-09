@@ -9,6 +9,7 @@ import csv
 import html
 import json
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -281,6 +282,7 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("user_name", "")
     st.session_state.setdefault("selected_book_id", books[0]["id"])
     st.session_state.setdefault("jump_to_book_detail", False)
+    st.session_state.setdefault("show_book_detail_page", False)
     st.session_state.setdefault("selected_forum_post_id", None)
     st.session_state.setdefault("jump_to_forum_detail", False)
 
@@ -307,7 +309,7 @@ def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[in
         return
     if book_id in books_by_id:
         st.session_state["selected_book_id"] = book_id
-        st.session_state["jump_to_book_detail"] = True
+        st.session_state["show_book_detail_page"] = True
         st.query_params.clear()
         st.rerun()
 
@@ -370,9 +372,10 @@ def auth_panel() -> None:
     st.rerun()
 
 
-def render_book_card(book: dict, key_prefix: str) -> None:
+def render_book_card(book: dict, key_prefix: str, auth_user: str = "") -> None:
     """Render book card with clickable metadata and detail action."""
-    href = f"?book_id={book['id']}&open=detail"
+    auth_query = f"&auth_user={quote_plus(auth_user)}" if auth_user else ""
+    href = f"?book_id={book['id']}&open=detail{auth_query}"
     stats = f"Rating: {book['rating']} ({book['rating_count']:,})"
     st.markdown(f'<a href="{href}" target="_self"><img src="{book["cover"]}" alt="{html.escape(book["title"])}" style="width:145px;max-width:100%;border-radius:8px;" /></a>', unsafe_allow_html=True)
     st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;"><strong>{html.escape(book["title"])}</strong></a>', unsafe_allow_html=True)
@@ -381,7 +384,7 @@ def render_book_card(book: dict, key_prefix: str) -> None:
     st.markdown("".join([f"<span class='pill'>{html.escape(g)}</span>" for g in book["genres"]]), unsafe_allow_html=True)
     if st.button("View details", key=f"{key_prefix}_details_{book['id']}"):
         st.session_state["selected_book_id"] = book["id"]
-        st.session_state["jump_to_book_detail"] = True
+        st.session_state["show_book_detail_page"] = True
         st.rerun()
 
 
@@ -395,6 +398,55 @@ def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
     if club_id is None:
         return bool(post.get("club"))
     return club_id in current_user.get("club_ids", [])
+
+
+def render_book_detail_page(
+    books: list[dict],
+    books_by_id: dict[int, dict],
+    current_user: dict | None,
+    store: dict,
+) -> None:
+    """Render dedicated Book Detail page with back navigation to Feed."""
+    if st.button("← Back to Feed"):
+        st.session_state["show_book_detail_page"] = False
+        st.rerun()
+
+    st.title("Book Detail")
+    if st.session_state["selected_book_id"] not in books_by_id:
+        st.session_state["selected_book_id"] = books[0]["id"]
+    book = books_by_id[st.session_state["selected_book_id"]]
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        st.image(book["cover"], width="stretch")
+    with c2:
+        st.subheader(book["title"])
+        st.caption(book["author"])
+        st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,})")
+        st.write(book["description"])
+        save_option = st.selectbox(
+            "Save to library as",
+            ["Saved", "In Progress", "Finished"],
+            disabled=not st.session_state["signed_in"],
+        )
+        if st.button("Update status", disabled=not st.session_state["signed_in"]):
+            if current_user is None:
+                st.warning("Sign in to save books.")
+            else:
+                status_key_map = {
+                    "Saved": "saved",
+                    "In Progress": "in_progress",
+                    "Finished": "finished",
+                }
+                target_key = status_key_map[save_option]
+                for key in ["saved", "in_progress", "finished"]:
+                    current_user["library"][key] = [
+                        bid for bid in current_user["library"][key] if bid != book["id"]
+                    ]
+                current_user["library"][target_key].append(book["id"])
+                save_user_store(store)
+                st.success(f"Saved to {save_option}.")
+        if not st.session_state["signed_in"]:
+            st.caption("Sign in to save books.")
 
 
 def main() -> None:
@@ -414,6 +466,18 @@ def main() -> None:
     auth_panel()
     store = load_user_store()
     users = store["users"]
+    auth_user_from_query = (st.query_params.get("auth_user") or "").strip().lower()
+    if (
+        not st.session_state["signed_in"]
+        and auth_user_from_query
+        and auth_user_from_query in users
+    ):
+        restored = ensure_user_schema(users[auth_user_from_query])
+        st.session_state["signed_in"] = True
+        st.session_state["user_email"] = auth_user_from_query
+        st.session_state["user_name"] = restored.get(
+            "name", auth_user_from_query.split("@")[0]
+        )
     current_user = None
     if st.session_state["signed_in"]:
         email = st.session_state["user_email"]
@@ -429,11 +493,12 @@ def main() -> None:
     forum_posts_data = forum_store["posts"]
     forum_post_ids = {int(p["id"]) for p in forum_posts_data if "id" in p}
 
-    tabs = st.tabs(["Feed", "Explore Clubs", "My Clubs", "Library", "Book Detail", "Forum"])
+    if st.session_state.get("show_book_detail_page"):
+        render_book_detail_page(books, books_by_id, current_user, store)
+        return
+
+    tabs = st.tabs(["Feed", "Explore Clubs", "My Clubs", "Library", "Forum"])
     handle_query_navigation(books_by_id, forum_post_ids)
-    if st.session_state.get("jump_to_book_detail"):
-        components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Book Detail"){t.click();break;}}</script>""", height=0)
-        st.session_state["jump_to_book_detail"] = False
     if st.session_state.get("jump_to_forum_detail"):
         components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Forum"){t.click();break;}}</script>""", height=0)
         st.session_state["jump_to_forum_detail"] = False
@@ -449,14 +514,22 @@ def main() -> None:
             cols = st.columns(4)
             for i, book in enumerate(trending):
                 with cols[i]:
-                    render_book_card(book, f"trend_{i}")
+                    render_book_card(
+                        book,
+                        f"trend_{i}",
+                        auth_user=st.session_state.get("user_email", ""),
+                    )
         else:
             st.caption("No trending books match this genre filter.")
         st.subheader("Recommended for you")
         cols = st.columns(3)
         for i, book in enumerate(filtered):
             with cols[i % 3]:
-                render_book_card(book, f"rec_{i}")
+                render_book_card(
+                    book,
+                    f"rec_{i}",
+                    auth_user=st.session_state.get("user_email", ""),
+                )
 
         st.subheader("Suggested book clubs")
         clubs_source = clubs
@@ -556,47 +629,13 @@ def main() -> None:
                     cols = st.columns(3)
                     for i, bid in enumerate(book_ids):
                         with cols[i % 3]:
-                            render_book_card(books_by_id[bid], f"{key}_{i}")
+                            render_book_card(
+                                books_by_id[bid],
+                                f"{key}_{i}",
+                                auth_user=st.session_state.get("user_email", ""),
+                            )
 
     with tabs[4]:
-        st.title("Book Detail")
-        if st.session_state["selected_book_id"] not in books_by_id:
-            st.session_state["selected_book_id"] = books[0]["id"]
-        book = books_by_id[st.session_state["selected_book_id"]]
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.image(book["cover"], width="stretch")
-        with c2:
-            st.subheader(book["title"])
-            st.caption(book["author"])
-            st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,})")
-            st.write(book["description"])
-            save_option = st.selectbox(
-                "Save to library as",
-                ["Saved", "In Progress", "Finished"],
-                disabled=not st.session_state["signed_in"],
-            )
-            if st.button("Update status", disabled=not st.session_state["signed_in"]):
-                if current_user is None:
-                    st.warning("Sign in to save books.")
-                else:
-                    status_key_map = {
-                        "Saved": "saved",
-                        "In Progress": "in_progress",
-                        "Finished": "finished",
-                    }
-                    target_key = status_key_map[save_option]
-                    for key in ["saved", "in_progress", "finished"]:
-                        current_user["library"][key] = [
-                            bid for bid in current_user["library"][key] if bid != book["id"]
-                        ]
-                    current_user["library"][target_key].append(book["id"])
-                    save_user_store(store)
-                    st.success(f"Saved to {save_option}.")
-            if not st.session_state["signed_in"]:
-                st.caption("Sign in to save books.")
-
-    with tabs[5]:
         st.title("Forum")
         if st.session_state.get("selected_forum_post_id") is not None:
             selected_post = next(
