@@ -1,5 +1,7 @@
 """Bookish Streamlit application backed by data/processed files."""
 
+# pylint: disable=line-too-long,too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
+
 from __future__ import annotations
 
 import ast
@@ -18,6 +20,7 @@ FORUM_DB_PATH = PROCESSED_DIR / "forum_posts.json"
 
 
 def inject_styles() -> None:
+    """Inject custom CSS styles for spacing and visual consistency."""
     st.markdown(
         """
         <style>
@@ -46,6 +49,7 @@ def inject_styles() -> None:
 
 
 def _read_jsonl_dict_lines(path: Path) -> list[dict]:
+    """Read JSONL file where each line is a dictionary and return parsed rows."""
     rows = []
     if not path.exists():
         return rows
@@ -59,6 +63,7 @@ def _read_jsonl_dict_lines(path: Path) -> list[dict]:
 
 
 def _read_isbn_index_file(path: Path) -> set[str]:
+    """Read indexed ISBN JSON format and return normalized ISBN set."""
     if not path.exists():
         return set()
     with path.open("r", encoding="utf-8") as f:
@@ -72,6 +77,7 @@ def _read_isbn_index_file(path: Path) -> set[str]:
 
 
 def _parse_tags(text: str) -> list[str]:
+    """Parse serialized tag list string into normalized lowercase tags."""
     if not text:
         return []
     try:
@@ -84,6 +90,7 @@ def _parse_tags(text: str) -> list[str]:
 
 
 def load_user_store() -> dict:
+    """Load user account store from JSON, creating a default file if needed."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     if not USER_DB_PATH.exists():
         default_store = {"users": {}}
@@ -101,11 +108,13 @@ def load_user_store() -> dict:
 
 
 def save_user_store(store: dict) -> None:
+    """Persist user account store to disk."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     USER_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
 
 
 def ensure_user_schema(user_record: dict) -> dict:
+    """Ensure user record has all expected keys for app features."""
     user_record.setdefault("name", "")
     user_record.setdefault("password", "")
     user_record.setdefault(
@@ -123,6 +132,7 @@ def ensure_user_schema(user_record: dict) -> dict:
 
 
 def load_forum_store(seed_posts: list[dict]) -> dict:
+    """Load persisted forum store, seeding from defaults on first run."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     if not FORUM_DB_PATH.exists():
         initial_posts = []
@@ -170,17 +180,18 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
 
 
 def save_forum_store(store: dict) -> None:
+    """Persist forum posts/comments store to disk."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     FORUM_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
 
 
 @st.cache_data
 def load_data() -> dict:
+    """Load and transform processed datasets into UI-ready structures."""
     books_parent = _read_jsonl_dict_lines(PROCESSED_DIR / "first_100_books_by_parent_asin.jsonl")
     catalog_isbns = _read_isbn_index_file(PROCESSED_DIR / "first_100_spl_catalog_by_isbn.json")
     checkout_isbns = _read_isbn_index_file(PROCESSED_DIR / "first_100_spl_checkouts_by_isbn.json")
 
-    branch_pool = ["Central Library", "Ballard", "Capitol Hill", "Fremont", "University", "West Seattle"]
     books = []
     for idx, row in enumerate(books_parent, start=1):
         source_id, meta = next(iter(row.items()))
@@ -195,10 +206,6 @@ def load_data() -> dict:
         rating_number = int(meta.get("rating_number") or 0)
         rating = float(meta.get("average_rating") or 0.0)
         in_spl = source_id.upper() in catalog_isbns or source_id.upper() in checkout_isbns
-        branches = []
-        if in_spl:
-            branches = branch_pool[: 1 + (sum(ord(ch) for ch in source_id) % 3)]
-
         books.append(
             {
                 "id": idx,
@@ -211,9 +218,6 @@ def load_data() -> dict:
                 "genres": genres,
                 "description": description,
                 "spl_available": in_spl,
-                "spl_branches": branches,
-                "checkouts": rating_number + (200 if in_spl else 20),
-                "clubs_reading": 1 + (idx % 6),
             }
         )
 
@@ -245,7 +249,6 @@ def load_data() -> dict:
                         "location": row.get("city_state") or "Seattle, WA",
                         "meeting_day": row.get("day_of_week_start") or "TBD",
                         "meeting_time": row.get("start_time") or "TBD",
-                        "members": 10 + (idx * 3 % 45),
                         "current_book_id": current_book_id,
                         "current_book_title": current_book_title,
                         "thumbnail": row.get("thumbnail") or "https://placehold.co/600x360?text=Club",
@@ -257,7 +260,7 @@ def load_data() -> dict:
                     break
 
     if not clubs:
-        clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "members": 20, "current_book_id": books[0]["id"], "current_book_title": books[0]["title"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
+        clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "current_book_id": books[0]["id"], "current_book_title": books[0]["title"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
 
     user_club_ids = [c["id"] for c in clubs[: min(4, len(clubs))]]
     library = {"in_progress": [b["id"] for b in books[0:4]], "saved": [b["id"] for b in books[4:8]], "finished": [b["id"] for b in books[8:12]]}
@@ -266,12 +269,13 @@ def load_data() -> dict:
         {"title": f"Top picks this week: {books[1]['title']}", "author": "Bookish Team", "genre": books[1]["genres"][0], "club": None, "replies": 5, "likes": 12, "time_ago": "1 day ago", "preview": f"This week's recommendation highlight is {books[1]['title']}."},
     ]
     genres = sorted({g for b in books for g in b["genres"]})
-    neighborhoods = sorted({(c["location"].split(",")[0]).strip() for c in clubs})
+    neighborhoods = sorted({(c["location"].split(",", maxsplit=1)[0]).strip() for c in clubs})
 
     return {"books": books, "books_by_id": books_by_id, "clubs": clubs, "forum_posts": forum_posts, "genres": genres, "library": library, "neighborhoods": neighborhoods, "user_club_ids": user_club_ids}
 
 
 def init_session(books: list[dict]) -> None:
+    """Initialize required Streamlit session-state defaults."""
     st.session_state.setdefault("signed_in", False)
     st.session_state.setdefault("user_email", "")
     st.session_state.setdefault("user_name", "")
@@ -282,6 +286,7 @@ def init_session(books: list[dict]) -> None:
 
 
 def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[int]) -> None:
+    """Handle deep-link query params for book detail and forum detail navigation."""
     book_param = st.query_params.get("book_id")
     if st.query_params.get("open") != "detail" or not book_param:
         post_param = st.query_params.get("post_id")
@@ -308,6 +313,7 @@ def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[in
 
 
 def auth_panel() -> None:
+    """Render account panel and handle sign-in/sign-up/sign-out flows."""
     st.sidebar.subheader("Account")
     if st.session_state["signed_in"]:
         st.sidebar.success(f"Signed in as {st.session_state['user_name']}")
@@ -350,7 +356,6 @@ def auth_panel() -> None:
         st.session_state["user_name"] = users[email]["name"]
         st.sidebar.success("Account created and signed in.")
         st.rerun()
-        return
 
     # sign in flow
     record = users.get(email)
@@ -366,8 +371,9 @@ def auth_panel() -> None:
 
 
 def render_book_card(book: dict, key_prefix: str) -> None:
+    """Render book card with clickable metadata and detail action."""
     href = f"?book_id={book['id']}&open=detail"
-    stats = f"Rating: {book['rating']} ({book['rating_count']:,}) | Clubs: {book['clubs_reading']}"
+    stats = f"Rating: {book['rating']} ({book['rating_count']:,})"
     st.markdown(f'<a href="{href}" target="_self"><img src="{book["cover"]}" alt="{html.escape(book["title"])}" style="width:145px;max-width:100%;border-radius:8px;" /></a>', unsafe_allow_html=True)
     st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;"><strong>{html.escape(book["title"])}</strong></a>', unsafe_allow_html=True)
     st.markdown(f'<a href="{href}" target="_self" style="text-decoration:none;color:inherit;">{html.escape(book["author"])}</a>', unsafe_allow_html=True)
@@ -380,6 +386,7 @@ def render_book_card(book: dict, key_prefix: str) -> None:
 
 
 def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
+    """Return whether the current user can view the given forum post."""
     if post.get("visibility") != "club":
         return True
     if current_user is None:
@@ -391,6 +398,7 @@ def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
 
 
 def main() -> None:
+    """Run the Streamlit app entrypoint and render all tabs."""
     st.set_page_config(page_title="Bookish", page_icon="ðŸ“š", layout="wide")
     inject_styles()
     data = load_data()
@@ -399,7 +407,6 @@ def main() -> None:
     clubs = data["clubs"]
     genres = data["genres"]
     neighborhoods = data["neighborhoods"]
-    library = data["library"]
     forum_posts = data["forum_posts"]
 
     init_session(books)
@@ -436,7 +443,7 @@ def main() -> None:
         selected_genres = st.multiselect("Filter by genre", genres)
         filtered = [b for b in books if not selected_genres or any(g in selected_genres for g in b["genres"])]
         trending_source = filtered if selected_genres else books
-        trending = sorted(trending_source, key=lambda b: b["checkouts"], reverse=True)[:4]
+        trending = sorted(trending_source, key=lambda b: b["rating_count"], reverse=True)[:4]
         st.subheader("Trending in Seattle")
         if trending:
             cols = st.columns(4)
@@ -457,13 +464,13 @@ def main() -> None:
             clubs_source = [
                 c for c in clubs_source if c.get("genre", "").lower() in {g.lower() for g in selected_genres}
             ]
-        top_clubs = sorted(clubs_source, key=lambda c: int(c.get("members", 0)), reverse=True)[:5]
+        top_clubs = clubs_source[:5]
         if not top_clubs:
             st.caption("No suggested clubs for this filter.")
         for club in top_clubs:
             st.markdown(f"**{club['name']}**")
             st.caption(
-                f"{club.get('genre', 'General')} | {club.get('location', 'Seattle, WA')} | Members: {club.get('members', 0)}"
+                f"{club.get('genre', 'General')} | {club.get('location', 'Seattle, WA')}"
             )
             st.write((club.get("description", "") or "")[:180] + ("..." if len(club.get("description", "")) > 180 else ""))
             if club.get("external_link"):
@@ -488,7 +495,7 @@ def main() -> None:
             st.caption(f"{club['genre']} | {club['location']}")
             summary = club["description"][:280] + ("..." if len(club["description"]) > 280 else "")
             st.write(summary)
-            st.write(f"Meetings: {club['meeting_day']} at {club['meeting_time']} | Members: {club['members']}")
+            st.write(f"Meetings: {club['meeting_day']} at {club['meeting_time']}")
             if club.get("external_link"):
                 st.link_button("Open club listing", club["external_link"], use_container_width=False)
             if st.session_state["signed_in"] and current_user is not None:
@@ -509,7 +516,7 @@ def main() -> None:
             st.info("Sign in to see your clubs.")
         for club in [c for c in clubs if c["id"] in (current_user["club_ids"] if current_user else [])]:
             st.subheader(club["name"])
-            st.caption(f"{club['members']} members | {club['location']}")
+            st.caption(f"{club['location']}")
             btn_col_1, btn_col_2 = st.columns([1, 1])
             if btn_col_1.button("Details", key=f"details_club_{club['id']}"):
                 toggle_key = f"show_club_details_{club['id']}"
@@ -562,7 +569,7 @@ def main() -> None:
         with c2:
             st.subheader(book["title"])
             st.caption(book["author"])
-            st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,}) | Clubs: **{book['clubs_reading']}**")
+            st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,})")
             st.write(book["description"])
             save_option = st.selectbox(
                 "Save to library as",
@@ -588,9 +595,6 @@ def main() -> None:
                     st.success(f"Saved to {save_option}.")
             if not st.session_state["signed_in"]:
                 st.caption("Sign in to save books.")
-        if book["spl_available"]:
-            st.markdown("#### Seattle Public Library availability")
-            st.write(", ".join(book["spl_branches"]))
 
     with tabs[5]:
         st.title("Forum")
