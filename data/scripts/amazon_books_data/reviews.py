@@ -1,14 +1,15 @@
 """
-Filters the Amazon book reviews data and splits it into train (75%) and test (25%) sets. 
-Transforms data in each split into a user-book sparse matrix with a corresponding
+Processes the Amazon book reviews data and splits it into train (75% of users) and test (25% of 
+users) sets. Transforms data in each split into a user-book sparse matrix with a corresponding
 vector of ground truth books indices (dense) for evaluation. Calculates the cosine similarity of
 pairs of books based on the train user-book matrix.
 
-*** Data filtering steps: ***
-(1) only stores user_id, parent_asin (book id), and rating columns
-(2) drops duplicate reviews by same user for same book and rows with na values
+*** Data processing steps: ***
+(1) maps all parent_asins of books in books_by_parent_asin.jsonl (cleaned amazon books meta data) 
+to integer book indices
+(2) creates a dataframe of reviews with valid parent_asin, user_id, and rating >= 3 and maps all
+parent_asins to book indices (as defined  in step 1), dropping rows with parent_asin not in mapping
 ** Train-test split and cosine similarity matrix construction steps: ***
-(3) maps user_id and parent_asin to integer indices for sparse matrix construction
 (4) constructs user-book sparse matrices, TRAIN (75%) and TEST (25%), along with corresponding 
 column vectors of ground truth book indices for evaluation, TRAIN_GROUND_TRUTH and 
 TEST_GROUND_TRUTH.
@@ -16,6 +17,8 @@ TEST_GROUND_TRUTH.
 
 Args:
     Books.jsonl: The input dataset of Amazon book reviews.
+    meta_Books.jsonl: The input dataset of Amazon books metadata in JSON Lines format, 
+    which is used to map parent_asins to book indices to ensure consistency across datasets.
 
 Returns:
     train_matrix.npz : NPZ file containing scipy.sparse.csr_matrix TRAIN,
@@ -39,123 +42,186 @@ Returns:
                             Each row corresponds to a user and contains the index of the held-out 
                             book for that user (or -1 if no book was held out).
 
+Note: Total # of books is determined by the number of books in the cleaned amazon 
+books meta data, meta_Books.jsonl 
+
 Time: ~ 30 minutes to run
 """
 
 import json
+import os
 import random
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.sparse import save_npz
+import sqlite3
 
+from data.scripts.config import RAW_DIR, PROCESSED_DIR
 
 random.seed(42)
 
-def create_leave_n_out_split(df, user_idx_col_name, book_idx_col_name,
-                                selected_user_indices, ground_truth_set_size=1):
+def create_leave_n_out_split(candidate_df, user_idx_col_name, 
+                             book_idx_col_name, split_proportion, 
+                             total_n_books=None, total_n_users=None, ground_truth_set_size=1):
     """
     Construct a sparse user-book matrix and a corresponding ground truth vector from subset of data.
 
-    This function performs a leave-n-out split per user. For each user, ground_truth_size books are
-    held out and their indices are stored in a ground truth array, while the remaining interactions 
-    are used to construct a CSR training matrix.
+    This function performs a leave-n-out split per user. For each user, ground_truth_set_size books 
+    are held out and their indices are stored in a ground truth array, while the remaining 
+    interactions are recorded in a CSR training matrix.
 
     Args:
-        df : pandas.DataFrame
-             Full data frame containing user idx (integer), book idx (integer), and rating (float) 
-             columns.
+        candidate_df : pandas.DataFrame
+             Data frame containing user reviews that are candidates for split. Must have columns
+             for user idx (integer), book idx (integer), and rating (float).
+        total_n_books : int
+                        Total number of books (columns) in the output sparse matrix. This should be
+                        consistent across train and test splits and should be determined by the 
+                        number of unique books you are interested in.
+        total_n_users : int
+                        Total number of users (rows) in the output sparse matrix. This should be
+                        consistent across train and test splits and should be determined by the 
+                        number of unique users you are interested in.
         user_idx_col_name : str
                             Column name containing integer user indices that we map to 
                             the rows of the CSR matrix.
         book_idx_col_name : str
                             Column name containing integer book indices that we map to the 
                             columns of the CSR matrix.
-        selected_user_indices : list of int
-                                List of user indices to include in the split. Only interactions for 
-                                these users will be considered. 
-        ground_truth_size : int, default=1
-                            Number of interactions to hold out per user.
+        split_proportion : float in (0, 1)
+                           Proportion of users to include in the split.
+        ground_truth_set_size : int, default=1
+                                Number of interactions to hold out per user.
 
     Returns: 
         split_matrix : scipy.sparse.csr_matrix
-                       Sparse matrix of shape (total # of users, total # of books) containing only 
+                       Sparse matrix of shape (total_n_users by total_n_books) containing only 
                        the split interactions (not held-out). Each row corresponds to a user and 
-                       each column corresponds to a book. An entry of 1 indicates that the user 
-                       gave rating >= 3 to book and an entry of 0 indicates they did not.
+                       each column corresponds to a book. An entry of 1 indicates user and book 
+                       interaction in split (not held out) and an entry of 0 otherwise.
         ground_truth : numpy.ndarray
-                       Array of shape (total # of users, ground_truth_size) containing
-                       held-out book indices for each user in split. Each row corresponds to a user 
+                       Array of shape (total_n_users, ground_truth_set_size) containing
+                       held-out book indices for each user. Each row corresponds to a user 
                        and contains the indices of the held-out books for that user. If no book 
-                       was held out for a user, the row contains -1.                       
+                       was held out for a user, the row contains -1.
+        split_compliment : pandas.DataFrame
+                          Data frame containing the users that were not included in the split 
+                          matrix. This is used to construct the test split after creating the 
+                          train split.     
 
     Notes:
-        - If a user has fewer or equal number of positive reviews (rating >= 3) to the specified 
-          ground_truth_size or they are not in selected_user_indices, they have value -1 for all 
-          entries in ground truth vector.
-        - For the same df, the dimensions of split_matrix and ground_truth will be the same for any 
-          set of valid selected_user_indices and ground_truth_size. Adjusting these parameters will 
-          only change the number of nonzero entries.
+        - If a user has fewer or equal number of reviews in df to the specified 
+          ground_truth_size or is not in split, they have value -1 for all entries in ground 
+          truth vector.
+        - If total_n_books or total_n_users is not provided, it will be set to the number of unique
+          book or user indices in the input dataframe, df.
         - *** IMPORTANT: the parameters user_idx_col_name and book_idx_col_name may need to be 
           dervied from the user_id and book_id using factorization or mapping to integer 
-          indices. ***
+          indices. book_id should be derived from all books, not just those in reviews.
+          similarly user_id should be derived from all users. ***
     """
-    n_users = df[user_idx_col_name].nunique()
-    n_books = df[book_idx_col_name].nunique()
-    ground_truth_col_vec = np.zeros((n_users, ground_truth_set_size), dtype=int) - 1
+    if total_n_books is None:
+        total_n_books = candidate_df[book_idx_col_name].nunique()
+    if total_n_users is None:
+        total_n_users = candidate_df[user_idx_col_name].nunique()
 
-    split_df = df[(df['rating'] >= 3) & (df[user_idx_col_name].isin(selected_user_indices))]
-    rows = split_df[user_idx_col_name].to_numpy()
-    cols = split_df[book_idx_col_name].to_numpy()
-    values = np.ones(len(rows), dtype=int)
-    split_matrix = csr_matrix((values, (rows, cols)), shape=(n_users, n_books), dtype=int)
-    for row_indx in selected_user_indices:
-        if split_matrix[row_indx].nnz <= ground_truth_set_size:
+    unique_users = candidate_df[user_idx_col_name].unique()
+    n_users_in_split = round(len(unique_users)* split_proportion)
+    user_indices_in_split = random.sample(list(unique_users), n_users_in_split)
+    users_in_split = candidate_df[candidate_df[user_idx_col_name].isin(user_indices_in_split)]
+
+    ground_truth_col_vec = np.full((total_n_users, ground_truth_set_size), -1, dtype=int)
+    held_out = set()
+    for user, group in users_in_split.groupby(user_idx_col_name):
+        books = group[book_idx_col_name].tolist()
+        if len(books) <= ground_truth_set_size:
             continue
-        random_book = random.sample(list(split_matrix[row_indx].indices), k = ground_truth_set_size)
-        ground_truth_col_vec[row_indx, :] = random_book
-        split_matrix[row_indx, random_book] = 0
-    split_matrix.eliminate_zeros()
-    return split_matrix, ground_truth_col_vec
+        sampled = random.sample(books, ground_truth_set_size)
+        ground_truth_col_vec[user] = sampled
+        held_out.update((user, sample) for sample in sampled)
 
+    mask = [(row.user_idx, row.book_idx) not in held_out 
+         for row in users_in_split.itertuples()]
+    users_in_split = users_in_split.loc[mask]
 
-INPUT_FILE = "../../data/raw/Books.jsonl"
+    rows = users_in_split[user_idx_col_name].to_numpy()
+    cols = users_in_split[book_idx_col_name].to_numpy()
+    values = np.ones(len(rows), dtype=int)
+    split_matrix = csr_matrix((values, (rows, cols)), shape=(total_n_users, total_n_books), dtype=int)
 
-all_book_reviews = []
-with open(INPUT_FILE, 'r', encoding='utf-8') as fp:
-    for line in fp:
-        book = json.loads(line)
-        all_book_reviews.append((book['user_id'], book['parent_asin'], float(book['rating'])))
+    split_compliment = candidate_df.drop(users_in_split.index)
+    return split_matrix, ground_truth_col_vec, split_compliment
 
-reviews_df = pd.DataFrame(all_book_reviews, columns=['user_id', 'parent_asin', 'rating'])
-reviews_df = reviews_df.dropna(subset=['user_id', 'parent_asin', 'rating'])
-reviews_df = reviews_df.drop_duplicates(['user_id', 'parent_asin'])
+INPUT_FILE = os.path.join(RAW_DIR, 'Books.jsonl')
 
-reviews_df['user_idx'], user_index = pd.factorize(reviews_df['user_id'])
-reviews_df['book_idx'], book_index = pd.factorize(reviews_df['parent_asin'])
+OUTPUT_FILE_TRAIN_MATRIX = os.path.join(PROCESSED_DIR, 'train_matrix.npz')
+OUTPUT_FILE_TEST_MATRIX = os.path.join(PROCESSED_DIR, 'test_matrix.npz')
+OUTPUT_FILE_BOOK_SIMILARITY = os.path.join(PROCESSED_DIR, 'book_similarity.npz')
+OUTPUT_FILE_TRAIN_GROUND_TRUTH = os.path.join(PROCESSED_DIR, 'train_ground_truth.npy')
+OUTPUT_FILE_TEST_GROUND_TRUTH = os.path.join(PROCESSED_DIR, 'test_ground_truth.npy')
+BOOK_ID_TO_IDX = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 
-n_unique_users = reviews_df['user_idx'].nunique()
-n_train_rows = round(n_unique_users * 0.75)
-train_user_indices = random.sample(range(n_unique_users), n_train_rows)
+def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
+         output_file_train_matrix=OUTPUT_FILE_TRAIN_MATRIX, 
+         output_file_test_matrix=OUTPUT_FILE_TEST_MATRIX, 
+         output_file_book_similarity=OUTPUT_FILE_BOOK_SIMILARITY, 
+         output_file_train_ground_truth=OUTPUT_FILE_TRAIN_GROUND_TRUTH, 
+         output_file_test_ground_truth=OUTPUT_FILE_TEST_GROUND_TRUTH):
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+    if not os.path.exists(book_id_to_idx):
+        raise FileNotFoundError(f"Book index mapping file not found: {book_id_to_idx}")
 
-TRAIN, TRAIN_GROUND_TRUTH = create_leave_n_out_split(reviews_df, 'user_idx', 'book_idx',
-                         train_user_indices, ground_truth_set_size=1)
+    with open(book_id_to_idx, "r") as f:
+        book_id_to_idx = json.load(f)
+    n_books = len(book_id_to_idx)
 
+    chunks_list = []
+    user_id_to_idx = {}
+    next_user_idx = 0
+    for chunk in pd.read_json(
+        input_file, 
+        lines=True, 
+        dtype={"user_id": "string", "parent_asin": "string", "rating": "float"}, 
+        chunksize=1_000_000):
 
-test_user_indices = list(set(range(n_unique_users)) - set(train_user_indices))
-TEST, TEST_GROUND_TRUTH = create_leave_n_out_split(reviews_df, 'user_idx', 'book_idx',
-                         test_user_indices, ground_truth_set_size=1)
-print("Built train and test user-book matrices and corresponding ground truth vectors.")
+        chunk = chunk[["user_id", "parent_asin", "rating"]]
+        chunk = chunk[chunk["rating"] >= 3] 
+        chunk["book_idx"] = chunk["parent_asin"].map(book_id_to_idx)
+        chunk = chunk.dropna(subset=["book_idx"])
+        chunk["book_idx"] = chunk["book_idx"].astype(int)
+        new_users = chunk["user_id"].unique()
 
-### Calculate cosine similarity of columns (books) ###
-col_norms = np.sqrt(TRAIN.power(2).sum(axis=0)).A1
-col_norms[col_norms == 0] = 1.0
-TRAIN_normalized = TRAIN.multiply(1 / col_norms)
-BOOK_SIMILARITY_SPARSE = TRAIN_normalized.T @ TRAIN_normalized
+        for u in new_users:
+            if u not in user_id_to_idx:
+                user_id_to_idx[u] = next_user_idx
+                next_user_idx += 1
+        chunk["user_idx"] = chunk["user_id"].map(user_id_to_idx)
+        chunks_list.append(chunk[["user_idx","book_idx"]])
+    reviews_df = pd.concat(chunks_list, ignore_index=True)
+    n_users = reviews_df['user_idx'].nunique()
+    
+        
+    TRAIN, TRAIN_GROUND_TRUTH, COMPLIMENT_TRAIN = create_leave_n_out_split(candidate_df=reviews_df, user_idx_col_name='user_idx', 
+                                                                           book_idx_col_name='book_idx', split_proportion=0.75, 
+                                                                           total_n_books=n_books)
+    TEST, TEST_GROUND_TRUTH, __ = create_leave_n_out_split(candidate_df=COMPLIMENT_TRAIN, user_idx_col_name='user_idx', 
+                                                           book_idx_col_name='book_idx', split_proportion=1, total_n_books=n_books, 
+                                                           total_n_users=n_users)
+    print("Built train and test user-book matrices and corresponding ground truth vectors.")
+            
+    ### Calculate cosine similarity of columns (books) ###
+    col_norms = np.sqrt(TRAIN.power(2).sum(axis=0)).A1
+    col_norms[col_norms == 0] = 1.0
+    TRAIN_normalized = TRAIN.multiply(1 / col_norms)
+    BOOK_SIMILARITY_SPARSE = TRAIN_normalized.T @ TRAIN_normalized
+    save_npz(output_file_train_matrix, TRAIN)
+    save_npz(output_file_test_matrix, TEST)
+    save_npz(output_file_book_similarity, BOOK_SIMILARITY_SPARSE)
+    np.save(output_file_train_ground_truth, TRAIN_GROUND_TRUTH)
+    np.save(output_file_test_ground_truth, TEST_GROUND_TRUTH)
 
-save_npz("../../data/processed/.train_matrix.npz", TRAIN)
-save_npz("../../data/processed/test_matrix.npz", TEST)
-save_npz("../../data/processed/book_similarity.npz", BOOK_SIMILARITY_SPARSE)
-np.save("../../data/processed/train_ground_truth.npy", TRAIN_GROUND_TRUTH)
-np.save("../../data/processed/test_ground_truth.npy", TEST_GROUND_TRUTH)
+if __name__ == "__main__":
+    main()
