@@ -162,7 +162,7 @@ OUTPUT_FILE_TRAIN_GROUND_TRUTH = os.path.join(PROCESSED_DIR, 'train_ground_truth
 OUTPUT_FILE_TEST_GROUND_TRUTH = os.path.join(PROCESSED_DIR, 'test_ground_truth.npy')
 BOOK_ID_TO_IDX = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 
-def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX, 
+def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
          output_file_train_matrix=OUTPUT_FILE_TRAIN_MATRIX,
          output_file_test_matrix=OUTPUT_FILE_TEST_MATRIX,
          output_file_book_similarity=OUTPUT_FILE_BOOK_SIMILARITY,

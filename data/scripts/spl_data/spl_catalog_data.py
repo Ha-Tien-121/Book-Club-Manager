@@ -101,7 +101,7 @@ def main(output_isbn_index=OUTPUT_ISBN_INDEX,
     for book in catalog_json:
         isbn = book.get("ISBN")
         title_normalized = book.get("Title").lower() if book.get("Title") else None
-        author_normalized = (book.get("Author").lower().replace(".", "").strip() 
+        author_normalized = (book.get("Author").lower().replace(".", "").strip()
                              if book.get("Author") else None)
         if isbn != "__MISSING_ISBN__":
             books_by_isbn[isbn] = book
