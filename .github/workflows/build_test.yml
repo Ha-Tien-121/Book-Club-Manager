@@ -92,10 +92,11 @@ jobs:
           pip install -e .
 
       # Next step: run the unit tests with code coverage.
+      # under coverage run add any other files containing code we test
       - name: Unit tests
         run: |
           export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
-          coverage run -m unittest discover -s tests -p "test*.py"
+          coverage run --source=data/scripts -m unittest discover -s tests -p "test*.py" 
           coverage report
           coverage lcov
 
