@@ -69,6 +69,37 @@ def get_recommendations(
     )
 
 
+def get_top_popular_books(top_k: int = 10) -> List[Dict[str, Any]]:
+    """Return globally popular books for cold-start users."""
+    if top_k <= 0:
+        return []
+    books_df = _recommender.books_df
+    if books_df is None or books_df.empty:
+        return []
+
+    popularity_score = (
+        0.5 * books_df["rating_number_norm"]
+        + 0.3 * books_df["average_rating_norm"]
+        + 0.2 * books_df["checkouts_norm"]
+    )
+    ranked_indices = popularity_score.sort_values(ascending=False).index.tolist()
+
+    results: List[Dict[str, Any]] = []
+    for idx in ranked_indices:
+        row = books_df.loc[idx]
+        book_id = str(row["parent_asin"]) if not pd.isna(row["parent_asin"]) else None
+        results.append(
+            {
+                "book_id": book_id,
+                "title": row["title"],
+                "score": float(popularity_score.loc[idx]),
+            }
+        )
+        if len(results) >= top_k:
+            break
+    return results
+
+
 def mark_book_as_read(
     user_id: str,
     book_id: str,

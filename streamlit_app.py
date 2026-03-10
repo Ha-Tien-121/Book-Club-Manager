@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import ast
+from collections import Counter
 import csv
 import html
 import json
@@ -13,6 +14,15 @@ from urllib.parse import quote_plus
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+try:
+    from backend.recommender.service import (
+        get_recommendations as recommender_get_recommendations,
+        get_top_popular_books,
+    )
+    RECOMMENDER_AVAILABLE = True
+except (ImportError, FileNotFoundError):
+    RECOMMENDER_AVAILABLE = False
 
 BASE_DIR = Path(__file__).resolve().parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
@@ -224,6 +234,7 @@ def load_data() -> dict:
 
     books = books[:36]
     books_by_id = {b["id"]: b for b in books}
+    books_by_source_id = {str(b["source_id"]): b for b in books}
     title_author_to_id = {f"{b['title'].strip().lower()}|{b['author'].strip().lower()}": b["id"] for b in books}
 
     clubs = []
@@ -257,9 +268,6 @@ def load_data() -> dict:
                         "external_link": row.get("link") or "",
                     }
                 )
-                if idx >= 24:
-                    break
-
     if not clubs:
         clubs = [{"id": 1, "name": "Seattle Readers", "description": "Fallback club generated because processed club data is missing.", "genre": "General", "location": "Seattle, WA", "meeting_day": "Wed", "meeting_time": "7:00 PM", "current_book_id": books[0]["id"], "current_book_title": books[0]["title"], "thumbnail": "https://placehold.co/600x360?text=Club", "is_external": False, "external_link": ""}]
 
@@ -272,7 +280,7 @@ def load_data() -> dict:
     genres = sorted({g for b in books for g in b["genres"]})
     neighborhoods = sorted({(c["location"].split(",", maxsplit=1)[0]).strip() for c in clubs})
 
-    return {"books": books, "books_by_id": books_by_id, "clubs": clubs, "forum_posts": forum_posts, "genres": genres, "library": library, "neighborhoods": neighborhoods, "user_club_ids": user_club_ids}
+    return {"books": books, "books_by_id": books_by_id, "books_by_source_id": books_by_source_id, "clubs": clubs, "forum_posts": forum_posts, "genres": genres, "library": library, "neighborhoods": neighborhoods, "user_club_ids": user_club_ids}
 
 
 def init_session(books: list[dict]) -> None:
@@ -285,6 +293,7 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("show_book_detail_page", False)
     st.session_state.setdefault("selected_forum_post_id", None)
     st.session_state.setdefault("jump_to_forum_detail", False)
+    st.session_state.setdefault("jump_to_explore_clubs", False)
 
 
 def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[int]) -> None:
@@ -400,6 +409,89 @@ def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
     return club_id in current_user.get("club_ids", [])
 
 
+def build_user_recommender_stores(
+    current_user: dict | None,
+    user_email: str,
+    books_by_id: dict[int, dict],
+    clubs: list[dict],
+) -> tuple[dict, dict, bool]:
+    """Build recommender stores from user account activity."""
+    if current_user is None or not user_email:
+        return {}, {}, False
+
+    user_books_read_store: dict[str, list[str]] = {}
+    user_genres_store: dict[str, list[dict]] = {}
+    has_behavior_data = False
+
+    source_ids: list[str] = []
+    for shelf in ("in_progress", "saved", "finished"):
+        for book_id in current_user.get("library", {}).get(shelf, []):
+            book = books_by_id.get(book_id)
+            if book and book.get("source_id"):
+                source_ids.append(str(book["source_id"]))
+    if source_ids:
+        user_books_read_store[user_email] = list(dict.fromkeys(source_ids))
+        has_behavior_data = True
+
+    genre_counts: Counter = Counter()
+    joined_ids = {int(cid) for cid in current_user.get("club_ids", [])}
+    for club in clubs:
+        if int(club.get("id", -1)) not in joined_ids:
+            continue
+        genre = str(club.get("genre") or "").strip()
+        if genre:
+            genre_counts[genre] += 1
+    if genre_counts:
+        ranked_genres = [name for name, _ in genre_counts.most_common(3)]
+        user_genres_store[user_email] = [
+            {"genre": genre_name, "rank": rank}
+            for rank, genre_name in enumerate(ranked_genres, start=1)
+        ]
+        has_behavior_data = True
+
+    has_forum_data = bool(
+        current_user.get("forum_posts") or current_user.get("saved_forum_post_ids")
+    )
+    if has_forum_data:
+        has_behavior_data = True
+
+    return user_genres_store, user_books_read_store, has_behavior_data
+
+
+def resolve_recommended_books(
+    recommendations: list[dict],
+    books_by_source_id: dict[str, dict],
+    selected_genres: list[str],
+    fallback_books: list[dict],
+    top_k: int = 10,
+) -> list[dict]:
+    """Resolve recommender IDs to loaded books and backfill from fallback list."""
+    resolved: list[dict] = []
+    selected = set(selected_genres)
+    for item in recommendations:
+        source_id = str(item.get("book_id") or "").strip()
+        if not source_id:
+            continue
+        book = books_by_source_id.get(source_id)
+        if book is None:
+            continue
+        if selected and not any(g in selected for g in book.get("genres", [])):
+            continue
+        resolved.append(book)
+        if len(resolved) >= top_k:
+            return resolved
+
+    for book in fallback_books:
+        if selected and not any(g in selected for g in book.get("genres", [])):
+            continue
+        if book in resolved:
+            continue
+        resolved.append(book)
+        if len(resolved) >= top_k:
+            break
+    return resolved
+
+
 def render_book_detail_page(
     books: list[dict],
     books_by_id: dict[int, dict],
@@ -456,6 +548,7 @@ def main() -> None:
     data = load_data()
     books = data["books"]
     books_by_id = data["books_by_id"]
+    books_by_source_id = data["books_by_source_id"]
     clubs = data["clubs"]
     genres = data["genres"]
     neighborhoods = data["neighborhoods"]
@@ -502,6 +595,9 @@ def main() -> None:
     if st.session_state.get("jump_to_forum_detail"):
         components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Forum"){t.click();break;}}</script>""", height=0)
         st.session_state["jump_to_forum_detail"] = False
+    if st.session_state.get("jump_to_explore_clubs"):
+        components.html("""<script>for(const t of window.parent.document.querySelectorAll('button[role="tab"]')){if(t.textContent.trim()==="Explore Clubs"){t.click();break;}}</script>""", height=0)
+        st.session_state["jump_to_explore_clubs"] = False
 
     with tabs[0]:
         st.title("Discover your next read")
@@ -522,14 +618,50 @@ def main() -> None:
         else:
             st.caption("No trending books match this genre filter.")
         st.subheader("Recommended for you")
-        cols = st.columns(3)
-        for i, book in enumerate(filtered):
-            with cols[i % 3]:
-                render_book_card(
-                    book,
-                    f"rec_{i}",
-                    auth_user=st.session_state.get("user_email", ""),
-                )
+        recommendation_rows: list[dict] = []
+        if RECOMMENDER_AVAILABLE:
+            try:
+                if st.session_state["signed_in"] and current_user is not None:
+                    user_email = st.session_state.get("user_email", "")
+                    user_genres_store, user_books_store, has_user_data = build_user_recommender_stores(
+                        current_user=current_user,
+                        user_email=user_email,
+                        books_by_id=books_by_id,
+                        clubs=clubs,
+                    )
+                    if has_user_data:
+                        recommendation_rows = recommender_get_recommendations(
+                            user_id=user_email,
+                            user_genres_store=user_genres_store,
+                            user_books_read_store=user_books_store,
+                            top_k=30,
+                        )
+                    else:
+                        recommendation_rows = get_top_popular_books(top_k=30)
+                else:
+                    recommendation_rows = get_top_popular_books(top_k=30)
+            except (RuntimeError, ValueError, KeyError):
+                recommendation_rows = []
+
+        fallback_books = sorted(filtered, key=lambda b: b["rating_count"], reverse=True)
+        recommended_books = resolve_recommended_books(
+            recommendations=recommendation_rows,
+            books_by_source_id=books_by_source_id,
+            selected_genres=selected_genres,
+            fallback_books=fallback_books,
+            top_k=10,
+        )
+        if not recommended_books:
+            st.caption("No recommendations available yet.")
+        else:
+            cols = st.columns(5)
+            for i, book in enumerate(recommended_books):
+                with cols[i % 5]:
+                    render_book_card(
+                        book,
+                        f"rec_{i}",
+                        auth_user=st.session_state.get("user_email", ""),
+                    )
 
         st.subheader("Suggested book clubs")
         clubs_source = clubs
@@ -549,6 +681,9 @@ def main() -> None:
             if club.get("external_link"):
                 st.link_button("Open club", club["external_link"], use_container_width=False)
             st.divider()
+        if st.button("See More Clubs", key="see_more_clubs_feed"):
+            st.session_state["jump_to_explore_clubs"] = True
+            st.rerun()
 
     with tabs[1]:
         st.title("Explore Clubs")

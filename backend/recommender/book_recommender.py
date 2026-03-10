@@ -1,13 +1,23 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix, hstack
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import MinMaxScaler
+
+try:
+    from scipy.sparse import hstack
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.preprocessing import MinMaxScaler
+    HAS_ML_DEPS = True
+except ImportError:
+    hstack = None
+    TfidfVectorizer = None
+    cosine_similarity = None
+    MinMaxScaler = None
+    HAS_ML_DEPS = False
 
 
 @dataclass
@@ -41,9 +51,9 @@ class BookRecommender:
         self.data_dir: Path = data_dir
         self.weights: RecommenderWeights = weights or RecommenderWeights()
 
-        self.vectorizer: Optional[TfidfVectorizer] = None
-        self.genre_tfidf_matrix: Optional[csr_matrix] = None
-        self.feature_matrix: Optional[csr_matrix] = None
+        self.vectorizer: Optional[Any] = None
+        self.genre_tfidf_matrix: Optional[Any] = None
+        self.feature_matrix: Optional[Any] = None
 
         self.books_df: Optional[pd.DataFrame] = None
         self.book_id_to_index: Dict[str, int] = {}
@@ -58,10 +68,18 @@ class BookRecommender:
 
     @staticmethod
     def _prepare_categories(raw: Any) -> str:
-        if pd.isna(raw):
+        if raw is None:
             return ""
+        if isinstance(raw, list):
+            text = " ".join(str(item) for item in raw)
+        else:
+            try:
+                if pd.isna(raw):
+                    return ""
+            except (TypeError, ValueError):
+                pass
+            text = str(raw)
 
-        text = str(raw)
         for ch in "[]'\"":
             text = text.replace(ch, " ")
         return " ".join(text.lower().split())
@@ -73,13 +91,63 @@ class BookRecommender:
         amazon_path = self.data_dir / "AMAZON_books_meta_data_first_100_rows.csv"
         spl_checkouts_path = self.data_dir / "SPL_checkouts_first_100_rows.csv"
         spl_catalog_path = self.data_dir / "SPL_catalog_first_100_rows.csv"
+        jsonl_books_path = self.data_dir / "first_100_books_by_parent_asin.jsonl"
+        json_books_path = self.data_dir / "books_sample_100.json"
 
-        amazon_df = pd.read_csv(amazon_path)
-        checkouts_df = pd.read_csv(spl_checkouts_path)
-        catalog_df = pd.read_csv(spl_catalog_path)
+        if amazon_path.exists():
+            amazon_df = pd.read_csv(amazon_path)
+        elif jsonl_books_path.exists():
+            rows: List[Dict[str, Any]] = []
+            with jsonl_books_path.open("r", encoding="utf-8") as file_obj:
+                for line in file_obj:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parsed = json.loads(line)
+                    source_id, payload = next(iter(parsed.items()))
+                    rows.append(
+                        {
+                            "parent_asin": str(payload.get("parent_asin") or source_id),
+                            "title": payload.get("title"),
+                            "author_name": payload.get("author_name"),
+                            "average_rating": payload.get("average_rating"),
+                            "rating_number": payload.get("rating_number"),
+                            "categories": payload.get("categories"),
+                        }
+                    )
+            amazon_df = pd.DataFrame(rows)
+        elif json_books_path.exists():
+            amazon_df = pd.read_json(json_books_path)
+        else:
+            raise FileNotFoundError(
+                "No supported books metadata file found in data/processed. "
+                "Expected one of AMAZON_books_meta_data_first_100_rows.csv, "
+                "first_100_books_by_parent_asin.jsonl, books_sample_100.json."
+            )
+
+        if spl_checkouts_path.exists():
+            checkouts_df = pd.read_csv(spl_checkouts_path)
+        else:
+            checkouts_df = pd.DataFrame(columns=["Title", "Checkouts"])
+
+        if spl_catalog_path.exists():
+            catalog_df = pd.read_csv(spl_catalog_path)
+        else:
+            catalog_df = pd.DataFrame(columns=["Title", "Author", "ISBN"])
 
         # Standardize titles for joins.
         amazon_df["title_clean"] = amazon_df["title"].apply(self._clean_title)
+        if "Title" not in checkouts_df.columns:
+            checkouts_df["Title"] = ""
+        if "Checkouts" not in checkouts_df.columns:
+            checkouts_df["Checkouts"] = 0
+        if "Title" not in catalog_df.columns:
+            catalog_df["Title"] = ""
+        if "Author" not in catalog_df.columns:
+            catalog_df["Author"] = ""
+        if "ISBN" not in catalog_df.columns:
+            catalog_df["ISBN"] = ""
+
         checkouts_df["title_clean"] = checkouts_df["Title"].apply(self._clean_title)
         catalog_df["title_clean"] = catalog_df["Title"].apply(self._clean_title)
 
@@ -118,28 +186,47 @@ class BookRecommender:
             merged[col] = merged[col].fillna(0.0)
 
         # Prepare genres/categories text for TF-IDF.
+        if "categories" not in merged.columns:
+            merged["categories"] = ""
         merged["categories_text"] = merged["categories"].apply(
             self._prepare_categories
         )
 
-        # Fit TF-IDF vectorizer on categories.
-        self.vectorizer = TfidfVectorizer()
-        self.genre_tfidf_matrix = self.vectorizer.fit_transform(
-            merged["categories_text"].fillna("")
-        )
-
         # Normalize rating and popularity features.
-        scaler = MinMaxScaler()
         numeric_features = merged[["average_rating", "rating_number", "Checkouts"]]
-        scaled_numeric = scaler.fit_transform(numeric_features.values)
+        if HAS_ML_DEPS and MinMaxScaler is not None:
+            scaler = MinMaxScaler()
+            scaled_numeric = scaler.fit_transform(numeric_features.values)
+        else:
+            scaled_numeric = np.zeros_like(numeric_features.values, dtype=float)
+            for col_idx, col_name in enumerate(
+                ["average_rating", "rating_number", "Checkouts"]
+            ):
+                series = merged[col_name].astype(float)
+                min_v = float(series.min())
+                max_v = float(series.max())
+                if max_v <= min_v:
+                    scaled_numeric[:, col_idx] = 0.0
+                else:
+                    scaled_numeric[:, col_idx] = (series - min_v) / (max_v - min_v)
 
         merged["average_rating_norm"] = scaled_numeric[:, 0]
         merged["rating_number_norm"] = scaled_numeric[:, 1]
         merged["checkouts_norm"] = scaled_numeric[:, 2]
 
-        # Combine sparse TF-IDF features with normalized numeric features.
-        numeric_sparse = csr_matrix(scaled_numeric)
-        self.feature_matrix = hstack([self.genre_tfidf_matrix, numeric_sparse]).tocsr()
+        if HAS_ML_DEPS and TfidfVectorizer is not None and hstack is not None:
+            self.vectorizer = TfidfVectorizer()
+            self.genre_tfidf_matrix = self.vectorizer.fit_transform(
+                merged["categories_text"].fillna("")
+            )
+            from scipy.sparse import csr_matrix  # lazy import for optional dependency
+
+            numeric_sparse = csr_matrix(scaled_numeric)
+            self.feature_matrix = hstack([self.genre_tfidf_matrix, numeric_sparse]).tocsr()
+        else:
+            self.vectorizer = None
+            self.genre_tfidf_matrix = None
+            self.feature_matrix = None
 
         # Persist dataframe and lookup structures.
         self.books_df = merged
@@ -152,8 +239,10 @@ class BookRecommender:
         self._fitted = True
 
     def _ensure_fitted(self) -> None:
-        if not self._fitted or self.books_df is None or self.genre_tfidf_matrix is None:
+        if not self._fitted or self.books_df is None:
             raise RuntimeError("BookRecommender.fit() must be called before recommend().")
+        if HAS_ML_DEPS and self.genre_tfidf_matrix is None:
+            raise RuntimeError("Genre matrix is unavailable after fit().")
 
     def build_user_profile(
         self,
@@ -168,6 +257,8 @@ class BookRecommender:
         - Explicit user genre preferences (with rank weighting)
         - Books the user has already read
         """
+        if not HAS_ML_DEPS:
+            raise ValueError("User profile vectors require scipy/sklearn dependencies.")
         self._ensure_fitted()
         assert self.vectorizer is not None
         assert self.genre_tfidf_matrix is not None
@@ -251,20 +342,49 @@ class BookRecommender:
         """
         self._ensure_fitted()
         assert self.books_df is not None
-        assert self.genre_tfidf_matrix is not None
 
         if top_k <= 0:
             return []
 
-        # Build user profile from explicit genres and/or reading history.
-        user_profile = self.build_user_profile(
-            user_id=user_id,
-            user_genres_df=user_genres_df,
-            user_books_df=user_books_df,
-        )
+        if HAS_ML_DEPS and self.genre_tfidf_matrix is not None and cosine_similarity is not None:
+            user_profile = self.build_user_profile(
+                user_id=user_id,
+                user_genres_df=user_genres_df,
+                user_books_df=user_books_df,
+            )
+            genre_sim = cosine_similarity(user_profile, self.genre_tfidf_matrix).ravel()
+        else:
+            preferred_genres: set[str] = set()
+            if user_genres_df is not None and not user_genres_df.empty:
+                user_rows = user_genres_df[user_genres_df["user_id"] == user_id]
+                preferred_genres.update(
+                    {
+                        str(v).strip().lower()
+                        for v in user_rows.get("genre", pd.Series(dtype=str)).tolist()
+                        if str(v).strip()
+                    }
+                )
+            if user_books_df is not None and not user_books_df.empty:
+                books_row = user_books_df[user_books_df["user_id"] == user_id]
+                if not books_row.empty:
+                    for book_id in books_row.iloc[0]["books_read"] or []:
+                        idx = self.book_id_to_index.get(str(book_id))
+                        if idx is None:
+                            continue
+                        categories_text = str(self.books_df.iloc[idx]["categories_text"])
+                        preferred_genres.update(categories_text.split())
+            if not preferred_genres:
+                raise ValueError(
+                    "Cannot build recommendations without user preference signals."
+                )
 
-        # Genre similarity: cosine similarity between user profile and each book's genre vector.
-        genre_sim = cosine_similarity(user_profile, self.genre_tfidf_matrix).ravel()
+            genre_sim = np.zeros(len(self.books_df), dtype=float)
+            for idx, row in self.books_df.iterrows():
+                tokens = set(str(row.get("categories_text", "")).split())
+                if not tokens:
+                    continue
+                overlap = len(tokens.intersection(preferred_genres))
+                genre_sim[idx] = overlap / max(1, len(preferred_genres))
 
         # If the user has read books, strengthen the influence of genre similarity.
         has_read_books = False
