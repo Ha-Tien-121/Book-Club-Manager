@@ -1,7 +1,10 @@
 """Helper functions for formatting author name in the SPL and Amazon datasets."""
 
-import pandas as pd
+
 import re
+
+import pandas as pd
+
 
 def format_author(authors):
     """
@@ -22,7 +25,7 @@ def format_author(authors):
 
     def _format_single_author(author):
         author = str(author)
-        author = re.sub(r'\(.*?\)', '', str(author)) 
+        author = re.sub(r'\(.*?\)', '', str(author))
         parts = [" ".join(p.split()) for p in author.split(",")]
         if len(parts) >= 2:
             return f"{parts[1]} {parts[0]}"
