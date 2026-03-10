@@ -96,9 +96,9 @@ jobs:
       - name: Unit tests
         run: |
           export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
-          coverage run --source=data/scripts -m unittest discover -s tests -p "test*.py" 
+          coverage run --source=data -m unittest discover -s tests -p "test*.py"
           coverage report
-          coverage lcov
+          coverage lcov -o coverage.lcov
 
       # Next step: run pylint. Anything less than 10/10 will fail.
       #            Once we've covered pylint in lecture, uncomment
@@ -112,7 +112,7 @@ jobs:
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-path: data/scripts
+          base-path: data
           path-to-lcov: coverage.lcov
           # The following two options are needed for "parallel"
           # runs - ie if you have a matrix of python versions.
