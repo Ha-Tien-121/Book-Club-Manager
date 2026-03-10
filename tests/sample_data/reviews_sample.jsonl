@@ -1,0 +1,9 @@
+{"user_id":"u1","parent_asin":"1111111111","rating":5.0}
+{"user_id":"u1","parent_asin":"2222222222","rating":4.0}
+{"user_id":"u1","parent_asin":"9999999999","rating":5.0}
+{"user_id":"u2","parent_asin":"2222222222","rating":2.0}
+{"user_id":"u2","parent_asin":"3333333333","rating":3.0}
+{"user_id":"u3","parent_asin":"4444444444","rating":5.0}
+{"user_id":"u4","parent_asin":"5555555555","rating":1.0}
+{"user_id":"u5","parent_asin":"not_in_mapping","rating":5.0}
+{"user_id":"u6","parent_asin":"1111111111","rating":4.0}
