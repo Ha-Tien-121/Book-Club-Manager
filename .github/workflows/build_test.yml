@@ -107,12 +107,14 @@ jobs:
         run: |
           pylint data/scripts/**/*.py
 
+      - name: Debug lcov
+        run: cat coverage.lcov | head -30
+
       # Lastly: report code coverage to Coveralls.
       - name: Report code coverage to Coveralls
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-path: data
           path-to-lcov: coverage.lcov
           # The following two options are needed for "parallel"
           # runs - ie if you have a matrix of python versions.
