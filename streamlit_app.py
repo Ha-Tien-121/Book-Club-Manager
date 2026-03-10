@@ -294,6 +294,8 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("selected_forum_post_id", None)
     st.session_state.setdefault("jump_to_forum_detail", False)
     st.session_state.setdefault("jump_to_explore_clubs", False)
+    st.session_state.setdefault("trending_feed_page_index", 0)
+    st.session_state.setdefault("recommended_feed_page_index", 0)
 
 
 def handle_query_navigation(books_by_id: dict[int, dict], forum_post_ids: set[int]) -> None:
@@ -492,6 +494,53 @@ def resolve_recommended_books(
     return resolved
 
 
+def render_book_carousel(
+    section_key: str,
+    books: list[dict],
+    cards_per_page: int,
+    key_prefix: str,
+    auth_user: str = "",
+) -> None:
+    """Render paged book cards with previous/next carousel controls."""
+    if not books:
+        return
+
+    total_pages = max(1, (len(books) + cards_per_page - 1) // cards_per_page)
+    page_state_key = f"{section_key}_page_index"
+    st.session_state.setdefault(page_state_key, 0)
+    current_page = int(st.session_state[page_state_key])
+    current_page = max(0, min(current_page, total_pages - 1))
+    st.session_state[page_state_key] = current_page
+
+    start = current_page * cards_per_page
+    page_books = books[start : start + cards_per_page]
+    side_left, center_cards, side_right = st.columns([1, 12, 1], vertical_alignment="center")
+
+    with side_left:
+        st.markdown("<div style='height:220px;'></div>", unsafe_allow_html=True)
+        if st.button("◀", key=f"{section_key}_prev", disabled=current_page <= 0):
+            st.session_state[page_state_key] = max(0, current_page - 1)
+            st.rerun()
+
+    with center_cards:
+        cols = st.columns(cards_per_page)
+        for i, book in enumerate(page_books):
+            with cols[i]:
+                render_book_card(
+                    book,
+                    f"{key_prefix}_{current_page}_{i}",
+                    auth_user=auth_user,
+                )
+
+    with side_right:
+        st.markdown("<div style='height:220px;'></div>", unsafe_allow_html=True)
+        if st.button(
+            "▶", key=f"{section_key}_next", disabled=current_page >= total_pages - 1
+        ):
+            st.session_state[page_state_key] = min(total_pages - 1, current_page + 1)
+            st.rerun()
+
+
 def render_book_detail_page(
     books: list[dict],
     books_by_id: dict[int, dict],
@@ -604,17 +653,16 @@ def main() -> None:
         selected_genres = st.multiselect("Filter by genre", genres)
         filtered = [b for b in books if not selected_genres or any(g in selected_genres for g in b["genres"])]
         trending_source = filtered if selected_genres else books
-        trending = sorted(trending_source, key=lambda b: b["rating_count"], reverse=True)[:4]
+        trending = sorted(trending_source, key=lambda b: b["rating_count"], reverse=True)
         st.subheader("Trending in Seattle")
         if trending:
-            cols = st.columns(4)
-            for i, book in enumerate(trending):
-                with cols[i]:
-                    render_book_card(
-                        book,
-                        f"trend_{i}",
-                        auth_user=st.session_state.get("user_email", ""),
-                    )
+            render_book_carousel(
+                section_key="trending_feed",
+                books=trending,
+                cards_per_page=4,
+                key_prefix="trend",
+                auth_user=st.session_state.get("user_email", ""),
+            )
         else:
             st.caption("No trending books match this genre filter.")
         st.subheader("Recommended for you")
@@ -649,19 +697,18 @@ def main() -> None:
             books_by_source_id=books_by_source_id,
             selected_genres=selected_genres,
             fallback_books=fallback_books,
-            top_k=10,
+            top_k=max(10, len(filtered)),
         )
         if not recommended_books:
             st.caption("No recommendations available yet.")
         else:
-            cols = st.columns(5)
-            for i, book in enumerate(recommended_books):
-                with cols[i % 5]:
-                    render_book_card(
-                        book,
-                        f"rec_{i}",
-                        auth_user=st.session_state.get("user_email", ""),
-                    )
+            render_book_carousel(
+                section_key="recommended_feed",
+                books=recommended_books,
+                cards_per_page=5,
+                key_prefix="rec",
+                auth_user=st.session_state.get("user_email", ""),
+            )
 
         st.subheader("Suggested book clubs")
         clubs_source = clubs
