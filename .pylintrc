@@ -1,0 +1,11 @@
+[MAIN]
+ignore-pattern=test.*
+init-hook='import sys; sys.path.append(".")'
+
+[MESSAGES CONTROL]
+disable=
+    duplicate-code,
+    too-many-locals,
+    too-many-arguments,
+    too-many-positional-arguments,
+    too-many-statements
