@@ -6,7 +6,7 @@
 
 ## Overview
 
-This technology review evaluates Python libraries for computing book-to-book cosine similarity as part of a personalized book recommendation system. The system combines Amazon book metadata, Amazon user reviews, and Seattle Public Library checkout data to surface relevant book recommendations for users.
+This technology review evaluates Python libraries for computing book-to-book cosine similarity as part of a personalized book recommendation system. The system combines Amazon book metadata, Amazon user reviews, and Seattle Public Library checkout data to surface relevant book recommendations for users. 
 
 ---
 
@@ -122,3 +122,5 @@ Density: 0.0050% non-zero entries
 COMPARISON SUMMARY
 ...
 ```
+
+This technology review does not connect to the full original data due to size constraints, and the functionalities have been explored to arrive at a decision to proceed building a book recommender for the original data. 
