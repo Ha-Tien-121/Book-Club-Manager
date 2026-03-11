@@ -26,7 +26,10 @@ except (ImportError, FileNotFoundError):
 
 BASE_DIR = Path(__file__).resolve().parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
-USER_DB_PATH = PROCESSED_DIR / "user_accounts.json"
+USER_ACCOUNTS_PATH = PROCESSED_DIR / "user_accounts.json"
+USER_BOOKS_PATH = PROCESSED_DIR / "user_books.json"
+USER_CLUBS_PATH = PROCESSED_DIR / "user_clubs.json"
+USER_FORUM_PATH = PROCESSED_DIR / "user_forum.json"
 FORUM_DB_PATH = PROCESSED_DIR / "forum_posts.json"
 
 
@@ -100,46 +103,166 @@ def _parse_tags(text: str) -> list[str]:
     return []
 
 
-def load_user_store() -> dict:
-    """Load user account store from JSON, creating a default file if needed."""
+def _load_json_store(path: Path, default: dict) -> dict:
+    """Load a JSON file or return default if missing/invalid."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    if not USER_DB_PATH.exists():
-        default_store = {"users": {}}
-        USER_DB_PATH.write_text(json.dumps(default_store, indent=2), encoding="utf-8")
-        return default_store
-
-    with USER_DB_PATH.open("r", encoding="utf-8") as f:
+    if not path.exists():
+        return default
+    with path.open("r", encoding="utf-8") as f:
         try:
-            store = json.load(f)
+            return json.load(f)
         except json.JSONDecodeError:
-            store = {"users": {}}
-    if "users" not in store or not isinstance(store["users"], dict):
-        store = {"users": {}}
-    return store
+            return default
 
 
-def save_user_store(store: dict) -> None:
-    """Persist user account store to disk."""
+def _save_json_store(path: Path, data: dict) -> None:
+    """Write a dict to JSON file."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    USER_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def ensure_user_schema(user_record: dict) -> dict:
-    """Ensure user record has all expected keys for app features."""
-    user_record.setdefault("name", "")
-    user_record.setdefault("password", "")
-    user_record.setdefault(
-        "library",
-        {
-            "in_progress": [],
-            "saved": [],
-            "finished": [],
-        },
-    )
-    user_record.setdefault("club_ids", [])
-    user_record.setdefault("forum_posts", [])
-    user_record.setdefault("saved_forum_post_ids", [])
-    return user_record
+def _migrate_legacy_user_accounts(accounts_data: dict) -> dict | None:
+    """
+    If accounts_data is legacy single-file format (users have library, club_ids, etc.),
+    split into accounts/books/clubs/forum and write the four files. Returns new store dict.
+    """
+    users = accounts_data.get("users") or {}
+    if not users:
+        return None
+    first = next(iter(users.values()), {})
+    if "library" not in first and "club_ids" not in first:
+        return None
+    accounts = {"users": {}}
+    books = {}
+    clubs = {}
+    forum = {}
+    for email, u in users.items():
+        accounts["users"][email] = ensure_user_account_schema({
+            "user_id": email,
+            "email": email,
+            "name": u.get("name", email.split("@")[0]),
+            "password": u.get("password", ""),
+        })
+        books[email] = {
+            "library": u.get("library") or {"in_progress": [], "saved": [], "finished": []},
+            "genre_preferences": u.get("genre_preferences") or [],
+        }
+        clubs[email] = {"club_ids": u.get("club_ids") or []}
+        forum[email] = {
+            "forum_posts": u.get("forum_posts") or [],
+            "saved_forum_post_ids": u.get("saved_forum_post_ids") or [],
+        }
+    _save_json_store(USER_ACCOUNTS_PATH, accounts)
+    _save_json_store(USER_BOOKS_PATH, books)
+    _save_json_store(USER_CLUBS_PATH, clubs)
+    _save_json_store(USER_FORUM_PATH, forum)
+    return {"accounts": accounts, "books": books, "clubs": clubs, "forum": forum}
+
+
+def load_user_store() -> dict:
+    """Load all user-related stores into one dict: accounts, books, clubs, forum."""
+    accounts = _load_json_store(USER_ACCOUNTS_PATH, {"users": {}})
+    if "users" not in accounts or not isinstance(accounts["users"], dict):
+        accounts = {"users": {}}
+    books = _load_json_store(USER_BOOKS_PATH, {})
+    clubs = _load_json_store(USER_CLUBS_PATH, {})
+    forum = _load_json_store(USER_FORUM_PATH, {})
+    migrated = _migrate_legacy_user_accounts(accounts)
+    if migrated is not None:
+        return migrated
+    return {"accounts": accounts, "books": books, "clubs": clubs, "forum": forum}
+
+
+def save_user_accounts(store: dict) -> None:
+    """Persist user_accounts (user_id, email, name, password) to disk."""
+    _save_json_store(USER_ACCOUNTS_PATH, store["accounts"])
+
+
+def save_user_books(store: dict) -> None:
+    """Persist user_books (user_id, library, genre_preferences) to disk."""
+    _save_json_store(USER_BOOKS_PATH, store["books"])
+
+
+def save_user_clubs(store: dict) -> None:
+    """Persist user_clubs (user_id, club_ids) to disk."""
+    _save_json_store(USER_CLUBS_PATH, store["clubs"])
+
+
+def save_user_forum(store: dict) -> None:
+    """Persist user_forum (user_id, forum_posts, saved_forum_post_ids) to disk."""
+    _save_json_store(USER_FORUM_PATH, store["forum"])
+
+
+def _default_books_record() -> dict:
+    return {
+        "library": {"in_progress": [], "saved": [], "finished": []},
+        "genre_preferences": [],
+    }
+
+
+def _default_clubs_record() -> dict:
+    return {"club_ids": []}
+
+
+def _default_forum_record() -> dict:
+    return {"forum_posts": [], "saved_forum_post_ids": []}
+
+
+def ensure_user_account_schema(record: dict) -> dict:
+    """Ensure account record has user_id, email, name, password."""
+    record.setdefault("user_id", record.get("email", ""))
+    record.setdefault("email", "")
+    record.setdefault("name", "")
+    record.setdefault("password", "")
+    return record
+
+
+def ensure_user_books_schema(record: dict) -> dict:
+    """Ensure books record has library and genre_preferences."""
+    record.setdefault("library", {"in_progress": [], "saved": [], "finished": []})
+    record.setdefault("genre_preferences", [])
+    return record
+
+
+def ensure_user_clubs_schema(record: dict) -> dict:
+    """Ensure clubs record has club_ids."""
+    record.setdefault("club_ids", [])
+    return record
+
+
+def ensure_user_forum_schema(record: dict) -> dict:
+    """Ensure forum record has forum_posts and saved_forum_post_ids."""
+    record.setdefault("forum_posts", [])
+    record.setdefault("saved_forum_post_ids", [])
+    return record
+
+
+def get_current_user(store: dict, email: str) -> dict | None:
+    """
+    Return a merged user dict from accounts, books, clubs, forum (by email).
+    Mutating the returned dict's library, club_ids, etc. mutates the store.
+    """
+    users = store["accounts"].get("users") or {}
+    acc = users.get(email)
+    if not acc:
+        return None
+    books_rec = store["books"].setdefault(email, _default_books_record())
+    clubs_rec = store["clubs"].setdefault(email, _default_clubs_record())
+    forum_rec = store["forum"].setdefault(email, _default_forum_record())
+    ensure_user_books_schema(books_rec)
+    ensure_user_clubs_schema(clubs_rec)
+    ensure_user_forum_schema(forum_rec)
+    return {
+        "user_id": email,
+        "email": acc.get("email", email),
+        "name": acc.get("name", email.split("@")[0]),
+        "password": acc.get("password", ""),
+        "library": books_rec["library"],
+        "genre_preferences": books_rec["genre_preferences"],
+        "club_ids": clubs_rec["club_ids"],
+        "forum_posts": forum_rec["forum_posts"],
+        "saved_forum_post_ids": forum_rec["saved_forum_post_ids"],
+    }
 
 
 def load_forum_store(seed_posts: list[dict]) -> dict:
@@ -156,6 +279,9 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
                     "genre": post.get("genre"),
                     "club": post.get("club"),
                     "club_id": None,
+                    "book_id": None,
+                    "book_title": None,
+                    "tags": [],
                     "visibility": "club" if post.get("club") else "public",
                     "replies": post.get("replies", 0),
                     "likes": post.get("likes", 0),
@@ -184,6 +310,10 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
         post.setdefault("visibility", "public")
         post.setdefault("club", None)
         post.setdefault("club_id", None)
+        post.setdefault("genre", None)
+        post.setdefault("book_id", None)
+        post.setdefault("book_title", None)
+        post.setdefault("tags", [])
         for c in post["comments"]:
             c.setdefault("liked_by", [])
             c.setdefault("likes", 0)
@@ -294,6 +424,7 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("selected_forum_post_id", None)
     st.session_state.setdefault("jump_to_forum_detail", False)
     st.session_state.setdefault("jump_to_explore_clubs", False)
+    st.session_state.setdefault("show_genre_onboarding", False)
     st.session_state.setdefault("trending_feed_page_index", 0)
     st.session_state.setdefault("recommended_feed_page_index", 0)
 
@@ -352,21 +483,28 @@ def auth_panel() -> None:
         return
 
     store = load_user_store()
-    users = store["users"]
+    users = store["accounts"].setdefault("users", {})
     if sign_up:
         if email in users:
             st.sidebar.error("Account already exists. Please sign in.")
             return
-        users[email] = ensure_user_schema(
-            {
-                "name": email.split("@")[0],
-                "password": password,
-            }
-        )
-        save_user_store(store)
+        users[email] = ensure_user_account_schema({
+            "user_id": email,
+            "email": email,
+            "name": email.split("@")[0],
+            "password": password,
+        })
+        store["books"][email] = _default_books_record()
+        store["clubs"][email] = _default_clubs_record()
+        store["forum"][email] = _default_forum_record()
+        save_user_accounts(store)
+        save_user_books(store)
+        save_user_clubs(store)
+        save_user_forum(store)
         st.session_state["signed_in"] = True
         st.session_state["user_email"] = email
         st.session_state["user_name"] = users[email]["name"]
+        st.session_state["show_genre_onboarding"] = True
         st.sidebar.success("Account created and signed in.")
         st.rerun()
 
@@ -375,12 +513,35 @@ def auth_panel() -> None:
     if not record or record.get("password") != password:
         st.sidebar.error("Invalid email or password.")
         return
-    ensure_user_schema(record)
+    ensure_user_account_schema(record)
     st.session_state["signed_in"] = True
     st.session_state["user_email"] = email
     st.session_state["user_name"] = record.get("name", email.split("@")[0])
     st.sidebar.success("Signed in.")
     st.rerun()
+
+
+def render_genre_onboarding(
+    genres: list[str],
+    current_user: dict,
+    store: dict,
+) -> None:
+    """Show genre preference checkboxes; save to user and return to feed on Save."""
+    st.title("Welcome! Choose your favorite genres")
+    st.caption("Check the genres you most like to read.")
+    current_prefs = set(current_user.get("genre_preferences") or [])
+    selected = []
+    cols = st.columns(3)
+    for i, genre in enumerate(sorted(genres)):
+        with cols[i % 3]:
+            if st.checkbox(genre, value=genre in current_prefs, key=f"genre_onboarding_{genre}"):
+                selected.append(genre)
+    if st.button("Save Preferences", key="save_genre_preferences"):
+        current_user["genre_preferences"] = selected
+        save_user_books(store)
+        st.session_state["show_genre_onboarding"] = False
+        st.success("Preferences saved. Taking you to the feed.")
+        st.rerun()
 
 
 def render_book_card(book: dict, key_prefix: str, auth_user: str = "") -> None:
@@ -409,6 +570,44 @@ def can_view_forum_post(post: dict, current_user: dict | None) -> bool:
     if club_id is None:
         return bool(post.get("club"))
     return club_id in current_user.get("club_ids", [])
+
+
+def build_post_tags(post: dict) -> list[str]:
+    """Build displayable tag list from structured post metadata."""
+    tags: list[str] = []
+    for raw in post.get("tags", []):
+        text = str(raw).strip()
+        if text and text not in tags:
+            tags.append(text)
+    for key in ("book_title", "genre", "club"):
+        value = str(post.get(key) or "").strip()
+        if value and value not in tags:
+            tags.append(value)
+    return tags
+
+
+def filter_posts_by_tag_query(posts: list[dict], query: str) -> list[dict]:
+    """Filter forum posts by matching query against tags."""
+    query = query.strip().lower()
+    if not query:
+        return posts
+    out = []
+    for post in posts:
+        tag_blob = " ".join(build_post_tags(post)).lower()
+        if query in tag_blob:
+            out.append(post)
+    return out
+
+
+def render_pill_tags(tags: list[str]) -> None:
+    """Render tags using the same pill style as book genres."""
+    clean_tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+    if not clean_tags:
+        return
+    st.markdown(
+        "".join([f"<span class='pill'>{html.escape(tag)}</span>" for tag in clean_tags]),
+        unsafe_allow_html=True,
+    )
 
 
 def build_user_recommender_stores(
@@ -544,10 +743,13 @@ def render_book_carousel(
 def render_book_detail_page(
     books: list[dict],
     books_by_id: dict[int, dict],
+    clubs: list[dict],
     current_user: dict | None,
     store: dict,
+    forum_store: dict,
+    forum_posts_data: list[dict],
 ) -> None:
-    """Render dedicated Book Detail page with back navigation to Feed."""
+    """Render dedicated Book Detail page and related forum discussions."""
     if st.button("← Back to Feed"):
         st.session_state["show_book_detail_page"] = False
         st.rerun()
@@ -584,10 +786,120 @@ def render_book_detail_page(
                         bid for bid in current_user["library"][key] if bid != book["id"]
                     ]
                 current_user["library"][target_key].append(book["id"])
-                save_user_store(store)
+                save_user_books(store)
                 st.success(f"Saved to {save_option}.")
         if not st.session_state["signed_in"]:
             st.caption("Sign in to save books.")
+
+    st.divider()
+    st.subheader("Discussions for this book")
+    related_posts = []
+    book_title_lower = str(book["title"]).strip().lower()
+    for post in forum_posts_data:
+        post_book_id = post.get("book_id")
+        post_book_title = str(post.get("book_title") or "").strip().lower()
+        tag_hit = any(book_title_lower == t.strip().lower() for t in post.get("tags", []))
+        id_hit = post_book_id is not None and int(post_book_id) == int(book["id"])
+        title_hit = post_book_title == book_title_lower
+        if id_hit or title_hit or tag_hit:
+            if can_view_forum_post(post, current_user):
+                related_posts.append(post)
+
+    if related_posts:
+        for post in related_posts:
+            st.markdown(f"### {post['title']}")
+            post_tags = build_post_tags(post)
+            st.caption(f"{post['author']} | {post['time_ago']}")
+            render_pill_tags(post_tags)
+            st.write(post["preview"])
+            if st.button("Open discussion", key=f"open_book_discussion_{int(post['id'])}"):
+                st.session_state["selected_forum_post_id"] = int(post["id"])
+                st.session_state["jump_to_forum_detail"] = True
+                st.session_state["show_book_detail_page"] = False
+                st.rerun()
+            st.divider()
+    else:
+        st.info("No discussions for this book yet.")
+
+    if not st.session_state["signed_in"] or current_user is None:
+        st.caption("Sign in to start a discussion for this book.")
+        return
+
+    joined_clubs = [c for c in clubs if c["id"] in current_user.get("club_ids", [])]
+    with st.form(f"book_post_form_{book['id']}"):
+        st.markdown("#### Start a discussion")
+        post_title = st.text_input("Discussion title")
+        post_text = st.text_area("Discussion post")
+        c1, c2 = st.columns(2)
+        visibility = c1.selectbox(
+            "Visibility",
+            ["Public", "Club Members"],
+            help="Club discussions are visible to members of one selected club.",
+        )
+        selected_club_name = None
+        selected_club_id = None
+        if visibility == "Club Members":
+            club_options = [f"{c['id']}::{c['name']}" for c in joined_clubs]
+            selected_club_name = c2.selectbox(
+                "Club",
+                [c.split("::", 1)[1] for c in club_options] if club_options else ["No joined clubs"],
+                disabled=not club_options,
+            )
+            if club_options:
+                selected_club_id = [
+                    int(c.split("::", 1)[0])
+                    for c in club_options
+                    if c.split("::", 1)[1] == selected_club_name
+                ][0]
+        custom_tags = st.text_input(
+            "Additional tags (comma-separated)",
+            placeholder="example: pacing, ending, characters",
+        )
+        submit_post = st.form_submit_button("Post discussion")
+
+    if submit_post:
+        if not post_title.strip() or not post_text.strip():
+            st.warning("Please add both title and post content.")
+            return
+        if visibility == "Club Members" and not joined_clubs:
+            st.warning("Join a club first to create club-only posts.")
+            return
+
+        tags = [book["title"]]
+        if book.get("genres"):
+            tags.append(book["genres"][0])
+        if selected_club_name:
+            tags.append(selected_club_name)
+        for raw_tag in custom_tags.split(","):
+            tag = raw_tag.strip()
+            if tag and tag not in tags:
+                tags.append(tag)
+
+        forum_store["posts"].insert(
+            0,
+            {
+                "id": int(forum_store["next_post_id"]),
+                "title": post_title.strip(),
+                "author": st.session_state["user_name"],
+                "genre": book["genres"][0] if book.get("genres") else None,
+                "club": selected_club_name if visibility == "Club Members" else None,
+                "club_id": selected_club_id if visibility == "Club Members" else None,
+                "book_id": int(book["id"]),
+                "book_title": book["title"],
+                "tags": tags,
+                "visibility": "club" if visibility == "Club Members" else "public",
+                "replies": 0,
+                "likes": 0,
+                "liked_by": [],
+                "time_ago": "just now",
+                "preview": post_text.strip(),
+                "comments": [],
+            },
+        )
+        forum_store["next_post_id"] = int(forum_store["next_post_id"]) + 1
+        save_forum_store(forum_store)
+        st.success("Posted discussion for this book.")
+        st.rerun()
 
 
 def main() -> None:
@@ -607,36 +919,48 @@ def main() -> None:
     st.sidebar.title("Bookish")
     auth_panel()
     store = load_user_store()
-    users = store["users"]
+    users = store["accounts"].get("users") or {}
     auth_user_from_query = (st.query_params.get("auth_user") or "").strip().lower()
     if (
         not st.session_state["signed_in"]
         and auth_user_from_query
         and auth_user_from_query in users
     ):
-        restored = ensure_user_schema(users[auth_user_from_query])
-        st.session_state["signed_in"] = True
-        st.session_state["user_email"] = auth_user_from_query
-        st.session_state["user_name"] = restored.get(
-            "name", auth_user_from_query.split("@")[0]
-        )
+        restored = get_current_user(store, auth_user_from_query)
+        if restored:
+            st.session_state["signed_in"] = True
+            st.session_state["user_email"] = auth_user_from_query
+            st.session_state["user_name"] = restored.get(
+                "name", auth_user_from_query.split("@")[0]
+            )
     current_user = None
     if st.session_state["signed_in"]:
         email = st.session_state["user_email"]
-        current_user = users.get(email)
+        current_user = get_current_user(store, email)
         if current_user is None:
             st.session_state["signed_in"] = False
             st.session_state["user_email"] = ""
             st.session_state["user_name"] = ""
             st.rerun()
-        current_user = ensure_user_schema(current_user)
 
     forum_store = load_forum_store(forum_posts)
     forum_posts_data = forum_store["posts"]
     forum_post_ids = {int(p["id"]) for p in forum_posts_data if "id" in p}
 
+    if st.session_state.get("show_genre_onboarding") and current_user is not None:
+        render_genre_onboarding(genres=genres, current_user=current_user, store=store)
+        return
+
     if st.session_state.get("show_book_detail_page"):
-        render_book_detail_page(books, books_by_id, current_user, store)
+        render_book_detail_page(
+            books=books,
+            books_by_id=books_by_id,
+            clubs=clubs,
+            current_user=current_user,
+            store=store,
+            forum_store=forum_store,
+            forum_posts_data=forum_posts_data,
+        )
         return
 
     tabs = st.tabs(["Feed", "Explore Clubs", "My Clubs", "Library", "Forum"])
@@ -759,7 +1083,7 @@ def main() -> None:
                     st.success("Joined")
                 elif st.button("Join club", key=f"join_club_{club['id']}"):
                     current_user["club_ids"].append(club["id"])
-                    save_user_store(store)
+                    save_user_clubs(store)
                     st.rerun()
             else:
                 st.caption("Sign in to join clubs.")
@@ -781,7 +1105,7 @@ def main() -> None:
                 current_user["club_ids"] = [
                     cid for cid in current_user.get("club_ids", []) if int(cid) != int(club["id"])
                 ]
-                save_user_store(store)
+                save_user_clubs(store)
                 st.success(f"Removed {club['name']} from My Clubs.")
                 st.rerun()
 
@@ -830,8 +1154,9 @@ def main() -> None:
                     st.session_state["selected_forum_post_id"] = None
                     st.rerun()
                 st.markdown(f"## {selected_post['title']}")
-                tags = [x for x in [selected_post.get("genre"), selected_post.get("club")] if x]
-                st.caption(f"{selected_post['author']} | {selected_post['time_ago']} | {' | '.join(tags)}")
+                tags = build_post_tags(selected_post)
+                st.caption(f"{selected_post['author']} | {selected_post['time_ago']}")
+                render_pill_tags(tags)
                 st.write(selected_post["preview"])
 
                 # Post actions
@@ -858,7 +1183,7 @@ def main() -> None:
                             ]
                         else:
                             current_user["saved_forum_post_ids"].append(int(selected_post["id"]))
-                        save_user_store(store)
+                        save_user_forum(store)
                         st.rerun()
                 else:
                     a1.caption("Sign in to like posts.")
@@ -946,12 +1271,23 @@ def main() -> None:
                                 for c in club_options
                                 if c.split("::", 1)[1] == selected_club_name
                             ][0]
+                    custom_tags_text = st.text_input(
+                        "Additional tags (comma-separated)",
+                        placeholder="example: mystery, pacing, Seattle",
+                    )
                     submitted = st.form_submit_button("Post")
                 if submitted:
                     if post_title.strip() and post_text.strip():
                         if visibility == "Club Members" and not joined_clubs:
                             st.warning("Join a club first to create club-only posts.")
                         else:
+                            tags = []
+                            if visibility == "Club Members" and selected_club_name:
+                                tags.append(selected_club_name)
+                            for raw_tag in custom_tags_text.split(","):
+                                tag = raw_tag.strip()
+                                if tag and tag not in tags:
+                                    tags.append(tag)
                             forum_store["posts"].insert(
                                 0,
                                 {
@@ -961,6 +1297,9 @@ def main() -> None:
                                     "genre": None,
                                     "club": selected_club_name if visibility == "Club Members" else None,
                                     "club_id": selected_club_id if visibility == "Club Members" else None,
+                                    "book_id": None,
+                                    "book_title": None,
+                                    "tags": tags,
                                     "visibility": "club" if visibility == "Club Members" else "public",
                                     "replies": 0,
                                     "likes": 0,
@@ -979,6 +1318,7 @@ def main() -> None:
             else:
                 st.caption("Sign in to create and save forum posts.")
 
+            tag_query = st.text_input("Search by tags", placeholder="Search tags...")
             view = st.radio(
                 "View",
                 ["All", "Public", "Club Discussions", "Saved"],
@@ -995,6 +1335,7 @@ def main() -> None:
                 else:
                     saved_ids = {int(pid) for pid in current_user.get("saved_forum_post_ids", [])}
                     posts = [p for p in posts if int(p.get("id", -1)) in saved_ids]
+            posts = filter_posts_by_tag_query(posts, tag_query)
 
             if view == "Saved" and current_user is None:
                 st.info("Sign in to view saved forum posts.")
@@ -1003,9 +1344,9 @@ def main() -> None:
 
             for post in posts:
                 st.markdown(f"### {post['title']}")
-                tags = [x for x in [post.get("genre"), post.get("club")] if x]
-                meta = f"{post['author']} | {post['time_ago']} | {' | '.join(tags)}"
-                st.caption(meta)
+                tags = build_post_tags(post)
+                st.caption(f"{post['author']} | {post['time_ago']}")
+                render_pill_tags(tags)
                 st.write(post["preview"])
                 st.caption(f"Likes: {int(post.get('likes',0))} | Replies: {int(post.get('replies',0))}")
                 if st.button("Open discussion", key=f"open_forum_post_{int(post['id'])}"):
