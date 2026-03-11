@@ -25,6 +25,17 @@ class StreamlitAppTest(unittest.TestCase):
     def setUp(self) -> None:
         self.at = AppTest.from_file(_app_path()).run()
 
+    def _find_text_input(self, label: str):
+        """Return the first text_input element matching label (sidebar or main)."""
+        candidates = []
+        if hasattr(self.at, "sidebar") and hasattr(self.at.sidebar, "text_input"):
+            candidates.extend(list(self.at.sidebar.text_input))
+        candidates.extend(list(self.at.text_input))
+        for el in candidates:
+            if getattr(el, "label", None) == label:
+                return el
+        raise AssertionError(f"text_input with label '{label}' not found")
+
     def test_app_runs_without_error(self) -> None:
         """App loads and completes one run."""
         self.assertIsNotNone(self.at)
@@ -78,6 +89,27 @@ class StreamlitAppTest(unittest.TestCase):
         tab_labels = [t.label for t in self.at.tabs]
         self.assertIn("Library", tab_labels)
         self.assertIn("Forum", tab_labels)
+
+    def test_create_account_duplicate_email_shows_error(self) -> None:
+        """Creating an account with an existing email shows 'Email has been taken.'."""
+        email_input = self._find_text_input("Email")
+        password_input = self._find_text_input("Password")
+
+        email_input.input("abc@gmail.com").run()
+        password_input.input("123456").run()
+
+        create_buttons = [b for b in self.at.button if b.label == "Create Account"]
+        self.assertGreaterEqual(len(create_buttons), 1, "Create Account button not found")
+        create_buttons[0].click().run()
+
+        error_text = " ".join(
+            [getattr(e, "value", "") for e in list(self.at.error)]
+            + [
+                getattr(e, "value", "")
+                for e in list(getattr(self.at.sidebar, "error", []))
+            ]
+        )
+        self.assertIn("Email has been taken.", error_text)
 
 
 class StreamlitAppExploreClubsTest(unittest.TestCase):
