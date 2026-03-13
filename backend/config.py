@@ -38,7 +38,7 @@ FORUM_DB_PATH = PROCESSED_DIR / "forum_posts.json"
 USER_EVENTS_PATH = USERS_DIR / "user_events.json"
 
 
-# AWS / DynamoDB configuration (used when IS_AWS is True)
+# AWS / DynamoDB / S3 configuration (used when IS_AWS is True)
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
 # DynamoDB table names. These can be overridden per‑environment via env vars.
@@ -46,6 +46,15 @@ USER_BOOKS_TABLE = os.getenv("USER_BOOKS_TABLE", "user_books")
 USER_EVENTS_TABLE = os.getenv("USER_EVENTS_TABLE", "user_events")
 USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")
 FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")
+BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
+EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
+
+# S3 bucket for book data and images.
+DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
+# Optional base URL for serving public images (e.g. CloudFront or direct S3 URL).
+CDN_BASE_URL = os.getenv("CDN_BASE_URL", f"https://{DATA_BUCKET}.s3.{AWS_REGION}.amazonaws.com")
+# Default image key for books that don't have a thumbnail.
+DEFAULT_BOOK_IMAGE_KEY = os.getenv("DEFAULT_BOOK_IMAGE_KEY", "images/book_icon.png")
 
 # Auth / security tuning (bcrypt work factor)
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
