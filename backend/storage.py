@@ -5,9 +5,11 @@ from typing import Any, Optional
 
 import boto3
 import pandas as pd
+from boto3.dynamodb.conditions import Key
 
 # DynamoDB table names
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
+BOOKS_GSI_TITLE_AUTHOR_KEY = os.getenv("BOOKS_GSI_TITLE_AUTHOR_KEY", "title_author_key")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
 USER_LIBRARY_TABLE = os.getenv("USER_LIBRARY_TABLE", "user_library")
 
@@ -74,6 +76,37 @@ def get_book_metadata(parent_asin: str) -> Optional[dict[str, Any]]:
         return None
     item["average_rating"] = float(item["average_rating"])
     return item
+
+
+def get_book_by_title_author_key(title_author_key: str) -> Optional[dict[str, Any]]:
+    """
+    Look up a book by title_author_key using the books table GSI.
+    The GSI is expected to project title_author_key (partition key), parent_asin, and categories.
+    Returns a dict with parent_asin and categories (list of genre strings), or None if not found.
+    """
+    if not title_author_key or not str(title_author_key).strip():
+        return None
+    dynamodb = boto3.resource("dynamodb")
+    table = dynamodb.Table(BOOKS_TABLE)
+    try:
+        resp = table.query(
+            IndexName=BOOKS_GSI_TITLE_AUTHOR_KEY,
+            KeyConditionExpression=Key("title_author_key").eq(str(title_author_key).strip()),
+            Limit=1,
+        )
+    except Exception:
+        return None
+    items = resp.get("Items") or []
+    if not items:
+        return None
+    item = items[0]
+    categories = item.get("categories")
+    if not isinstance(categories, list):
+        categories = []
+    return {
+        "parent_asin": item.get("parent_asin"),
+        "categories": categories,
+    }
 
 
 def get_event_details(event_id: str) -> Optional[dict[str, Any]]:
