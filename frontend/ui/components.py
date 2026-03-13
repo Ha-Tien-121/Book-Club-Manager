@@ -19,8 +19,13 @@ def render_pill_tags(tags: list[str]) -> None:
     )
 
 
-def render_book_card(book: dict, key_prefix: str, auth_user: str = "") -> None:
-    """Render book card with clickable metadata and detail action."""
+def render_book_card(
+    book: dict,
+    key_prefix: str,
+    auth_user: str = "",
+    show_view_details_button: bool = True,
+) -> None:
+    """Render book card with clickable metadata and optional detail button."""
     auth_query = f"&auth_user={quote_plus(auth_user)}" if auth_user else ""
     href = f"?book_id={book['id']}&open=detail{auth_query}"
     stats = f"Rating: {book['rating']} ({book['rating_count']:,})"
@@ -47,7 +52,9 @@ def render_book_card(book: dict, key_prefix: str, auth_user: str = "") -> None:
         unsafe_allow_html=True,
     )
     render_pill_tags(book.get("genres", []))
-    if st.button("View details", key=f"{key_prefix}_details_{book['id']}"):
+    if show_view_details_button and st.button(
+        "View details", key=f"{key_prefix}_details_{book['id']}"
+    ):
         st.session_state["selected_book_id"] = book["id"]
         st.session_state["show_book_detail_page"] = True
         st.rerun()
@@ -69,29 +76,21 @@ def render_book_carousel(
     current_page = int(st.session_state[page_state_key])
     current_page = max(0, min(current_page, total_pages - 1))
     st.session_state[page_state_key] = current_page
-
     start = current_page * cards_per_page
     page_books = books[start : start + cards_per_page]
     side_left, center_cards, side_right = st.columns(
         [1, 12, 1], vertical_alignment="center"
     )
-
     with side_left:
         st.markdown("<div style='height:220px;'></div>", unsafe_allow_html=True)
         if st.button("◀", key=f"{section_key}_prev", disabled=current_page <= 0):
             st.session_state[page_state_key] = max(0, current_page - 1)
             st.rerun()
-
     with center_cards:
         cols = st.columns(cards_per_page)
         for i, book in enumerate(page_books):
             with cols[i]:
-                render_book_card(
-                    book,
-                    f"{key_prefix}_{current_page}_{i}",
-                    auth_user=auth_user,
-                )
-
+                render_book_card(book, f"{key_prefix}_{current_page}_{i}", auth_user=auth_user)
     with side_right:
         st.markdown("<div style='height:220px;'></div>", unsafe_allow_html=True)
         if st.button(

@@ -1,2 +1,0 @@
-"""Bookish Streamlit application package."""
-

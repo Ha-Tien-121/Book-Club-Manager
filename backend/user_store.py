@@ -1,11 +1,11 @@
 """User stores: accounts, books, clubs, forum."""
 
-# from __future__ import annotations  # legacy duplicated section (kept inert)
+from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from app.config import (
+from backend.config import (
     PROCESSED_DIR,
     USER_ACCOUNTS_PATH,
     USER_BOOKS_PATH,
@@ -77,10 +77,7 @@ def ensure_user_forum_schema(record: dict) -> dict:
 
 
 def _migrate_legacy_user_accounts(accounts_data: dict) -> dict | None:
-    """
-    If accounts_data is legacy single-file format (users have library, club_ids, etc.),
-    split into accounts/books/clubs/forum and write the four files. Returns new store dict.
-    """
+    """Migrate legacy single-file user format into split stores."""
     users = accounts_data.get("users") or {}
     if not users:
         return None
@@ -127,7 +124,6 @@ def load_user_store() -> dict:
     books = _load_json_store(USER_BOOKS_PATH, {})
     clubs = _load_json_store(USER_CLUBS_PATH, {})
     forum = _load_json_store(USER_FORUM_PATH, {})
-
     migrated = _migrate_legacy_user_accounts(accounts)
     if migrated is not None:
         return migrated
@@ -135,42 +131,33 @@ def load_user_store() -> dict:
 
 
 def save_user_accounts(store: dict) -> None:
-    """Persist user_accounts to disk."""
     _save_json_store(USER_ACCOUNTS_PATH, store["accounts"])
 
 
 def save_user_books(store: dict) -> None:
-    """Persist user_books to disk."""
     _save_json_store(USER_BOOKS_PATH, store["books"])
 
 
 def save_user_clubs(store: dict) -> None:
-    """Persist user_clubs to disk."""
     _save_json_store(USER_CLUBS_PATH, store["clubs"])
 
 
 def save_user_forum(store: dict) -> None:
-    """Persist user_forum to disk."""
     _save_json_store(USER_FORUM_PATH, store["forum"])
 
 
 def get_current_user(store: dict, email: str) -> dict | None:
-    """
-    Return a merged user dict from accounts, books, clubs, forum (by email).
-    Mutating the returned dict's library, club_ids, etc. mutates the store.
-    """
+    """Return merged user dict from accounts/books/clubs/forum."""
     users = store["accounts"].get("users") or {}
     acc = users.get(email)
     if not acc:
         return None
-
     books_rec = store["books"].setdefault(email, _default_books_record())
     clubs_rec = store["clubs"].setdefault(email, _default_clubs_record())
     forum_rec = store["forum"].setdefault(email, _default_forum_record())
     ensure_user_books_schema(books_rec)
     ensure_user_clubs_schema(clubs_rec)
     ensure_user_forum_schema(forum_rec)
-
     return {
         "user_id": email,
         "email": acc.get("email", email),
@@ -198,124 +185,9 @@ def create_user(store: dict, email: str, password: str) -> dict:
     store["books"][email] = _default_books_record()
     store["clubs"][email] = _default_clubs_record()
     store["forum"][email] = _default_forum_record()
-
     save_user_accounts(store)
     save_user_books(store)
     save_user_clubs(store)
     save_user_forum(store)
     return users[email]
-#     clubs: dict = {}
-#     forum: dict = {}
-#     for email, u in users.items():
-#         accounts["users"][email] = ensure_user_account_schema(
-#             {
-#                 "user_id": email,
-#                 "email": email,
-#                 "name": u.get("name", email.split("@")[0]),
-#                 "password": u.get("password", ""),
-#             }
-#         )
-#         books[email] = {
-#             "library": u.get("library")
-#             or {"in_progress": [], "saved": [], "finished": []},
-#             "genre_preferences": u.get("genre_preferences") or [],
-#         }
-#         clubs[email] = {"club_ids": u.get("club_ids") or []}
-#         forum[email] = {
-#             "forum_posts": u.get("forum_posts") or [],
-#             "saved_forum_post_ids": u.get("saved_forum_post_ids") or [],
-#         }
-
-#     _save_json_store(USER_ACCOUNTS_PATH, accounts)
-#     _save_json_store(USER_BOOKS_PATH, books)
-#     _save_json_store(USER_CLUBS_PATH, clubs)
-#     _save_json_store(USER_FORUM_PATH, forum)
-#     return {"accounts": accounts, "books": books, "clubs": clubs, "forum": forum}
-
-
-# def load_user_store() -> dict:
-#     """Load all user-related stores into one dict: accounts, books, clubs, forum."""
-#     accounts = _load_json_store(USER_ACCOUNTS_PATH, {"users": {}})
-#     if "users" not in accounts or not isinstance(accounts["users"], dict):
-#         accounts = {"users": {}}
-#     books = _load_json_store(USER_BOOKS_PATH, {})
-#     clubs = _load_json_store(USER_CLUBS_PATH, {})
-#     forum = _load_json_store(USER_FORUM_PATH, {})
-
-#     migrated = _migrate_legacy_user_accounts(accounts)
-#     if migrated is not None:
-#         return migrated
-#     return {"accounts": accounts, "books": books, "clubs": clubs, "forum": forum}
-
-
-# def save_user_accounts(store: dict) -> None:
-#     """Persist user_accounts to disk."""
-#     _save_json_store(USER_ACCOUNTS_PATH, store["accounts"])
-
-
-# def save_user_books(store: dict) -> None:
-#     """Persist user_books to disk."""
-#     _save_json_store(USER_BOOKS_PATH, store["books"])
-
-
-# def save_user_clubs(store: dict) -> None:
-#     """Persist user_clubs to disk."""
-#     _save_json_store(USER_CLUBS_PATH, store["clubs"])
-
-
-# def save_user_forum(store: dict) -> None:
-#     """Persist user_forum to disk."""
-#     _save_json_store(USER_FORUM_PATH, store["forum"])
-
-
-# def get_current_user(store: dict, email: str) -> dict | None:
-#     """
-#     Return a merged user dict from accounts, books, clubs, forum (by email).
-#     Mutating the returned dict's library, club_ids, etc. mutates the store.
-#     """
-#     users = store["accounts"].get("users") or {}
-#     acc = users.get(email)
-#     if not acc:
-#         return None
-
-#     books_rec = store["books"].setdefault(email, _default_books_record())
-#     clubs_rec = store["clubs"].setdefault(email, _default_clubs_record())
-#     forum_rec = store["forum"].setdefault(email, _default_forum_record())
-#     ensure_user_books_schema(books_rec)
-#     ensure_user_clubs_schema(clubs_rec)
-#     ensure_user_forum_schema(forum_rec)
-
-#     return {
-#         "user_id": email,
-#         "email": acc.get("email", email),
-#         "name": acc.get("name", email.split("@")[0]),
-#         "password": acc.get("password", ""),
-#         "library": books_rec["library"],
-#         "genre_preferences": books_rec["genre_preferences"],
-#         "club_ids": clubs_rec["club_ids"],
-#         "forum_posts": forum_rec["forum_posts"],
-#         "saved_forum_post_ids": forum_rec["saved_forum_post_ids"],
-#     }
-
-
-# def create_user(store: dict, email: str, password: str) -> dict:
-#     """Create user across the four stores and persist them."""
-#     users = store["accounts"].setdefault("users", {})
-#     users[email] = ensure_user_account_schema(
-#         {
-#             "user_id": email,
-#             "email": email,
-#             "name": email.split("@")[0],
-#             "password": password,
-#         }
-#     )
-#     store["books"][email] = _default_books_record()
-#     store["clubs"][email] = _default_clubs_record()
-#     store["forum"][email] = _default_forum_record()
-
-#     save_user_accounts(store)
-#     save_user_books(store)
-#     save_user_clubs(store)
-#     save_user_forum(store)
-#     return users[email]
 

@@ -1,10 +1,10 @@
 """Forum posts persistence store."""
 
-# from __future__ import annotations  # legacy duplicated section (kept inert)
+from __future__ import annotations
 
 import json
 
-from app.config import FORUM_DB_PATH, PROCESSED_DIR
+from backend.config import FORUM_DB_PATH, PROCESSED_DIR
 
 
 def load_forum_store(seed_posts: list[dict]) -> dict:
@@ -36,7 +36,6 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
         store = {"next_post_id": len(initial_posts) + 1, "posts": initial_posts}
         FORUM_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
         return store
-
     with FORUM_DB_PATH.open("r", encoding="utf-8") as file_obj:
         try:
             store = json.load(file_obj)

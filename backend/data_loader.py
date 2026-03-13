@@ -7,7 +7,7 @@ import csv
 import json
 from pathlib import Path
 
-from app.config import PROCESSED_DIR
+from backend.config import PROCESSED_DIR
 
 
 def _read_jsonl_dict_lines(path: Path) -> list[dict]:

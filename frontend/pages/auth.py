@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app.stores.user_store import (
-    create_user,
-    ensure_user_account_schema,
-    load_user_store,
-)
+from backend.auth_service import create_user, get_user, login_user
 
 
 def auth_panel() -> None:
@@ -39,27 +35,26 @@ def auth_panel() -> None:
         st.sidebar.error("Please enter email and password.")
         return
 
-    store = load_user_store()
-    users = store["accounts"].setdefault("users", {})
-
     if sign_up:
-        if email in users:
-            st.sidebar.error("Email has been taken.")
+        try:
+            create_user(email=email, password=password)
+        except ValueError as exc:
+            st.sidebar.error(str(exc))
             return
-        create_user(store, email=email, password=password)
         st.session_state["signed_in"] = True
         st.session_state["user_email"] = email
-        st.session_state["user_name"] = users[email]["name"]
+        user = get_user(email)
+        st.session_state["user_name"] = user.get("name", email.split("@")[0])
         st.session_state["show_genre_onboarding"] = True
         st.sidebar.success("Account created and signed in.")
         st.rerun()
 
-    record = users.get(email)
-    if not record or record.get("password") != password:
-        st.sidebar.error("Invalid email or password.")
+    try:
+        record = login_user(email=email, password=password)
+    except ValueError as exc:
+        st.sidebar.error(str(exc))
         return
 
-    ensure_user_account_schema(record)
     st.session_state["signed_in"] = True
     st.session_state["user_email"] = email
     st.session_state["user_name"] = record.get("name", email.split("@")[0])

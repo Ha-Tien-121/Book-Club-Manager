@@ -1,5 +1,5 @@
 """Bookish Streamlit entrypoint."""
 
-from app.main import main
+from frontend.main import main
 
 main()

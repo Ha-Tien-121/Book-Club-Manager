@@ -1,4 +1,4 @@
-"""Shared configuration paths for the Bookish app."""
+"""Shared configuration paths for backend services."""
 
 from __future__ import annotations
 
