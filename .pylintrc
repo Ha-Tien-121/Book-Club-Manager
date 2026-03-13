@@ -2,6 +2,9 @@
 ignore-pattern=test.*
 init-hook='import sys; sys.path.append(".")'
 
+[FORMAT]
+max-line-length=120
+
 [MESSAGES CONTROL]
 disable=
     duplicate-code,
