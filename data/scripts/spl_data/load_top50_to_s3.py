@@ -64,4 +64,3 @@ def upload_top50_to_s3(
 
 if __name__ == "__main__":
     upload_top50_to_s3()
-
