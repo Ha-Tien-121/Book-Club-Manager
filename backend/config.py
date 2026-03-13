@@ -51,6 +51,8 @@ EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
 
 # S3 bucket for book data and images.
 DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
+# S3 key for SPL top-50 checkouts JSON (list of book dicts).
+TOP50_BOOKS_S3_KEY = os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
 # Optional base URL for serving public images (e.g. CloudFront or direct S3 URL).
 CDN_BASE_URL = os.getenv("CDN_BASE_URL", f"https://{DATA_BUCKET}.s3.{AWS_REGION}.amazonaws.com")
 # Default image key for books that don't have a thumbnail.
