@@ -39,6 +39,12 @@ def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool]:
             g = str(club.get("genre") or "").strip()
             if g:
                 genre_counts[g] += 1
+    user_accounts = storage.get_user_accounts(user_id)
+    if isinstance(user_accounts, dict):
+        for rank, genre in enumerate(user_accounts.get("genre_preferences") or [], start=1):
+            if genre:
+                genre_counts[genre] += (4 - min(rank, 3))
+                has_behavior = True
     if genre_counts:
         ranked = [name for name, _ in genre_counts.most_common(3)]
         user_genres_store[user_id] = [
