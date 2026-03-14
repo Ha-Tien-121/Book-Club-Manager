@@ -44,4 +44,3 @@ def get_user_library(user_id: str) -> dict:
     """Return user's library dictionary."""
     rec = storage.get_user_books(str(user_id).strip().lower())
     return dict(rec.get("library") or {"in_progress": [], "saved": [], "finished": []})
-
