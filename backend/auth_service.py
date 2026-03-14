@@ -76,17 +76,3 @@ def login_user(email: str, password: str) -> dict[str, Any]:
 def get_user(user_id: str) -> dict[str, Any]:
     """Get user account by id/email."""
     return storage.get_user_accounts(str(user_id).strip().lower())
-
-
-#move this to the library 
-def update_user_preferences(user_id: str, genres: list[str]) -> dict[str, Any]:
-    """Update user's genre preferences."""
-    user_id = str(user_id).strip().lower()
-    books = storage._read_json(USER_BOOKS_PATH, {})  # pylint: disable=protected-access
-    rec = books.setdefault(
-        user_id,
-        {"library": {"in_progress": [], "saved": [], "finished": []}, "genre_preferences": []},
-    )
-    rec["genre_preferences"] = [str(g) for g in (genres or []) if str(g).strip()]
-    storage._save_user_books_all(books)  # pylint: disable=protected-access
-    return dict(rec)
