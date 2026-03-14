@@ -1,19 +1,28 @@
-"""
-Events service: business logic for book club events and discovery.
+"""Events service layer."""
 
-Sits above the storage layer and provides the operations needed by the UI and API:
-event details, trending/upcoming events, filtering by tag or book, and search.
-Use this module instead of calling storage directly when you need event data
-for pages, cards, or recommendations.
-"""
-
-from typing import Any, Optional
+from __future__ import annotations
 
 from backend import storage
 
 
-def get_event_detail(event_id: str) -> Optional[dict[str, Any]]:
+def get_event_detail(event_id: str) -> dict:
+    """Get full event details by event_id."""
+    return storage.get_event_detail(event_id) or {}
+
+
+def get_events_by_city(city_state: str) -> list[dict]:
     """
-    Get full event details. For event details page.
+    Return events filtered by city_state.
+    TODO: implement when events data source is available.
     """
-    return storage.get_event_details(event_id)
+    _ = city_state
+    return []
+
+
+def get_events_by_genre(genre: str) -> list[dict]:
+    """
+    Return events filtered by genre.
+    TODO: implement when events data source is available.
+    """
+    _ = genre
+    return []
