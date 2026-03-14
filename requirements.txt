@@ -1,6 +1,7 @@
 # Project dependencies
 # Last updated: 2026-03-13
 
+boto3
 pandas
 pyarrow>=18.0.0,<19.0.0  
 numpy

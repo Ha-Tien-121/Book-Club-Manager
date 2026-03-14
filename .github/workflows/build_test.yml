@@ -92,7 +92,7 @@ jobs:
           pip install -e .
 
       # Next step: run the unit tests with code coverage.
-      # under coverage run add any other files containing code we test
+      # to package whole repo replace data with .
       - name: Unit tests
         run: |
           export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
@@ -103,6 +103,7 @@ jobs:
       # Next step: run pylint. Anything less than 10/10 will fail.
       #            Once we've covered pylint in lecture, uncomment
       #            the following lines.
+      # to lint entire repo remove data/scripts/ below
       - name: Lint with pylint
         run: |
           pylint data/scripts/**/*.py

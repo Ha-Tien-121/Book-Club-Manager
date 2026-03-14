@@ -3,7 +3,7 @@ Central configuration for the backend.
 
 This module is the single source of truth for:
   - Which environment the app is running in (local vs AWS).
-  - Where local JSON “databases” live.
+  - Where local JSON "databases" live.
   - Which DynamoDB tables and AWS region to use in cloud mode.
 
 The rest of the backend should import from here instead of hard‑coding
@@ -29,7 +29,7 @@ USERS_DIR = BASE_DIR / "data" / "users"
 # Local path for default book recs when not using S3 (reviews top 25).
 REVIEWS_TOP50_BOOKS_LOCAL_PATH = PROCESSED_DIR / "reviews_top25_books.json"
 
-# Local JSON “databases” for the mock / local mode.
+# Local JSON "databases" for the mock / local mode.
 USER_ACCOUNTS_PATH = PROCESSED_DIR / "user_accounts.json"
 USER_BOOKS_PATH = PROCESSED_DIR / "user_books.json"
 USER_CLUBS_PATH = PROCESSED_DIR / "user_clubs.json"

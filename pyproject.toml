@@ -28,6 +28,7 @@ classifiers = [
 ]
 dependencies = []
 
+# to package whole repo set find = {}
 [tool.setuptools]
 packages = { find = { where = ["data/scripts"] } }
 
