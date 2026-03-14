@@ -7,7 +7,7 @@ from collections import Counter
 import streamlit as st
 import streamlit.components.v1 as components
 
-from backend.auth_service import update_user_preferences
+from backend.library_service import update_user_preferences
 from backend.data_loader import load_data
 from backend.forum_store import load_forum_store, save_forum_store
 from backend.recommender_service import get_book_recommendations
