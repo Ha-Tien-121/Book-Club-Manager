@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 import pandas as pd
 
 from backend.config import (
@@ -36,7 +36,10 @@ from backend.config import (
     FORUM_POSTS_TABLE,
     USER_FORUMS_TABLE,
     FORUM_POSTS_GSI,
+    FORUM_POSTS_CREATED_AT_GSI,
     EVENTS_GSI,
+    EVENTS_PARENT_ASIN_GSI,
+    EVENTS_CITY_STATE_GSI,
     BOOKS_TABLE,
     EVENTS_TABLE,
     DATA_BUCKET,
@@ -150,6 +153,8 @@ class Storage(Protocol):
     def get_book_metadata(self, parent_asin: str) -> dict | None: ...
     def get_book_by_title_author_key(self, title_author_key: str) -> dict | None: ...
     def get_event_details(self, event_id: str) -> dict | None: ...
+    def get_events_by_city(self, city_state: str) -> list[dict]: ...
+    def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list[dict]: ...
     def get_spl_top50_checkout_books(self) -> list[dict]: ...
     def get_top50_review_books(self) -> list[dict]: ...
     def get_soonest_events(self, limit: int = 10) -> list[dict]: ...
@@ -346,6 +351,22 @@ class LocalStorage:
         """
         _ = event_id
         return None
+
+    def get_events_by_city(self, city_state: str) -> list[dict]:
+        """
+        TODO: implement local event lookup by city if/when there is a local
+        events JSON source for development. For now, return [].
+        """
+        _ = city_state
+        return []
+
+    def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list[dict]:
+        """
+        TODO: implement local events-for-book lookup if/when there is a local
+        events JSON source for development. For now, return [].
+        """
+        _ = (parent_asin, limit)
+        return []
 
     def get_spl_top50_checkout_books(self) -> list[dict]:
         """
@@ -561,9 +582,15 @@ class CloudStorage:
 
         library = self._normalize_library_map(item.get("library"))
         genre_preferences = self._normalize_string_list(item.get("genre_preferences"))
+        raw_counts = item.get("genre_counts") or {}
+        genre_counts = self._normalize_decimals(raw_counts) if isinstance(raw_counts, dict) else {}
+        if not isinstance(genre_counts, dict):
+            genre_counts = {}
+        genre_counts = {str(k): int(v) for k, v in genre_counts.items() if isinstance(v, (int, float, Decimal))}
         return {
             "library": library,
             "genre_preferences": genre_preferences,
+            "genre_counts": genre_counts,
         }
     
     def get_user_library(self, user_id: str) -> dict:
@@ -598,6 +625,10 @@ class CloudStorage:
         user_id = str(user_id).strip().lower()
         library = item.get("library") or {"in_progress": [], "saved": [], "finished": []}
         genre_preferences = item.get("genre_preferences") or []
+        genre_counts = item.get("genre_counts") or {}
+        if not isinstance(genre_counts, dict):
+            genre_counts = {}
+        genre_counts = {str(k): int(v) for k, v in genre_counts.items() if isinstance(v, (int, float))}
 
         to_save = {
             "user_email": user_id,
@@ -607,6 +638,7 @@ class CloudStorage:
                 "finished": [str(b) for b in library.get("finished") or []],
             },
             "genre_preferences": [str(g) for g in genre_preferences],
+            "genre_counts": genre_counts,
         }
         self._books.put_item(Item=to_save)
 
@@ -638,9 +670,15 @@ class CloudStorage:
 
         # Normalize existing record into app shape without doing a second
         # network round-trip through get_user_books.
+        raw_counts = existing.get("genre_counts") or {}
+        genre_counts = self._normalize_decimals(raw_counts) if isinstance(raw_counts, dict) else {}
+        if not isinstance(genre_counts, dict):
+            genre_counts = {}
+        genre_counts = {str(k): int(v) for k, v in genre_counts.items() if isinstance(v, (int, float, Decimal))}
         record = {
             "library": self._normalize_library_map(existing.get("library")),
             "genre_preferences": self._normalize_string_list(existing.get("genre_preferences")),
+            "genre_counts": genre_counts,
         }
         library = record.setdefault(
             "library", {"in_progress": [], "saved": [], "finished": []}
@@ -686,9 +724,15 @@ class CloudStorage:
                 "initialize it before removing books from shelves."
             )
 
+        raw_counts = existing.get("genre_counts") or {}
+        genre_counts = self._normalize_decimals(raw_counts) if isinstance(raw_counts, dict) else {}
+        if not isinstance(genre_counts, dict):
+            genre_counts = {}
+        genre_counts = {str(k): int(v) for k, v in genre_counts.items() if isinstance(v, (int, float, Decimal))}
         record = {
             "library": self._normalize_library_map(existing.get("library")),
             "genre_preferences": self._normalize_string_list(existing.get("genre_preferences")),
+            "genre_counts": genre_counts,
         }
         library = record.setdefault(
             "library", {"in_progress": [], "saved": [], "finished": []}
@@ -921,11 +965,15 @@ class CloudStorage:
         meta = meta_resp.get("Item") or {}
         next_post_id = int(meta.get("next_post_id") or 1)
 
-        # All posts: Query partition forum_posts (resource API for Python types)
+        # All posts: Query partition forum_posts. If a created_at GSI is configured, use it
+        # with ScanIndexForward=False so items are returned newest-first by created_at.
         posts = []
-        kwargs = {
+        kwargs: dict = {
             "KeyConditionExpression": Key("pk").eq(self._FORUM_POSTS_PK),
         }
+        if FORUM_POSTS_CREATED_AT_GSI:
+            kwargs["IndexName"] = FORUM_POSTS_CREATED_AT_GSI
+            kwargs["ScanIndexForward"] = False
         while True:
             resp = self._forum.query(**kwargs)
             for item in resp.get("Items") or []:
@@ -936,8 +984,9 @@ class CloudStorage:
                 break
             kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
 
-        # Sort by id so order is stable (e.g. newest first is handled by UI)
-        posts.sort(key=lambda p: int(p.get("id") or 0))
+        # Without GSI we still sort by id so order is stable (e.g. UI can decide newest).
+        if not FORUM_POSTS_CREATED_AT_GSI:
+            posts.sort(key=lambda p: int(p.get("id") or 0))
 
         return {"next_post_id": int(next_post_id), "posts": posts}
 
@@ -1264,6 +1313,77 @@ class CloudStorage:
         if not item:
             return None
         return item
+
+    def get_events_by_city(self, city_state: str) -> list[dict]:
+        """Fetch events filtered by city_state via GSI, ordered by soonest (ttl).
+        Args:
+            city_state: City/state string to match (exact, e.g. \"Seattle, WA\").
+        Returns:
+            List of event dicts in that city/state (may be empty). Requires
+            EVENTS_CITY_STATE_GSI to be set; otherwise returns [].
+        """
+        city_state = str(city_state or "").strip()
+        if not city_state or not EVENTS_CITY_STATE_GSI:
+            return []
+
+        try:
+            items: list[dict] = []
+            kwargs: dict = {
+                "IndexName": EVENTS_CITY_STATE_GSI,
+                "KeyConditionExpression": Key("city_state").eq(city_state),
+                "ScanIndexForward": True,
+            }
+            while True:
+                resp = self._events_main.query(**kwargs)
+                items.extend(resp.get("Items") or [])
+                if "LastEvaluatedKey" not in resp:
+                    break
+                kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+
+            items = [self._normalize_decimals(ev) for ev in items]
+            def _event_sort_key(ev: dict) -> int:
+                ttl = ev.get("ttl")
+                if ttl is not None:
+                    try:
+                        return int(ttl)
+                    except (TypeError, ValueError):
+                        pass
+                return 2**31 - 1
+            return sorted(items, key=_event_sort_key)
+        except Exception:
+            return []
+
+    def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list[dict]:
+        """Fetch upcoming events for a given book via GSI (parent_asin, ttl).
+        Args:
+            parent_asin: Book id (partition key on the GSI).
+            limit: Max number of events to return.
+        Returns:
+            List of event dicts, ordered by soonest ttl first.
+        """
+        parent_asin = str(parent_asin or "").strip()
+        if not parent_asin or limit <= 0 or not EVENTS_PARENT_ASIN_GSI:
+            return []
+
+        items: list[dict] = []
+        try:
+            kwargs: dict = {
+                "IndexName": EVENTS_PARENT_ASIN_GSI,
+                "KeyConditionExpression": Key("parent_asin").eq(parent_asin),
+                "ScanIndexForward": True,
+                "Limit": int(limit),
+            }
+            while True:
+                resp = self._events_main.query(**kwargs)
+                items.extend(resp.get("Items") or [])
+                if len(items) >= limit or "LastEvaluatedKey" not in resp:
+                    break
+                kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+        except Exception:
+            return []
+
+        items = [self._normalize_decimals(ev) for ev in items]
+        return items[:limit]
 
     def get_book_details(self, parent_asin: str) -> dict | None:
         """Fetch full book record including description from S3 parquet.
