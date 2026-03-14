@@ -28,3 +28,17 @@ def get_trending_books() -> list[dict]:
     books = get_books()
     return sorted(books, key=lambda b: int(b.get("rating_count") or 0), reverse=True)
 
+def get_trending_books_spl(limit: int = 50) -> list[dict]:
+    """
+    Return top books by SPL checkouts from S3.
+    Falls back to get_trending_books() if unavailable locally.
+    """
+    try:
+        from backend.storage import CloudStorage
+        from backend.config import IS_AWS
+        if IS_AWS:
+            return CloudStorage().get_top50_books()[:limit]
+    except Exception:
+        pass
+    return get_trending_books()[:limit]
+
