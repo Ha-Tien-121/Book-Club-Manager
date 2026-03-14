@@ -18,17 +18,31 @@ import time
 from backend.storage import get_storage
 
 
-def create_post(user_id: str, title: str, text: str, tags: list[str] | None = None) -> dict:
+def create_post(
+    user_id: str,
+    title: str,
+    text: str,
+    tags: list[str] | None = None,
+    parent_asin: str | None = None,
+    book_title: str | None = None,
+) -> dict:
     """Create a new public forum post and persist it.
+
+    When created from a book detail page, pass parent_asin (and optionally book_title).
+    The post will store parent_asin and book_title, and the book title is auto-added to
+    tags so the post is findable by book and maps to the exact book.
 
     Args:
         user_id: Author email/identifier (normalized to lowercase).
         title: Post title (required, stripped).
         text: Post body/preview text (required, stripped).
         tags: Optional list of tag strings from the UI (e.g. genres, book titles).
+        parent_asin: Optional book id when post is created under book details forum.
+        book_title: Optional book title for display/tagging; if None and parent_asin
+            is set, title is looked up from storage (get_book_metadata) when possible.
 
     Returns:
-        The new post dict (id, title, author, parent_asin, tags, replies, likes, comments, etc.).
+        The new post dict (id, title, author, parent_asin, book_title, tags, etc.).
 
     Raises:
         ValueError: If title or text is empty after stripping.
@@ -47,21 +61,38 @@ def create_post(user_id: str, title: str, text: str, tags: list[str] | None = No
         if s and key not in seen:
             seen.add(key)
             norm_tags.append(s)
+
     store = get_storage()
+    # Book-context: set parent_asin and book_title; auto-tag with book title.
+    pa = str(parent_asin or "").strip() or None
+    bt = str(book_title or "").strip() or None
+    if pa:
+        if not bt:
+            try:
+                meta = store.get_book_metadata(pa)
+                if meta and meta.get("title"):
+                    bt = str(meta["title"]).strip()
+            except Exception:
+                pass
+        if bt:
+            key_bt = bt.lower()
+            if key_bt not in seen:
+                seen.add(key_bt)
+                norm_tags.append(bt)
     db = store.load_forum_db()
     post_id = int(db.get("next_post_id") or 1)
     post = {
         "id": post_id,
         "title": title,
         "author": user_id,
-        "parent_asin": None,
-        "book_title": None,
+        "parent_asin": pa,
+        "book_title": bt,
         "tags": norm_tags,
         "replies": 0,
         "likes": 0,
         "liked_by": [],
         "created_at": int(time.time()),
-        "preview": text,
+        "text": text,
         "comments": [],
     }
     db.setdefault("posts", []).insert(0, post)
@@ -278,6 +309,37 @@ def filter_posts_by_tag(query: str) -> list[dict]:
     return out
 
 
+def get_posts_sorted(sort: str = "newest", tag: str | None = None) -> list[dict]:
+    """Return posts with optional tag filter, sorted for UI (newest or top_likes).
+
+    Args:
+        sort: One of \"newest\" (default) or \"top_likes\".
+        tag: Optional tag filter; case-insensitive substring match in tags.
+
+    Returns:
+        List of post dicts after filtering and sorting.
+    """
+    posts = get_posts()
+    q = str(tag or "").strip().lower()
+    if q:
+        filtered: list[dict] = []
+        for post in posts:
+            tags = post.get("tags") or []
+            blob = " ".join(str(t) for t in tags).lower()
+            if q in blob:
+                filtered.append(post)
+        posts = filtered
+
+    if sort == "top_likes":
+        posts = sorted(
+            posts,
+            key=lambda p: (int(p.get("likes") or 0), int(p.get("created_at") or 0)),
+            reverse=True,
+        )
+    # else \"newest\": get_posts() is already newest-first.
+    return posts
+
+
 def is_post_saved(user_id: str, post_id: int) -> bool:
     """Return True if the user has saved this post.
 
@@ -316,4 +378,30 @@ def is_post_liked(user_id: str, post_id: int) -> bool:
     rec = store.get_user_forums(user_id)
     liked = rec.get("liked_post_ids") or []
     return post_id_int in [int(x) for x in liked]
+
+
+def get_saved_posts_with_details(user_id: str) -> list[dict]:
+    """Return the user's saved posts as full post dicts for UI display.
+
+    Fetches saved post IDs, then loads each post's full details. Posts that no
+    longer exist are omitted from the result. Order matches saved_forum_post_ids.
+
+    Args:
+        user_id: User email/identifier.
+
+    Returns:
+        List of post dicts (full schema), in the same order as saved.
+    """
+    user_id = str(user_id).strip().lower()
+    if not user_id:
+        return []
+    store = get_storage()
+    rec = store.get_user_forums(user_id)
+    saved_ids = [int(x) for x in (rec.get("saved_forum_post_ids") or [])]
+    out: list[dict] = []
+    for pid in saved_ids:
+        post = store.get_forum_post(pid)
+        if post:
+            out.append(post)
+    return out
 
