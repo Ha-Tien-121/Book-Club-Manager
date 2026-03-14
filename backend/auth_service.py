@@ -76,6 +76,7 @@ def get_user(user_id: str) -> dict[str, Any]:
     return storage.get_user_accounts(str(user_id).strip().lower())
 
 
+#move this to the library 
 def update_user_preferences(user_id: str, genres: list[str]) -> dict[str, Any]:
     """Update user's genre preferences."""
     user_id = str(user_id).strip().lower()
