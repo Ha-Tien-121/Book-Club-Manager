@@ -226,11 +226,11 @@ def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
     print("Built train and test user-book matrices and corresponding ground truth vectors.")
 
     ### Calculate cosine similarity of columns (books) ###
-    idf = np.log((n_users + 1) / (train.getnnz(axis=0) + 1)) + 1 
+    idf = np.log((n_users + 1) / (train.getnnz(axis=0) + 1)) + 1
     train_tfidf = train @ diags(idf)
     col_norms = np.sqrt(train_tfidf.power(2).sum(axis=0)).A1
     col_norms[col_norms == 0] = 1.0
-    train_normalized = train_tfidf.multiply(1 / col_norms) 
+    train_normalized = train_tfidf.multiply(1 / col_norms)
     book_similarity_sparse = train_normalized.T @ train_normalized
     book_similarity_sparse.data = book_similarity_sparse.data.astype("float32")
     book_similarity_sparse.data = np.round(book_similarity_sparse.data, 2)
