@@ -1,40 +1,99 @@
+"""
+Clean raw book events JSON: normalize fields, extract book title/author,
+tag by category, optionally enrich with parent_asin from DynamoDB. Outputs JSON
+for pipeline and DynamoDB loader.
+"""
+
 import ast
-import csv
+import hashlib
+import json
 import os
 import re
 import html
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
+from data.scripts.helper_functions.format_author import format_author
+from data.scripts.helper_functions.format_title import format_title
+
+try:
+    from backend import storage as _storage
+except ImportError:
+    _storage = None
+
 RAW_INPUT_PATH = os.getenv(
-    "BOOKCLUBS_RAW_PATH", "data/raw/bookclubs_seattle_raw.csv"
+    "BOOK_EVENTS_RAW_PATH", "data/raw/book_events_raw.json"
 )
-CLEAN_OUTPUT_PATH = os.getenv(
-    "BOOKCLUBS_CLEAN_PATH", "data/processed/bookclubs_seattle_clean.csv"
+CLEAN_JSON_PATH = os.getenv(
+    "BOOK_EVENTS_CLEAN_PATH",
+    "data/processed/book_events_clean.json",
 )
 
-# Keyword map for genre/affinity tagging
-TAG_KEYWORDS = {
-    "fantasy": ["fantasy", "urban fantasy", "epic fantasy", "sword & sorcery", "sword and sorcery"],
-    "sci-fi": ["sci-fi", "science fiction", "sf", "speculative", "time travel", "time-travel", "dystopian"],
-    "historical": ["historical", "history", "wwii", "world war", "period"],
-    "mystery": ["mystery", "thriller", "suspense", "crime", "whodunit", "detective", "noir"],
-    "romance": ["romance", "rom-com", "rom com", "romantic"],
-    "horror": ["horror", "gothic", "spooky", "ghost", "haunted"],
-    "literary": ["literary", "fiction", "novel"],
-    "nonfiction": ["nonfiction", "non-fiction", "nf", "essay", "essays", "biography", "bio"],
-    "lgbtq": ["lgbt", "lgbtq", "lgbtq+", "queer", "sapphic", "trans", "nonbinary", "non-binary", "gay", "lesbian"],
-    "ya": ["young adult", "teen", "teens", "teenager", "teenagers", "tween", "tweens", "tweenager", "tweenagers", "ya"],
-    "kids": ["kids", "kid", "children", "childrens", "children's", "family", "families", "youth", "toddler", "toddlers"],
-    "graphic": ["graphic novel", "graphic novels", "comic", "comics", "manga"],
-    "poetry": ["poetry", "poem", "poems", "poet"],
-    "classics": ["classic", "classics", "canon", "canonical"],
-    "finance": ["bookkeeping", "finance", "financial", "budget", "budgeting"],
+# Exact mapping to books_meta_data categories (genres) for tagging events.
+# Keys must match the category strings in books_meta_data.py; values are search terms.
+CATEGORY_KEYWORDS = {
+    "Literature & Fiction": ["literary", "fiction", "novel", "literature"],
+    "Children's Books": [
+        "children", "children's", "kids", "kid", "family", "families",
+        "youth", "toddler", "toddlers",
+    ],
+    "Mystery, Thriller & Suspense": [
+        "mystery", "thriller", "suspense", "crime", "whodunit", "detective", "noir",
+    ],
+    "Arts & Photography": ["arts", "photography", "art"],
+    "History": ["history", "historical", "wwii", "world war", "period"],
+    "Biographies & Memoirs": ["biography", "biographies", "memoir", "memoirs", "bio"],
+    "Crafts, Hobbies & Home": ["crafts", "hobbies", "home", "diy"],
+    "Business & Money": [
+        "business", "money", "bookkeeping", "finance", "financial", "budget", "budgeting",
+    ],
+    "Politics & Social Sciences": ["politics", "social sciences", "political"],
+    "Growing Up & Facts of Life": ["growing up", "facts of life", "slice of life"],
+    "Romance": ["romance", "rom-com", "rom com", "romantic"],
+    "Science & Math": ["science", "math", "mathematics", "scientific"],
+    "Teen & Young Adult": ["young adult", "teen", "teens", "teenager", "teenagers", "ya"],
+    "Cookbooks, Food & Wine": ["cookbook", "cookbooks", "food", "wine", "cooking"],
+    "Religion & Spirituality": ["religion", "spirituality", "religious", "spiritual"],
+    "Poetry": ["poetry", "poem", "poems", "poet"],
+    "Comics & Graphic Novels": [
+        "graphic novel", "graphic novels", "comic", "comics", "manga",
+    ],
+    "Travel": ["travel", "traveling", "travelling"],
+    "Fantasy": ["fantasy", "magic", "fantastical", "magical"],
+    "Action & Adventure": ["action", "adventure"],
+    "Self-Help": ["self-help", "self help", "selfhelp"],
+    "Science Fiction": [
+        "sci-fi", "science fiction", "sf", "speculative",
+        "time travel", "time-travel", "dystopian",
+    ],
+    "Sports & Outdoors": ["sports", "outdoors", "sport"],
+    "Classics": ["classic", "classics"],
+    "LGBTQ+ Books": [
+        "lgbt", "lgbtq", "lgbtq+", "queer", "sapphic", "trans",
+        "nonbinary", "non-binary", "gay", "lesbian",
+    ],
 }
 
 
-def clean_events(df: pd.DataFrame) -> pd.DataFrame:
+def _ttl_seconds_from_start_iso(start_iso: object) -> int | None:
+    """Return Unix timestamp (seconds) for DynamoDB TTL: item expires when event starts."""
+    if start_iso is None or (isinstance(start_iso, float) and pd.isna(start_iso)):
+        return None
+    raw = str(start_iso).strip()
+    if not raw:
+        return None
+    try:
+        raw = raw.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except (ValueError, TypeError):
+        return None
+
+
+def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-branches
     """
     Minimal cleaning:
     - strip whitespace
@@ -193,12 +252,13 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
     day_of_week_end_col = []
     book_title_col = []
     book_author_col = []
+    title_author_key_col = []
     tags_col = []
 
     for when_str in df.get("when", []):
         when_str = str(when_str or "")
         tokens = [t.strip() for t in when_str.split(",") if t.strip()]
-        day_of_week_token = tokens[0] if tokens else ""
+        day_of_week_token = tokens[0] if tokens else ""  # pylint: disable=unused-variable
         date_token = tokens[1] if len(tokens) > 1 else ""
         time_token = ",".join(tokens[2:]) if len(tokens) > 2 else (
             tokens[1] if len(tokens) > 1 and re.search(r"\d", tokens[1]) else ""
@@ -302,7 +362,8 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         cut_idx = None
         for i in range(n - 1, 1, -1):
             # check run ending at i of length 3
-            if i - 2 >= 0 and tokens[i][:1].islower() and tokens[i - 1][:1].islower() and tokens[i - 2][:1].islower():
+            if (i - 2 >= 0 and tokens[i][:1].islower()
+                    and tokens[i - 1][:1].islower() and tokens[i - 2][:1].islower()):
                 cut_idx = i - 2  # drop from this run start onward
                 break
         if cut_idx is not None:
@@ -315,7 +376,11 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         Skip stripping if the phrase appears inside quotes.
         """
         # If the phrase is inside quotes, leave it
-        if re.search(r"[\"“”']\s*[^\"“”']*book\s*club[^\"“”']*[\"“”']", val, flags=re.IGNORECASE):
+        quoted_book_club = (
+            r"[\"\"\u201c\u201d']\s*[^\"\"\u201c\u201d']*book\s*club"
+            r"[^\"\"\u201c\u201d']*[\"\"\u201c\u201d']"
+        )
+        if re.search(quoted_book_club, val, flags=re.IGNORECASE):
             return val
         # Otherwise strip the first unquoted occurrence
         m = re.search(r"(?i)\bbook\s*club\b", val)
@@ -332,11 +397,12 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         - then remove leading run of lowercase-start words (e.g., "this month we will be reading")
         """
         # split on common separators (exclude colon to keep subtitles); keep the last chunk
-        parts = re.split(
-            r"[.!?;]|\b(reading|discussion|discuss|discussing|will discuss|will be discussing|our book|this month|we will be reading|selection|first selection is|our selection is)\b",
-            val,
-            flags=re.IGNORECASE,
+        sep_pat = (
+            r"[.!?;]|\b(reading|discussion|discuss|discussing|will discuss|"
+            r"will be discussing|our book|this month|we will be reading|"
+            r"selection|first selection is|our selection is)\b"
         )
+        parts = re.split(sep_pat, val, flags=re.IGNORECASE)
         tail = parts[-1] if parts else val
         tokens = tail.split()
         # remove leading run of lowercase-start tokens
@@ -454,6 +520,20 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         book_title_col.append(t_found)
         book_author_col.append(a_found)
 
+        # title_author_key: same normalization as books_meta_data for lookup/match
+        title_display = format_title(t_found) if t_found else ""
+        author_display = format_author(a_found) if a_found else None
+        title_clean = title_display.lower() if title_display else ""
+        author_clean = (
+            author_display.lower().replace(".", "").strip()
+            if author_display
+            else None
+        )
+        title_author_key = (
+            f"{title_clean}|{author_clean}" if author_clean else None
+        )
+        title_author_key_col.append(title_author_key)
+
         # Tag extraction from title + description
         text_lower = f"{title_text} {desc_text}".lower()
 
@@ -461,10 +541,10 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
             return bool(re.search(rf"\b{re.escape(term.lower())}\b", corpus))
 
         row_tags = []
-        for tag, terms in TAG_KEYWORDS.items():
+        for category, terms in CATEGORY_KEYWORDS.items():
             for term in terms:
                 if _term_hit(term, text_lower):
-                    row_tags.append(tag)
+                    row_tags.append(category)
                     break
         tags_col.append(sorted(set(row_tags)))
 
@@ -479,6 +559,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         df["end_time"] = end_time_col
         df["book_title"] = book_title_col
         df["book_author"] = book_author_col
+        df["title_author_key"] = title_author_key_col
         df["tags"] = tags_col
 
     # expand venue dict-like strings into explicit columns
@@ -513,6 +594,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         df["venue_rating"] = venue_rating
         df["venue_reviews"] = venue_reviews
         df["venue_search_link"] = venue_search_link
+        df["venue"] = df["venue_name"]
 
     # flatten address list-like strings: first element as address, second as city/state if present
     flattened_address = []
@@ -539,7 +621,8 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
         df["city_state"] = city_state
 
     # drop low-value/raw columns now that we've expanded what we need
-    for col in ("query", "location", "venue"):
+    # keep `venue` because we normalize it to venue_name above
+    for col in ("query", "location"):
         if col in df.columns:
             df = df.drop(columns=[col])
 
@@ -547,57 +630,96 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["title"].astype(bool) & df["link"].astype(bool)]
     df = df.drop_duplicates(subset="link")
 
-    # Reorder/select known columns; keep unknowns at the end
-    ordered_cols = [
-        c
-        for c in (
-            "title",
-            "link",
-            "description",
-            "when",
-            "day_of_week_start",
-            "day_of_week_end",
-            "start_date",
-            "end_date",
-            "start_time",
-            "end_time",
-            "start_iso",
-            "end_iso",
-            "address",
-            "city_state",
-            "venue_name",
-            "venue_rating",
-            "venue_reviews",
-            "venue_search_link",
-            "thumbnail",
-            "book_title",
-            "book_author",
-            "tags",
-        )
-        if c in df.columns
+    # event_id: deterministic 16-char hex from link (stable for dedupe and DynamoDB)
+    df["event_id"] = df["link"].apply(
+        lambda u: hashlib.sha256(str(u).encode("utf-8")).hexdigest()[:16]
+    )
+
+    # ttl: Unix timestamp when event starts (for DynamoDB TTL; item expires at event start)
+    df["ttl"] = df["start_iso"].apply(_ttl_seconds_from_start_iso)
+
+    # Enrich with parent_asin from books table (GSI title_author_key) and merge book categories into tags
+    parent_asin_list = []
+    tags_merged = []
+    for _, row in df.iterrows():  # pylint: disable=too-many-nested-blocks
+        key = row.get("title_author_key")
+        tags = list(row.get("tags") or [])
+        parent_asin = None
+        if _storage and key:
+            try:
+                book = _storage.get_book_by_title_author_key(key)
+                if book:
+                    parent_asin = book.get("parent_asin")
+                    for cat in book.get("categories") or []:
+                        if cat and cat not in tags:
+                            tags.append(cat)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass  # resilient to DynamoDB/network errors during enrichment
+        parent_asin_list.append(parent_asin)
+        tags_merged.append(sorted(set(tags)))
+    df["parent_asin"] = parent_asin_list
+    df["tags"] = tags_merged
+
+    # Keep only the columns needed for downstream use
+    # (grouped: event → book → when → where → link → media)
+    output_cols = [
+        "event_id",
+        "title",
+        "description",
+        "book_title",
+        "book_author",
+        "title_author_key",
+        "parent_asin",
+        "tags",
+        "day_of_week_start",
+        "start_time",
+        "start_iso",
+        "ttl",
+        "city_state",
+        "venue",
+        "link",
+        "thumbnail",
     ]
-    remaining_cols = [c for c in df.columns if c not in ordered_cols]
-    df = df[ordered_cols + remaining_cols]
+    df = df[[c for c in output_cols if c in df.columns]]
     return df
 
 
-def main():
+def main() -> None:
+    """Read raw events JSON, clean and enrich, write to JSON."""
     if not os.path.exists(RAW_INPUT_PATH):
         raise SystemExit(f"Raw input not found: {RAW_INPUT_PATH}")
 
-    raw_df = pd.read_csv(RAW_INPUT_PATH)
+    with open(RAW_INPUT_PATH, encoding="utf-8") as f:
+        records = json.load(f)
+    if not isinstance(records, list):
+        records = []
+    raw_df = pd.DataFrame(records)
     clean_df = clean_events(raw_df)
 
-    os.makedirs(os.path.dirname(CLEAN_OUTPUT_PATH), exist_ok=True)
-    clean_df.to_csv(
-        CLEAN_OUTPUT_PATH,
-        index=False,
-        encoding="utf-8",
-        quoting=csv.QUOTE_ALL,
-    )
-    print(f"Cleaned {len(clean_df)} events -> {CLEAN_OUTPUT_PATH}")
+    out_dir = os.path.dirname(CLEAN_JSON_PATH)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    records = clean_df.to_dict(orient="records")
+    for rec in records:
+        for key, val in list(rec.items()):
+            if isinstance(val, dict):
+                rec[key] = val
+            elif hasattr(val, "tolist"):
+                rec[key] = val.tolist()
+            elif isinstance(val, list):
+                rec[key] = val
+            elif val is None or (isinstance(val, float) and pd.isna(val)):
+                rec[key] = None
+            elif isinstance(val, int):
+                rec[key] = val
+            elif isinstance(val, float):
+                rec[key] = int(val) if val == int(val) else val
+            else:
+                rec[key] = str(val) if val is not None else None
+    with open(CLEAN_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(records, f, indent=2, ensure_ascii=False)
+    print(f"Cleaned {len(clean_df)} events -> {CLEAN_JSON_PATH}")
 
 
 if __name__ == "__main__":
     main()
-
