@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from backend.config import USER_BOOKS_PATH
 from backend import storage
+from backend.recommender_service import on_book_added_to_shelf
 
 
 def add_book_to_library(user_id: str, book_id: int, shelf: str) -> dict:
-    """Add a book to shelf: saved|in_progress|finished."""
+    """Add a book to shelf: saved|in_progress|finished. Triggers book recommender after 3 adds."""
     user_id = str(user_id).strip().lower()
     shelf = str(shelf).strip().lower()
     if shelf not in {"saved", "in_progress", "finished"}:
@@ -22,6 +23,7 @@ def add_book_to_library(user_id: str, book_id: int, shelf: str) -> dict:
         lib[key] = [bid for bid in lib.get(key, []) if int(bid) != int(book_id)]
     lib[shelf].append(int(book_id))
     storage._save_user_books_all(books)  # pylint: disable=protected-access
+    on_book_added_to_shelf(user_id)
     return dict(rec)
 
 

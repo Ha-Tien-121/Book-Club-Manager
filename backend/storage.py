@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -22,8 +23,12 @@ from backend.config import (
     USER_CLUBS_PATH,
     USER_FORUM_PATH,
     USER_EVENTS_PATH,
+    USER_RECOMMENDATIONS_PATH,
+    RECOMMENDED_BOOKS_SIZE,
+    RECOMMENDED_EVENTS_SIZE,
     # AWS configuration
     IS_AWS,
+    USER_RECOMMENDATIONS_TABLE,
     AWS_REGION,
     USER_ACCOUNTS_TABLE,
     USER_BOOKS_TABLE,
@@ -31,14 +36,28 @@ from backend.config import (
     FORUM_POSTS_TABLE,
     USER_FORUMS_TABLE,
     FORUM_POSTS_GSI,
+    EVENTS_GSI,
     BOOKS_TABLE,
     EVENTS_TABLE,
     DATA_BUCKET,
     CDN_BASE_URL,
     DEFAULT_BOOK_IMAGE_KEY,
     TOP50_BOOKS_S3_KEY,
+    REVIEWS_TOP50_BOOKS_S3_KEY,
+    REVIEWS_TOP50_BOOKS_LOCAL_PATH,
 )
 from backend.data_loader import load_data as _load_ui_data
+
+
+def _default_user_recommendations() -> dict:
+    """Default shape for user_recommendations when missing."""
+    return {
+        "recommended_books": [],
+        "recommended_events": [],
+        "book_updated_at": 0,
+        "events_soonest_expiry": 0,
+        "adds_since_last_book_run": 0,
+    }
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -114,6 +133,9 @@ class Storage(Protocol):
     def get_user_events(self, user_id: str) -> dict: ...
     def save_user_events(self, user_id: str, item: dict) -> None: ...
 
+    def get_user_recommendations(self, user_id: str) -> dict: ...
+    def save_user_recommendations(self, user_id: str, item: dict) -> None: ...
+
     # Forum posts
     def load_forum_db(self) -> dict: ...
     def save_forum_db(self, db: dict) -> None: ...
@@ -128,7 +150,9 @@ class Storage(Protocol):
     def get_book_metadata(self, parent_asin: str) -> dict | None: ...
     def get_book_by_title_author_key(self, title_author_key: str) -> dict | None: ...
     def get_event_details(self, event_id: str) -> dict | None: ...
-    def get_top50_books(self) -> list[dict]: ...
+    def get_spl_top50_checkout_books(self) -> list[dict]: ...
+    def get_top50_review_books(self) -> list[dict]: ...
+    def get_soonest_events(self, limit: int = 10) -> list[dict]: ...
 
 
 class LocalStorage:
@@ -196,6 +220,21 @@ class LocalStorage:
         data = _read_json(USER_EVENTS_PATH, {})
         data[user_id] = dict(item)
         _write_json(USER_EVENTS_PATH, data)
+
+    def get_user_recommendations(self, user_id: str) -> dict:
+        data = _read_json(USER_RECOMMENDATIONS_PATH, {})
+        rec = dict(data.get(user_id) or {})
+        rec.setdefault("recommended_books", [])
+        rec.setdefault("recommended_events", [])
+        rec.setdefault("book_updated_at", 0)
+        rec.setdefault("events_soonest_expiry", 0)
+        rec.setdefault("adds_since_last_book_run", 0)
+        return rec
+
+    def save_user_recommendations(self, user_id: str, item: dict) -> None:
+        data = _read_json(USER_RECOMMENDATIONS_PATH, {})
+        data[user_id] = dict(item)
+        _write_json(USER_RECOMMENDATIONS_PATH, data)
 
     def load_forum_db(self) -> dict:
         return _read_json(FORUM_DB_PATH, {"next_post_id": 1, "posts": []})
@@ -308,11 +347,26 @@ class LocalStorage:
         _ = event_id
         return None
 
-    def get_top50_books(self) -> list[dict]:
+    def get_spl_top50_checkout_books(self) -> list[dict]:
         """
-        TODO: implement local get_top50_books (e.g. from local JSON) if needed.
+        TODO: implement local SPL top-50 checkouts (e.g. from local JSON) if needed.
         CloudStorage fetches from S3; local returns empty list.
         """
+        return []
+
+    def get_top50_review_books(self) -> list[dict]:
+        """Default/cold-start book recs: top 50 from Amazon reviews JSON. Local: read from REVIEWS_TOP50_BOOKS_LOCAL_PATH if exists."""
+        if REVIEWS_TOP50_BOOKS_LOCAL_PATH.exists():
+            try:
+                data = json.loads(REVIEWS_TOP50_BOOKS_LOCAL_PATH.read_text(encoding="utf-8"))
+                return data[:50] if isinstance(data, list) else []
+            except Exception:
+                return []
+        return []
+
+    def get_soonest_events(self, limit: int = 10) -> list[dict]:
+        """Default/cold-start event recs: soonest-upcoming events. Local: no events source, return []."""
+        _ = limit
         return []
 
     # ------------------------------------------------------------------
@@ -400,6 +454,7 @@ class CloudStorage:
         self._books = dynamodb.Table(USER_BOOKS_TABLE)
         self._events = dynamodb.Table(USER_EVENTS_TABLE)
         self._user_forums = dynamodb.Table(USER_FORUMS_TABLE)
+        self._recommendations = dynamodb.Table(USER_RECOMMENDATIONS_TABLE)
         self._forum = dynamodb.Table(FORUM_POSTS_TABLE)
         # Main content tables
         self._books_main = dynamodb.Table(BOOKS_TABLE)
@@ -597,6 +652,11 @@ class CloudStorage:
         # Add to target shelf
         library[shelf].append(parent_asin)
         self.save_user_books(user_id, record)
+        try:
+            from backend.recommender_service import on_book_added_to_shelf
+            on_book_added_to_shelf(str(user_id).strip().lower())
+        except Exception:
+            pass
         return library
 
     def remove_book_from_shelf(self, user_id: str, shelf: str, parent_asin: str) -> dict:
@@ -731,6 +791,59 @@ class CloudStorage:
         ]
         self.save_user_events(user_id, {"events": events})
         return events
+
+    # --------------------------------------------------------------
+    # User recommendations (50 books, 10 events; when to re-run tracked here)
+    # --------------------------------------------------------------
+    # Partition key: user_email. Attributes: recommended_books, recommended_events, book_updated_at, events_soonest_expiry, adds_since_last_book_run.
+
+    def get_user_recommendations(self, user_id: str) -> dict:
+        """Fetch stored recommendations and run-tracking fields."""
+        user_id = str(user_id).strip().lower()
+        if not user_id:
+            return _default_user_recommendations()
+        key = {"user_email": user_id}
+        try:
+            resp = self._recommendations.get_item(Key=key)
+        except Exception:
+            return _default_user_recommendations()
+        item = resp.get("Item") or {}
+        if not item:
+            return _default_user_recommendations()
+        books = item.get("recommended_books")
+        events = item.get("recommended_events")
+        if not isinstance(books, list):
+            books = []
+        if not isinstance(events, list):
+            events = []
+        return {
+            "recommended_books": list(books),
+            "recommended_events": list(events),
+            "book_updated_at": int(item.get("book_updated_at") or 0),
+            "events_soonest_expiry": int(item.get("events_soonest_expiry") or 0),
+            "adds_since_last_book_run": int(item.get("adds_since_last_book_run") or 0),
+        }
+
+    def save_user_recommendations(self, user_id: str, item: dict) -> None:
+        """Persist recommendations and run-tracking fields."""
+        user_id = str(user_id).strip().lower()
+        if not user_id:
+            return
+        books = item.get("recommended_books") or []
+        events = item.get("recommended_events") or []
+        if not isinstance(books, list):
+            books = []
+        if not isinstance(events, list):
+            events = []
+        to_save = {
+            "user_email": user_id,
+            "recommended_books": books[:RECOMMENDED_BOOKS_SIZE],
+            "recommended_events": events[:RECOMMENDED_EVENTS_SIZE],
+            "book_updated_at": int(item.get("book_updated_at") or 0),
+            "events_soonest_expiry": int(item.get("events_soonest_expiry") or 0),
+            "adds_since_last_book_run": int(item.get("adds_since_last_book_run") or 0),
+        }
+        self._recommendations.put_item(Item=to_save)
 
     # --------------------------------------------------------------
     # User forums (saved posts, who liked what - separate from forum posts)
@@ -1021,7 +1134,7 @@ class CloudStorage:
     # Main books & events tables 
     # ------------------------------------------------------------------
 
-    def get_top50_books(self) -> list[dict]:
+    def get_spl_top50_checkout_books(self) -> list[dict]:
         """Fetch SPL top-50 checkouts book list from S3.
         Returns:
             List of book dicts, or [] on missing bucket/key or error.
@@ -1036,6 +1149,52 @@ class CloudStorage:
             if isinstance(data, list):
                 return data
             return []
+        except Exception:
+            return []
+
+    def get_top50_review_books(self) -> list[dict]:
+        """Default/cold-start book recs: top 50 from Amazon reviews JSON in S3 (books/reviews_top50_books.json)."""
+        if not DATA_BUCKET:
+            return []
+        try:
+            s3 = boto3.client("s3")
+            resp = s3.get_object(Bucket=DATA_BUCKET, Key=REVIEWS_TOP50_BOOKS_S3_KEY)
+            body = resp["Body"].read().decode("utf-8")
+            data = json.loads(body)
+            return data[:50] if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def get_soonest_events(self, limit: int = 10) -> list[dict]:
+        """Default/cold-start event recs: up to limit events sorted by soonest ttl. Uses GSI (type, ttl) when EVENTS_GSI set; else table scan."""
+        if EVENTS_GSI:
+            try:
+                now = int(time.time())
+                resp = self._events_main.query(
+                    IndexName=EVENTS_GSI,
+                    KeyConditionExpression=Key("type").eq("event") & Key("ttl").gte(now),
+                    Limit=limit,
+                    ScanIndexForward=True,
+                )
+                return list(resp.get("Items") or [])[:limit]
+            except Exception:
+                pass
+        try:
+            scan = self._events_main.scan()
+            items = list(scan.get("Items") or [])
+            while "LastEvaluatedKey" in scan:
+                scan = self._events_main.scan(ExclusiveStartKey=scan["LastEvaluatedKey"])
+                items.extend(scan.get("Items") or [])
+            def sort_key(e: dict) -> int:
+                t = e.get("ttl") or e.get("expiry") or e.get("start_time")
+                if t is None:
+                    return 0
+                try:
+                    return int(t)
+                except (TypeError, ValueError):
+                    return 0
+            items.sort(key=sort_key)
+            return items[:limit]
         except Exception:
             return []
 

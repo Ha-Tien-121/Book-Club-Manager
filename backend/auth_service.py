@@ -8,6 +8,7 @@ import bcrypt
 
 from backend.config import BCRYPT_ROUNDS, USER_ACCOUNTS_PATH, USER_BOOKS_PATH
 from backend import storage
+from backend.recommender_service import ensure_default_recommendations
 
 
 def _hash_password(password: str) -> str:
@@ -54,6 +55,7 @@ def create_user(email: str, password: str) -> dict[str, Any]:
         {"library": {"in_progress": [], "saved": [], "finished": []}, "genre_preferences": []},
     )
     storage._save_user_books_all(books)  # pylint: disable=protected-access
+    ensure_default_recommendations(email)
     clean = dict(user_record)
     clean.pop("password_hash", None)
     return clean

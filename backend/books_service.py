@@ -38,7 +38,7 @@ def get_trending_books_spl(limit: int = 50) -> list[dict]:
         from backend.storage import CloudStorage  # pylint: disable=import-outside-toplevel
         from backend.config import IS_AWS  # pylint: disable=import-outside-toplevel
         if IS_AWS:
-            return CloudStorage().get_top50_books()[:limit]
+            return CloudStorage().get_spl_top50_checkout_books()[:limit]
     except Exception:  # pylint: disable=broad-exception-caught
         pass
     return get_trending_books()[:limit]
