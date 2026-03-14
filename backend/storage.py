@@ -32,6 +32,7 @@ from backend.config import (
     DATA_BUCKET,
     CDN_BASE_URL,
     DEFAULT_BOOK_IMAGE_KEY,
+    TOP50_BOOKS_S3_KEY,
 )
 from backend.data_loader import load_data as _load_ui_data
 
@@ -118,6 +119,7 @@ class Storage(Protocol):
     def get_book_metadata(self, parent_asin: str) -> dict | None: ...
     def get_book_by_title_author_key(self, title_author_key: str) -> dict | None: ...
     def get_event_details(self, event_id: str) -> dict | None: ...
+    def get_top50_books(self) -> list[dict]: ...
 
 
 class LocalStorage:
@@ -239,6 +241,13 @@ class LocalStorage:
         """
         _ = event_id
         return None
+
+    def get_top50_books(self) -> list[dict]:
+        """
+        TODO: implement local get_top50_books (e.g. from local JSON) if needed.
+        CloudStorage fetches from S3; local returns empty list.
+        """
+        return []
 
     # ------------------------------------------------------------------
     # TODO convenience helpers for local dev
@@ -736,8 +745,28 @@ class CloudStorage:
         return out
 
     # ------------------------------------------------------------------
-    # Main books & events tables (DynamoDB)
+    # Main books & events tables 
     # ------------------------------------------------------------------
+
+    def get_top50_books(self) -> list[dict]:
+        """
+        Fetch the SPL top-50 checkouts book list from S3.
+
+        Reads s3://{DATA_BUCKET}/{TOP50_BOOKS_S3_KEY} (JSON array of book dicts).
+        Returns the list, or [] if the bucket/key is missing or read fails.
+        """
+        if not DATA_BUCKET:
+            return []
+        try:
+            s3 = boto3.client("s3")
+            resp = s3.get_object(Bucket=DATA_BUCKET, Key=TOP50_BOOKS_S3_KEY)
+            body = resp["Body"].read().decode("utf-8")
+            data = json.loads(body)
+            if isinstance(data, list):
+                return data
+            return []
+        except Exception:
+            return []
 
     def get_book_metadata(self, parent_asin: str) -> dict | None:
         """
