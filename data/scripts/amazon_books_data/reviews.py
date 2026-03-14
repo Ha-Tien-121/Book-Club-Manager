@@ -13,7 +13,8 @@ parent_asins to book indices (as defined  in step 1), dropping rows with parent_
 (4) constructs user-book sparse matrices, TRAIN (75%) and TEST (25%), along with corresponding 
 column vectors of ground truth book indices for evaluation, TRAIN_GROUND_TRUTH and 
 TEST_GROUND_TRUTH.
-(5) constructs sparse book similarity matrix of cosine books, BOOKS_SIMILARITY_SPARSE.
+(5) constructs sparse cosine similarity matrix of TF-IDF normalized book interactions, 
+BOOKS_SIMILARITY_SPARSE.
 
 Args:
     Books.jsonl: The input dataset of Amazon book reviews.
@@ -31,8 +32,8 @@ Returns:
                        with rating >= 3 and 0 otherwise.
     book_similarity.npz : NPZ file containing scipy.sparse.csr_matrix BOOK_SIMILARITY_SPARSE,
                           Dimension (total # books, total # books),
-                          Entry (i, j) is the cosine similarity of book i and book j based on train 
-                          user-book matrix.
+                          Entry (i, j) is the cosine similarity of book i and book j based on 
+                          train user-book matrix and normalized by TF-IDF.
     train_ground_truth.npy : NPY file containing dense numpy.ndarray TRAIN_GROUND_TRUTH,
                              Dimension (total # users, 1),
                              Each row corresponds to a user and contains the index of the held-out 
@@ -45,6 +46,10 @@ Returns:
 Note: Total # of books is determined by the number of books in the cleaned amazon 
 books meta data, meta_Books.jsonl 
 
+Usage:
+    Run script from the project root using:
+    python -m data.scripts.amazon_books_data.reviews
+
 Time: ~ 30 minutes to run
 """
 
@@ -54,8 +59,7 @@ import random
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
-from scipy.sparse import save_npz
+from scipy.sparse import csr_matrix, save_npz, diags
 
 from data.scripts.config import RAW_DIR, PROCESSED_DIR
 
@@ -222,10 +226,18 @@ def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
     print("Built train and test user-book matrices and corresponding ground truth vectors.")
 
     ### Calculate cosine similarity of columns (books) ###
-    col_norms = np.sqrt(train.power(2).sum(axis=0)).A1
+    idf = np.log((n_users + 1) / (train.getnnz(axis=0) + 1)) + 1
+    train_tfidf = train @ diags(idf)
+    col_norms = np.sqrt(train_tfidf.power(2).sum(axis=0)).A1
     col_norms[col_norms == 0] = 1.0
-    train_normalized = train.multiply(1 / col_norms)
+    train_normalized = train_tfidf.multiply(1 / col_norms)
     book_similarity_sparse = train_normalized.T @ train_normalized
+    book_similarity_sparse.data = book_similarity_sparse.data.astype("float32")
+    book_similarity_sparse.data = np.round(book_similarity_sparse.data, 2)
+    book_similarity_sparse = book_similarity_sparse.tocsr()
+    book_similarity_sparse.setdiag(0)
+    book_similarity_sparse.eliminate_zeros()
+
     save_npz(output_file_train_matrix, train)
     save_npz(output_file_test_matrix, test)
     save_npz(output_file_book_similarity, book_similarity_sparse)
