@@ -40,7 +40,10 @@ def remove_book_from_library(user_id: str, book_id: int) -> dict:
     return dict(rec)
 
 
-def get_user_library(user_id: str) -> dict:
+def get_user_library(user_id: str) -> dict: #check the functions
     """Return user's library dictionary."""
     rec = storage.get_user_books(str(user_id).strip().lower())
     return dict(rec.get("library") or {"in_progress": [], "saved": [], "finished": []})
+
+#update_status (book_id) (it should add) or save_book/mark_finish (look at shelf - save, in progress, finish)
+#look at the remove_from_shelf
