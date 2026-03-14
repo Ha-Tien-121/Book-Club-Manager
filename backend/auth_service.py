@@ -43,7 +43,7 @@ def create_user(email: str, password: str) -> dict[str, Any]:
     user_record: dict[str, Any] = {
         "user_id": email,
         "email": email,
-        "name": email.split("@")[0],
+        "name": email.split("@", maxsplit=1)[0],
         "password_hash": _hash_password(password),
     }
     users[email] = user_record
@@ -76,6 +76,7 @@ def get_user(user_id: str) -> dict[str, Any]:
     return storage.get_user_accounts(str(user_id).strip().lower())
 
 
+#move this to the library 
 def update_user_preferences(user_id: str, genres: list[str]) -> dict[str, Any]:
     """Update user's genre preferences."""
     user_id = str(user_id).strip().lower()
@@ -87,4 +88,3 @@ def update_user_preferences(user_id: str, genres: list[str]) -> dict[str, Any]:
     rec["genre_preferences"] = [str(g) for g in (genres or []) if str(g).strip()]
     storage._save_user_books_all(books)  # pylint: disable=protected-access
     return dict(rec)
-

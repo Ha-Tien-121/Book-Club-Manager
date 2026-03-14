@@ -36,15 +36,13 @@ def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool]:
     joined_ids = {int(cid) for cid in (user_clubs.get("club_ids") or [])}
     for club in clubs:
         if int(club.get("id", -1)) in joined_ids:
-            g = str(club.get("genre") or "").strip()
-            if g:
-                genre_counts[g] += 1
-    user_accounts = storage.get_user_accounts(user_id)
-    if isinstance(user_accounts, dict):
-        for rank, genre in enumerate(user_accounts.get("genre_preferences") or [], start=1):
-            if genre:
-                genre_counts[genre] += (4 - min(rank, 3))
-                has_behavior = True
+            genre_name = str(club.get("genre") or "").strip()
+            if genre_name:
+                genre_counts[genre_name] += 1
+    for rank, genre in enumerate(user_books.get("genre_preferences") or [], start=1):
+        if genre:
+            genre_counts[genre] += (4 - min(rank, 3))
+            has_behavior = True
     if genre_counts:
         ranked = [name for name, _ in genre_counts.most_common(3)]
         user_genres_store[user_id] = [
@@ -78,4 +76,3 @@ def get_event_recommendations(user_id: str) -> list[dict]:
     """Return event recommendations (placeholder)."""
     _ = user_id
     return []
-
