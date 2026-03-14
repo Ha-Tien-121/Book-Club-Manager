@@ -46,3 +46,11 @@ Some nice-to-have features are:
 - **SerpAPI API**: Search Seattle book club on MeetUp.com (Info: name of club, link to listing, snippet about club)
 -  **Goodreads**: Book popularity, ratings, reviews, and genre metadata 
 - **Seattle Public Library (SPL) Data**: Book availability, location info, and "readers who borrowed this also borrowed…" insights 
+
+## Run Streamlit App
+
+```bash
+conda activate bookish
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
