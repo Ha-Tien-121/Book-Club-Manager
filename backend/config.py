@@ -46,6 +46,11 @@ USER_BOOKS_TABLE = os.getenv("USER_BOOKS_TABLE", "user_books")
 USER_EVENTS_TABLE = os.getenv("USER_EVENTS_TABLE", "user_events")
 USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")
 FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")
+USER_FORUMS_TABLE = os.getenv("USER_FORUMS_TABLE", "user_forums")
+# user_forums table: partition key user_email (string), no sort key. Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
+# GSI on forum_posts for querying thread by parent_asin (partition key = parent_asin, sort key = sk).
+# Set to GSI name (e.g. "parent_asin-index") or leave empty to use full load + filter.
+FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "").strip() or None
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
 

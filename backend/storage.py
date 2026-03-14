@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
@@ -22,11 +23,14 @@ from backend.config import (
     USER_FORUM_PATH,
     USER_EVENTS_PATH,
     # AWS configuration
+    IS_AWS,
     AWS_REGION,
     USER_ACCOUNTS_TABLE,
     USER_BOOKS_TABLE,
     USER_EVENTS_TABLE,
     FORUM_POSTS_TABLE,
+    USER_FORUMS_TABLE,
+    FORUM_POSTS_GSI,
     BOOKS_TABLE,
     EVENTS_TABLE,
     DATA_BUCKET,
@@ -76,10 +80,11 @@ def _get_shard_key(book_id: str) -> str:
 
 
 def build_image_url(key: str) -> str:
-    """
-    Build a public URL for an image key using CDN_BASE_URL.
-
-    The key should be a relative S3 key like "images/book_icon.png".
+    """Build public URL for an image stored in S3.
+    Args:
+        key: S3 object key (e.g. images/book_icon.png).
+    Returns:
+        Full URL string for the image.
     """
     return f"{CDN_BASE_URL.rstrip('/')}/{key.lstrip('/')}"
 
@@ -113,6 +118,10 @@ class Storage(Protocol):
     def load_forum_db(self) -> dict: ...
     def save_forum_db(self, db: dict) -> None: ...
     def get_forum_thread(self, parent_asin: str) -> list[dict]: ...
+    def get_forum_thread_for_book(self, parent_asin: str) -> list[dict]: ...
+    def get_forum_post(self, post_id: int) -> dict: ...
+    def get_forum_posts_by_tag(self, tag: str) -> list[dict]: ...
+    def update_forum_post(self, post_id: int, post: dict) -> None: ...
 
     # Books & events (main content)
     def get_book_details(self, parent_asin: str) -> dict | None: ...
@@ -163,11 +172,20 @@ class LocalStorage:
 
     def get_user_forums(self, user_id: str) -> dict:
         data = _read_json(USER_FORUM_PATH, {})
-        return dict(data.get(user_id) or {})
+        rec = dict(data.get(user_id) or {})
+        return {
+            "saved_forum_post_ids": rec.get("saved_forum_post_ids") or [],
+            "liked_post_ids": rec.get("liked_post_ids") or [],
+            "liked_comment_ids": rec.get("liked_comment_ids") or [],
+        }
 
     def save_user_forums(self, user_id: str, item: dict) -> None:
         data = _read_json(USER_FORUM_PATH, {})
-        data[user_id] = dict(item)
+        existing = dict(data.get(user_id) or {})
+        existing["saved_forum_post_ids"] = list(item.get("saved_forum_post_ids") or [])
+        existing["liked_post_ids"] = list(item.get("liked_post_ids") or [])
+        existing["liked_comment_ids"] = list(item.get("liked_comment_ids") or [])
+        data[user_id] = existing
         _write_json(USER_FORUM_PATH, data)
 
     def get_user_events(self, user_id: str) -> dict:
@@ -194,9 +212,57 @@ class LocalStorage:
             if any(str(t).strip().lower() == target for t in tags):
                 out.append(post)
                 continue
-            if str(post.get("book_title") or "").strip().lower() == target:
+            if str(post.get("parent_asin") or "").strip().lower() == target:
                 out.append(post)
         return out
+
+    def get_forum_thread_for_book(self, parent_asin: str) -> list[dict]:
+        """Return the forum thread for a book by parent_asin. Same as get_forum_thread."""
+        return self.get_forum_thread(parent_asin)
+
+    def get_forum_post(self, post_id: int) -> dict:
+        """Fetch a single forum post by id.
+        Args:
+            post_id: Post id.
+        Returns:
+            Post dict, or {} if not found.
+        """
+        posts = self.load_forum_db().get("posts") or []
+        for post in posts:
+            if int(post.get("id", -1)) == int(post_id):
+                return dict(post)
+        return {}
+
+    def get_forum_posts_by_tag(self, tag: str) -> list[dict]:
+        """Return posts that have the given tag (case-insensitive).
+        Args:
+            tag: Tag to filter by; empty string returns all posts.
+        Returns:
+            List of post dicts.
+        """
+        tag = str(tag or "").strip().lower()
+        posts = self.load_forum_db().get("posts") or []
+        if not tag:
+            return list(posts)
+        out: list[dict] = []
+        for post in posts:
+            tags = post.get("tags") or []
+            if any(str(t).strip().lower() == tag for t in tags):
+                out.append(post)
+        return out
+
+    def update_forum_post(self, post_id: int, post: dict) -> None:
+        """Update a single post (e.g. after adding a comment). Loads db, replaces post, saves."""
+        db = self.load_forum_db()
+        posts = list(db.get("posts") or [])
+        for i, p in enumerate(posts):
+            if int(p.get("id", -1)) == int(post_id):
+                posts[i] = dict(post)
+                posts[i]["id"] = int(post_id)
+                db["posts"] = posts
+                _write_json(FORUM_DB_PATH, db)
+                return
+        raise ValueError(f"post not found: {post_id}")
 
     # ------------------------------------------------------------------
     # Books & events (local dev) - TODO: wire to real sources if needed
@@ -333,6 +399,7 @@ class CloudStorage:
         self._accounts = dynamodb.Table(USER_ACCOUNTS_TABLE)
         self._books = dynamodb.Table(USER_BOOKS_TABLE)
         self._events = dynamodb.Table(USER_EVENTS_TABLE)
+        self._user_forums = dynamodb.Table(USER_FORUMS_TABLE)
         self._forum = dynamodb.Table(FORUM_POSTS_TABLE)
         # Main content tables
         self._books_main = dynamodb.Table(BOOKS_TABLE)
@@ -365,6 +432,17 @@ class CloudStorage:
         return [str(value)]
 
     @staticmethod
+    def _normalize_decimals(obj: Any) -> Any:
+        """Convert DynamoDB Decimal to int in dicts/lists so callers get plain Python types."""
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        if isinstance(obj, dict):
+            return {k: CloudStorage._normalize_decimals(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [CloudStorage._normalize_decimals(v) for v in obj]
+        return obj
+
+    @staticmethod
     def _normalize_library_map(value: Any) -> dict:
         """
         Normalize the DynamoDB library map into:
@@ -383,22 +461,22 @@ class CloudStorage:
     # User accounts
     # --------------------------------------------------------------
     def get_user_account(self, user_id: str) -> dict:
-        """
-        Fetch a user account record from the DynamoDB user accounts table.
-
-        The primary key is `user_email` (lowercased). Returns an empty dict
-        if the user does not exist.
+        """Fetch user account by email.
+        Args:
+            user_id: User email (used as primary key, lowercased).
+        Returns:
+            Account dict, or {} if not found.
         """
         key = {"user_email": str(user_id).strip().lower()}
         resp = self._accounts.get_item(Key=key)
         return dict(resp.get("Item") or {})
 
     def save_user_account(self, item: dict) -> None:
-        """
-        Upsert a user account record into the DynamoDB user accounts table.
-
-        Expects `item` to contain at least `user_id` or `email`; it will be
-        normalized into a `user_email` primary key.
+        """Upsert user account to DynamoDB.
+        Args:
+            item: Account dict; must contain user_id or email (used as primary key).
+        Returns:
+            None.
         """
         user_id = str(item.get("user_id") or item.get("email") or "").strip().lower()
         if not user_id:
@@ -411,13 +489,11 @@ class CloudStorage:
     # User books (library & genre preferences)
     # --------------------------------------------------------------
     def get_user_books(self, user_id: str) -> dict:
-        """
-        Return the user's books record in the same shape as LocalStorage:
-
-        {
-            "library": {"in_progress": [...], "saved": [...], "finished": [...]},
-            "genre_preferences": [...],
-        }
+        """Fetch user library and genre preferences.
+        Args:
+            user_id: User email (primary key).
+        Returns:
+            Dict with library (in_progress, saved, finished lists) and genre_preferences; empty defaults if missing.
         """
         key = {"user_email": str(user_id).strip().lower()}
         resp = self._books.get_item(Key=key)
@@ -436,21 +512,33 @@ class CloudStorage:
         }
     
     def get_user_library(self, user_id: str) -> dict:
-        """Convenience: return just the library shelves for a user."""
+        """Return only the library shelves for a user.
+        Args:
+            user_id: User email.
+        Returns:
+            Dict with in_progress, saved, finished (each a list of parent_asin).
+        """
         record = self.get_user_books(user_id)
         return record.get("library") or {"in_progress": [], "saved": [], "finished": []}
 
     def get_user_genre_preferences(self, user_id: str) -> list[str]:
-        """Convenience: return just the genre_preferences list for a user."""
+        """Return only the genre preferences for a user.
+        Args:
+            user_id: User email.
+        Returns:
+            List of genre strings.
+        """
         record = self.get_user_books(user_id)
         prefs = record.get("genre_preferences") or []
         return [str(g) for g in prefs]
 
     def save_user_books(self, user_id: str, item: dict) -> None:
-        """
-        Persist the user's books record to DynamoDB.
-
-        Expects `item` in the same shape returned by get_user_books.
+        """Persist user library and genre preferences to DynamoDB.
+        Args:
+            user_id: User email.
+            item: Dict with library and genre_preferences (same shape as get_user_books).
+        Returns:
+            None.
         """
         user_id = str(user_id).strip().lower()
         library = item.get("library") or {"in_progress": [], "saved": [], "finished": []}
@@ -468,9 +556,13 @@ class CloudStorage:
         self._books.put_item(Item=to_save)
 
     def add_book_to_shelf(self, user_id: str, shelf: str, parent_asin: str) -> dict:
-        """
-        Add a book to a specific shelf, ensuring it is removed from the others.
-        Returns the updated library dict.
+        """Add a book to one shelf and remove it from the others.
+        Args:
+            user_id: User email.
+            shelf: One of in_progress, saved, finished.
+            parent_asin: Book id.
+        Returns:
+            Updated library dict. Raises ValueError if user_books record does not exist.
         """
         shelf = str(shelf).strip()
         parent_asin = str(parent_asin).strip()
@@ -508,8 +600,13 @@ class CloudStorage:
         return library
 
     def remove_book_from_shelf(self, user_id: str, shelf: str, parent_asin: str) -> dict:
-        """
-        Remove a book from a single shelf. Returns the updated library dict.
+        """Remove a book from a single shelf.
+        Args:
+            user_id: User email.
+            shelf: One of in_progress, saved, finished.
+            parent_asin: Book id.
+        Returns:
+            Updated library dict. Raises ValueError if user_books record does not exist.
         """
         shelf = str(shelf).strip()
         parent_asin = str(parent_asin).strip()
@@ -542,8 +639,12 @@ class CloudStorage:
         return library
 
     def set_user_genre_preferences(self, user_id: str, genres: list[str]) -> list[str]:
-        """
-        Overwrite the user's genre_preferences list. Returns the updated list.
+        """Overwrite the user's genre preferences.
+        Args:
+            user_id: User email.
+            genres: List of genre strings to save.
+        Returns:
+            The saved genre list.
         """
         record = self.get_user_books(user_id)
         record["genre_preferences"] = [str(g) for g in (genres or [])]
@@ -555,11 +656,11 @@ class CloudStorage:
     # --------------------------------------------------------------
 
     def get_user_events(self, user_id: str) -> dict:
-        """
-        Return the user's saved events record.
-
-        Shape:
-            { "events": [event_id1, event_id2, ...] }
+        """Fetch user's saved event ids.
+        Args:
+            user_id: User email.
+        Returns:
+            Dict with key events (list of event_id strings).
         """
         key = {"user_email": str(user_id).strip().lower()}
         resp = self._events.get_item(Key=key)
@@ -570,11 +671,12 @@ class CloudStorage:
         return {"events": events}
 
     def save_user_events(self, user_id: str, item: dict) -> None:
-        """
-        Upsert the user's events record into DynamoDB.
-
-        Expects `item` in the shape returned by get_user_events:
-            { "events": [event_id1, ...] }
+        """Upsert user's saved events list to DynamoDB.
+        Args:
+            user_id: User email.
+            item: Dict with key events (list of event_id strings).
+        Returns:
+            None.
         """
         user_id = str(user_id).strip().lower()
         if not user_id:
@@ -587,11 +689,12 @@ class CloudStorage:
         self._events.put_item(Item=to_save)
 
     def add_event_for_user(self, user_id: str, event_id: str) -> list[str]:
-        """
-        Add an event_id to the user's saved events list.
-
-        Creates the user_events record if it does not already exist.
-        Returns the updated list of event_ids.
+        """Add an event to the user's saved list; creates record if missing.
+        Args:
+            user_id: User email.
+            event_id: Event id to save.
+        Returns:
+            Updated list of saved event_ids.
         """
         user_id = str(user_id).strip().lower()
         event_id = str(event_id).strip()
@@ -608,10 +711,12 @@ class CloudStorage:
         return events
 
     def remove_event_for_user(self, user_id: str, event_id: str) -> list[str]:
-        """
-        Remove an event_id from the user's saved events list.
-
-        Returns the updated list of event_ids.
+        """Remove an event from the user's saved list.
+        Args:
+            user_id: User email.
+            event_id: Event id to remove.
+        Returns:
+            Updated list of saved event_ids.
         """
         user_id = str(user_id).strip().lower()
         event_id = str(event_id).strip()
@@ -626,6 +731,60 @@ class CloudStorage:
         ]
         self.save_user_events(user_id, {"events": events})
         return events
+
+    # --------------------------------------------------------------
+    # User forums (saved posts, who liked what - separate from forum posts)
+    # --------------------------------------------------------------
+    # Table partition key: user_email (string). No sort key. Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
+
+    def get_user_forums(self, user_id: str) -> dict:
+        """Get user forum state: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
+        Args:
+            user_id: User email.
+        Returns:
+            Dict with saved_forum_post_ids (list of int), liked_post_ids (list of int), liked_comment_ids (list of str).
+        """
+        user_id = str(user_id).strip().lower()
+        if not user_id:
+            return {"saved_forum_post_ids": [], "liked_post_ids": [], "liked_comment_ids": []}
+        key = {"user_email": user_id}
+        try:
+            resp = self._user_forums.get_item(Key=key)
+        except Exception:
+            return {"saved_forum_post_ids": [], "liked_post_ids": [], "liked_comment_ids": []}
+        item = resp.get("Item") or {}
+        if not item:
+            return {"saved_forum_post_ids": [], "liked_post_ids": [], "liked_comment_ids": []}
+
+        def int_list(v: Any) -> list[int]:
+            if v is None:
+                return []
+            if isinstance(v, list):
+                return [int(x) for x in v if x is not None]
+            return []
+
+        return {
+            "saved_forum_post_ids": int_list(item.get("saved_forum_post_ids")),
+            "liked_post_ids": int_list(item.get("liked_post_ids")),
+            "liked_comment_ids": self._normalize_string_list(item.get("liked_comment_ids")),
+        }
+
+    def save_user_forums(self, user_id: str, item: dict) -> None:
+        """Save user forum state to DynamoDB.
+        Args:
+            user_id: User email.
+            item: Dict with saved_forum_post_ids, liked_post_ids, liked_comment_ids (lists).
+        """
+        user_id = str(user_id).strip().lower()
+        if not user_id:
+            return
+        to_save = {
+            "user_email": user_id,
+            "saved_forum_post_ids": [int(x) for x in (item.get("saved_forum_post_ids") or [])],
+            "liked_post_ids": [int(x) for x in (item.get("liked_post_ids") or [])],
+            "liked_comment_ids": [str(x) for x in (item.get("liked_comment_ids") or [])],
+        }
+        self._user_forums.put_item(Item=to_save)
     
     # --------------------------------------------------------------
     # Forum posts (posts-table pattern: one item per post)
@@ -638,11 +797,9 @@ class CloudStorage:
     _FORUM_POSTS_PK = "forum_posts"
 
     def load_forum_db(self) -> dict:
-        """
-        Load the global forum state from DynamoDB (posts-table pattern).
-
-        Returns the same shape as before: { "next_post_id": int, "posts": [ {...}, ... ] }
-        so the UI and forum_service remain unchanged.
+        """Load full forum state from DynamoDB.
+        Returns:
+            Dict with next_post_id (int) and posts (list of post dicts).
         """
         # Meta: next_post_id
         meta_resp = self._forum.get_item(
@@ -661,7 +818,7 @@ class CloudStorage:
             for item in resp.get("Items") or []:
                 post = {k: v for k, v in item.items() if k not in ("pk", "sk")}
                 if post:
-                    posts.append(post)
+                    posts.append(self._normalize_decimals(post))
             if "LastEvaluatedKey" not in resp:
                 break
             kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
@@ -669,14 +826,14 @@ class CloudStorage:
         # Sort by id so order is stable (e.g. newest first is handled by UI)
         posts.sort(key=lambda p: int(p.get("id") or 0))
 
-        return {"next_post_id": next_post_id, "posts": posts}
+        return {"next_post_id": int(next_post_id), "posts": posts}
 
     def save_forum_db(self, db: dict) -> None:
-        """
-        Persist the global forum state to DynamoDB (posts-table pattern).
-
-        Accepts the same shape: { "next_post_id": int, "posts": [ {...}, ... ] }.
-        Replaces all post items and updates meta.
+        """Replace all forum posts and meta in DynamoDB with the given state.
+        Args:
+            db: Dict with next_post_id (int) and posts (list of post dicts).
+        Returns:
+            None.
         """
         next_post_id = int(db.get("next_post_id") or 1)
         posts = db.get("posts") or []
@@ -707,15 +864,30 @@ class CloudStorage:
                 }
             )
 
-        # Write new post items (one PutItem per post; resource handles serialization)
+        # When post has parent_asin, add book title to tags at write time so users can filter by title.
         for post in posts:
-            post_id = post.get("id")
-            if post_id is None:
-                continue
-            item = dict(post)
-            item["pk"] = self._FORUM_POSTS_PK
-            item["sk"] = str(post_id)
-            self._forum.put_item(Item=item)
+            if post.get("parent_asin"):
+                meta = self.get_book_metadata(str(post["parent_asin"]))
+                if meta and meta.get("title"):
+                    title_str = str(meta["title"]).strip()
+                    tags = list(post.get("tags") or [])
+                    if title_str and title_str not in tags:
+                        tags.append(title_str)
+                        post["tags"] = tags
+
+        # Write new post items in batches of 25 (BatchWriteItem limit).
+        # Omit parent_asin when None so GSI (parent_asin-index) does not get NULL key.
+        with self._forum.batch_writer() as batch:
+            for post in posts:
+                post_id = post.get("id")
+                if post_id is None:
+                    continue
+                item = dict(post)
+                if item.get("parent_asin") is None:
+                    item.pop("parent_asin", None)
+                item["pk"] = self._FORUM_POSTS_PK
+                item["sk"] = str(post_id)
+                batch.put_item(Item=item)
 
         # Update meta
         self._forum.put_item(
@@ -727,33 +899,132 @@ class CloudStorage:
         )
 
     def get_forum_thread(self, parent_asin: str) -> list[dict]:
+        """Return posts whose parent_asin or tag matches the given parent_asin.
+        Uses GSI on parent_asin when FORUM_POSTS_GSI is set (efficient); otherwise loads all and filters.
+        Args:
+            parent_asin: Book id (matched case-insensitively against post parent_asin and tags).
+        Returns:
+            List of matching post dicts.
         """
-        Return all posts whose tags or book_title match the given parent_asin.
-        Same contract as before; uses posts-table Query + in-memory filter.
-        """
+        target = str(parent_asin).strip().lower()
+        if not target:
+            return []
+
+        if FORUM_POSTS_GSI:
+            # Query GSI by parent_asin (partition key); sort key = sk.
+            out: list[dict] = []
+            kwargs: dict = {
+                "IndexName": FORUM_POSTS_GSI,
+                "KeyConditionExpression": Key("parent_asin").eq(target),
+            }
+            while True:
+                resp = self._forum.query(**kwargs)
+                for item in resp.get("Items") or []:
+                    post = {k: v for k, v in item.items() if k not in ("pk", "sk")}
+                    if post:
+                        out.append(self._normalize_decimals(post))
+                if "LastEvaluatedKey" not in resp:
+                    break
+                kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+            out.sort(key=lambda p: int(p.get("id") or 0))
+            return out
+
         db = self.load_forum_db()
         posts = db.get("posts") or []
-        target = str(parent_asin).strip().lower()
-        out: list[dict] = []
+        out = []
         for post in posts:
             tags = post.get("tags") or []
             if any(str(t).strip().lower() == target for t in tags):
                 out.append(post)
                 continue
-            if str(post.get("book_title") or "").strip().lower() == target:
+            if str(post.get("parent_asin") or "").strip().lower() == target:
                 out.append(post)
         return out
+
+    def get_forum_thread_for_book(self, parent_asin: str) -> list[dict]:
+        """Return the forum thread for a book by parent_asin.
+        Uses get_forum_thread; for large forums a GSI on parent_asin would make this O(posts per book).
+        Args:
+            parent_asin: Book id (matched against post parent_asin and tags).
+        Returns:
+            List of matching post dicts.
+        """
+        return self.get_forum_thread(parent_asin)
+
+    def get_forum_post(self, post_id: int) -> dict:
+        """Fetch a single forum post by id.
+        Args:
+            post_id: Post id.
+        Returns:
+            Post dict, or {} if not found.
+        """
+        try:
+            resp = self._forum.get_item(
+                Key={"pk": self._FORUM_POSTS_PK, "sk": str(int(post_id))}
+            )
+        except Exception:
+            return {}
+        item = resp.get("Item") or {}
+        if not item:
+            return {}
+        out = {k: v for k, v in item.items() if k not in ("pk", "sk")}
+        return self._normalize_decimals(out)
+
+    def get_forum_posts_by_tag(self, tag: str) -> list[dict]:
+        """Return posts that have the given tag (case-insensitive).
+        Args:
+            tag: Tag to filter by; empty string returns all posts.
+        Returns:
+            List of post dicts.
+        """
+        tag = str(tag or "").strip().lower()
+        db = self.load_forum_db()
+        posts = db.get("posts") or []
+        if not tag:
+            return list(posts)
+        out: list[dict] = []
+        for post in posts:
+            tags = post.get("tags") or []
+            if any(str(t).strip().lower() == tag for t in tags):
+                out.append(post)
+        return out
+
+    def update_forum_post(self, post_id: int, post: dict) -> None:
+        """Update a single post (e.g. after adding a comment). Single PutItem; no full load/save.
+        Args:
+            post_id: Post id.
+            post: Full post dict (as from get_forum_post); must include id.
+        Returns:
+            None. Raises ValueError if post_id does not match post.get("id").
+        """
+        post_id = int(post_id)
+        if int(post.get("id", -1)) != post_id:
+            raise ValueError("post_id does not match post['id']")
+        # When post has parent_asin, add book title to tags at write time so users can filter by title.
+        if post.get("parent_asin"):
+            meta = self.get_book_metadata(str(post["parent_asin"]))
+            if meta and meta.get("title"):
+                title_str = str(meta["title"]).strip()
+                tags = list(post.get("tags") or [])
+                if title_str and title_str not in tags:
+                    tags.append(title_str)
+                    post = dict(post)
+                    post["tags"] = tags
+        item = dict(post)
+        if item.get("parent_asin") is None:
+            item.pop("parent_asin", None)
+        item["pk"] = self._FORUM_POSTS_PK
+        item["sk"] = str(post_id)
+        self._forum.put_item(Item=item)
 
     # ------------------------------------------------------------------
     # Main books & events tables 
     # ------------------------------------------------------------------
 
     def get_top50_books(self) -> list[dict]:
-        """
-        Fetch the SPL top-50 checkouts book list from S3.
-
-        Reads s3://{DATA_BUCKET}/{TOP50_BOOKS_S3_KEY} (JSON array of book dicts).
-        Returns the list, or [] if the bucket/key is missing or read fails.
+        """Fetch SPL top-50 checkouts book list from S3.
+        Returns:
+            List of book dicts, or [] on missing bucket/key or error.
         """
         if not DATA_BUCKET:
             return []
@@ -769,8 +1040,11 @@ class CloudStorage:
             return []
 
     def get_book_metadata(self, parent_asin: str) -> dict | None:
-        """
-        Get book metadata without description from the main books table.
+        """Fetch book metadata (no description) from main books table.
+        Args:
+            parent_asin: Book id.
+        Returns:
+            Book metadata dict, or None if not found.
         """
         try:
             resp = self._books_main.get_item(Key={"parent_asin": parent_asin})
@@ -788,10 +1062,11 @@ class CloudStorage:
         return item
 
     def get_book_by_title_author_key(self, title_author_key: str) -> dict | None:
-        """
-        Look up a book by title_author_key using the books table GSI.
-        Expects a GSI named 'title_author_key' on the main books table.
-        Returns { 'parent_asin': ..., 'categories': [...] } or None.
+        """Look up book by title_author_key (GSI on main books table).
+        Args:
+            title_author_key: Lookup key.
+        Returns:
+            Dict with parent_asin and categories, or None if not found.
         """
         if not title_author_key or not str(title_author_key).strip():
             return None
@@ -816,9 +1091,11 @@ class CloudStorage:
         }
 
     def get_event_details(self, event_id: str) -> dict | None:
-        """
-        Get all event details from the main events table.
-        Mirrors the old get_event_details helper.
+        """Fetch event by id from main events table.
+        Args:
+            event_id: Event id.
+        Returns:
+            Event dict, or None if not found.
         """
         try:
             resp = self._events_main.get_item(Key={"event_id": event_id})
@@ -830,11 +1107,11 @@ class CloudStorage:
         return item
 
     def get_book_details(self, parent_asin: str) -> dict | None:
-        """
-        Best-effort full book details (including description) from sharded parquet.
-
-        Reads from s3://{DATA_BUCKET}/books/parent_asin/{shard}.parquet.
-        Falls back to None if the parquet file can't be read.
+        """Fetch full book record including description from S3 parquet.
+        Args:
+            parent_asin: Book id.
+        Returns:
+            Full book dict, or None if not found or read fails.
         """
         shard = _get_shard_key(parent_asin)
         if not DATA_BUCKET:
@@ -862,9 +1139,14 @@ class CloudStorage:
         return item
 
 
-# For now we only declare the local backend class. A Dynamo backend can be
-# added later and selected based on APP_ENV; callers currently use the
-# function-level helpers below which directly call the JSON helpers.
+def get_storage() -> LocalStorage | CloudStorage:
+    """Return the storage backend for the current environment (local or AWS)."""
+    if IS_AWS:
+        return CloudStorage()
+    return LocalStorage()
+
+
+# Module-level helpers below; callers can also use get_storage() for backend-agnostic access.
 
 
 @lru_cache(maxsize=1)
@@ -916,7 +1198,7 @@ def get_form_thread(parent_asin: str) -> list[dict]:
         if any(str(t).strip().lower() == target for t in tags):
             out.append(post)
             continue
-        if str(post.get("book_title") or "").strip().lower() == target:
+        if str(post.get("parent_asin") or "").strip().lower() == target:
             out.append(post)
     return out
 

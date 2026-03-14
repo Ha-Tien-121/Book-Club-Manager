@@ -18,17 +18,13 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
                     "id": idx,
                     "title": post["title"],
                     "author": post["author"],
-                    "genre": post.get("genre"),
-                    "club": post.get("club"),
-                    "club_id": None,
-                    "book_id": None,
+                    "parent_asin": None,
                     "book_title": None,
                     "tags": [],
-                    "visibility": "club" if post.get("club") else "public",
                     "replies": post.get("replies", 0),
                     "likes": post.get("likes", 0),
                     "liked_by": [],
-                    "time_ago": post.get("time_ago", "recently"),
+                    "created_at": post.get("created_at", 0),
                     "preview": post["preview"],
                     "comments": [],
                 }
@@ -48,11 +44,7 @@ def load_forum_store(seed_posts: list[dict]) -> dict:
     for post in store["posts"]:
         post.setdefault("liked_by", [])
         post.setdefault("comments", [])
-        post.setdefault("visibility", "public")
-        post.setdefault("club", None)
-        post.setdefault("club_id", None)
-        post.setdefault("genre", None)
-        post.setdefault("book_id", None)
+        post.setdefault("parent_asin", None)
         post.setdefault("book_title", None)
         post.setdefault("tags", [])
         for comment in post["comments"]:
