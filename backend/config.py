@@ -56,11 +56,16 @@ USER_RECOMMENDATIONS_TABLE = os.getenv("USER_RECOMMENDATIONS_TABLE", "user_recom
 # user_forums table: partition key user_email (string), no sort key. Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
 # GSI on forum_posts for querying thread by parent_asin (partition key = parent_asin, sort key = sk).
 # Set to GSI name (e.g. "parent_asin-index") or leave empty to use full load + filter.
-FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "").strip() or None
+FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "parent_asin-index").strip() or None
+# Optional GSI on forum_posts for \"all posts by created_at\": partition key pk, sort key created_at.
+FORUM_POSTS_CREATED_AT_GSI = os.getenv("FORUM_POSTS_CREATED_AT_GSI", "created_at-index").strip() or None
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
 # GSI on events for soonest-upcoming: partition key type (e.g. "event"), sort key ttl. Set to GSI name (e.g. "type-ttl-index") or leave empty to use scan.
-EVENTS_GSI = os.getenv("EVENTS_GSI", "").strip() or None
+EVENTS_GSI = os.getenv("EVENTS_GSI", "ttl-index").strip() or None
+EVENTS_CITY_STATE_GSI = os.getenv("EVENTS_CITY_STATE_GSI", "city_state_ttl-index").strip() or None
+# GSI on events for "events related to a book": partition key parent_asin, sort key ttl.
+EVENTS_PARENT_ASIN_GSI = os.getenv("EVENTS_PARENT_ASIN_GSI", "parent_asin_ttl-index").strip() or None
 
 # S3 bucket for book data and images.
 DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
