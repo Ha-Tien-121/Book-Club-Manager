@@ -2,10 +2,12 @@
 
 Recommendations are stored in user_recommendations (not user_books).
 - Books: 50 items. Re-run after every ADDS_BEFORE_BOOK_RERUN (3) adds to shelf (see on_book_added_to_shelf).
+  Book recommender uses only the user's library (books on shelves).
 - Events: 10 items. Re-run when events_soonest_expiry is past (lazy refresh when reading).
+  Event recommender uses only the user's genre_preferences.
 
-Default (anonymous or user with no genre preferences):
-- Books: top 50 from static JSON (bookish-data-elsie/books/reviews_top50_books.json).
+Default (anonymous or user with no library / no genre preferences):
+- Books: top 25 from static JSON (reviews_top25_books.json).
 - Events: top 10 soonest events (by ttl/expiry).
 Seeded on account creation via ensure_default_recommendations(); also used for signed-out users.
 """
@@ -13,7 +15,6 @@ Seeded on account creation via ensure_default_recommendations(); also used for s
 from __future__ import annotations
 
 import time
-from collections import Counter
 
 from backend import storage
 from backend.config import (
@@ -21,7 +22,7 @@ from backend.config import (
     RECOMMENDED_BOOKS_SIZE,
     RECOMMENDED_EVENTS_SIZE,
 )
-from backend.recommender.service import (
+from backend.service import (
     get_recommendations as _get_recommendations,
     get_top_popular_books as _get_top_popular_books,
 )
@@ -29,63 +30,74 @@ from backend.storage import get_storage
 from backend.recommender.event_recommender import EventRecommender
 
 
-def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool]:
+def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool, bool]:
+    """Build inputs for book and event recommenders from storage.
+
+    - Book recommender uses only library (books on shelves → user_books_read_store).
+    - Event recommender uses only genre_preferences (user_genres_store).
+
+    Args:
+        user_id: Normalized user identifier.
+
+    Returns:
+        (user_genres_store, user_books_read_store, has_library, has_genre_prefs).
+    """
     user_id = str(user_id).strip().lower()
-    user_books = storage.get_user_books(user_id)
-    user_clubs = storage.get_user_clubs(user_id)
-    user_forums = storage.get_user_forums(user_id)
-    data = storage._catalog_cache()  # pylint: disable=protected-access
-    books_by_id = data.get("books_by_id", {})
-    clubs = data.get("clubs", [])
+    store = get_storage()
+    user_books = store.get_user_books(user_id)
     user_books_read_store: dict[str, list[str]] = {}
     user_genres_store: dict[str, list[dict]] = {}
     has_behavior = False
     source_ids: list[str] = []
     library = (user_books.get("library") or {}) if isinstance(user_books, dict) else {}
+    source_ids: list[str] = []
     for shelf in ("in_progress", "saved", "finished"):
         for bid in library.get(shelf, []) or []:
-            book = books_by_id.get(int(bid))
-            if book and book.get("source_id"):
-                source_ids.append(str(book["source_id"]))
+            if isinstance(bid, str) and bid.strip():
+                source_ids.append(bid.strip())
+            elif bid is not None and str(bid).strip():
+                source_ids.append(str(bid).strip())
     if source_ids:
         user_books_read_store[user_id] = list(dict.fromkeys(source_ids))
-        has_behavior = True
-    genre_counts: Counter = Counter()
-    joined_ids = {int(cid) for cid in (user_clubs.get("club_ids") or [])}
-    for club in clubs:
-        if int(club.get("id", -1)) in joined_ids:
-            genre_name = str(club.get("genre") or "").strip()
-            if genre_name:
-                genre_counts[genre_name] += 1
-    for rank, genre in enumerate(user_books.get("genre_preferences") or [], start=1):
-        if genre:
-            genre_counts[genre] += (4 - min(rank, 3))
-            has_behavior = True
-    if genre_counts:
-        ranked = [name for name, _ in genre_counts.most_common(3)]
+    has_library = bool(user_books_read_store.get(user_id))
+    # Genre preferences only (no clubs / forums).
+    prefs = user_books.get("genre_preferences") or []
+    if prefs:
         user_genres_store[user_id] = [
-            {"genre": g, "rank": rank} for rank, g in enumerate(ranked, start=1)
+            {"genre": g, "rank": rank}
+            for rank, g in enumerate([p for p in prefs if p][:3], start=1)
         ]
-        has_behavior = True
-    if user_forums.get("forum_posts") or user_forums.get("saved_forum_post_ids"):
-        has_behavior = True
-    return user_genres_store, user_books_read_store, has_behavior
+    has_genre_prefs = bool(user_genres_store.get(user_id))
+    return user_genres_store, user_books_read_store, has_library, has_genre_prefs
 
 
 def get_book_recommendations(user_id: str, top_k: int | None = None) -> list[dict]:
-    """Return book recommendations; cold-start users get top popular books. Default top_k=50."""
+    """Return book recommendations; cold-start users get top popular books.
+
+    Book recommender uses only the user's library (books on shelves). If the library
+    is empty, returns top popular from the fitted catalog. Does not read/write
+    user_recommendations; use get_recommended_books_for_user for the cached UI list.
+
+    Args:
+        user_id: User identifier (empty → cold start).
+        top_k: Max number of recommendations; default RECOMMENDED_BOOKS_SIZE (50).
+
+    Returns:
+        List of recommendation dicts (e.g. book_id, title, score or full book records).
+    """
     top_k = top_k if top_k is not None else RECOMMENDED_BOOKS_SIZE
     user_id = str(user_id).strip().lower()
     if not user_id:
         return _get_top_popular_books(top_k=10)
-    user_genres_store, user_books_store, has_data = _build_user_recommender_inputs(
+    user_genres_store, user_books_store, has_library, _ = _build_user_recommender_inputs(
         user_id
     )
-    if not has_data:
+    if not has_library:
         return _get_top_popular_books(top_k=min(top_k, 50))
+    # Book recommender: library only (no genre_preferences).
     return _get_recommendations(
         user_id=user_id,
-        user_genres_store=user_genres_store,
+        user_genres_store={},
         user_books_read_store=user_books_store,
         top_k=top_k,
     )
@@ -94,23 +106,18 @@ def get_book_recommendations(user_id: str, top_k: int | None = None) -> list[dic
 def get_event_recommendations(user_id: str, top_k: int | None = None) -> list[dict]:
     """Return event recommendations (personalized when possible).
 
-    Logic:
-    - If user has genre preferences:
-        - Build user tag set from top genres.
-        - Pull a pool of upcoming events from storage (get_soonest_events).
-        - Score and rank with EventRecommender.
-    - If no prefs or no events, returns [] (caller falls back to default soonest events).
+    Event recommender uses only the user's genre_preferences. If none, returns []
+    (caller falls back to default soonest events).
     """
     top_k = top_k if top_k is not None else RECOMMENDED_EVENTS_SIZE
     user_id = str(user_id or "").strip().lower()
     if not user_id or top_k <= 0:
         return []
 
-    # Reuse genre-preference aggregation
-    user_genres_store, _user_books_store, has_data = _build_user_recommender_inputs(
+    user_genres_store, _, _has_library, has_genre_prefs = _build_user_recommender_inputs(
         user_id
     )
-    if not has_data:
+    if not has_genre_prefs:
         return []
     rows = user_genres_store.get(user_id) or []
     user_tags = [r.get("genre") for r in rows if r.get("genre")]
@@ -130,7 +137,7 @@ def get_event_recommendations(user_id: str, top_k: int | None = None) -> list[di
 
 
 def _events_soonest_expiry(events: list[dict]) -> int:
-    """Return min ttl/expiry (Unix) from event dicts; 0 if none."""
+    """Return the soonest expiry time (min ttl) from event dicts; 0 if none."""
     expiries = []
     for e in events:
         t = e.get("ttl") or e.get("expiry")
@@ -143,7 +150,7 @@ def _events_soonest_expiry(events: list[dict]) -> int:
 
 
 def _user_has_genre_preferences(user_id: str) -> bool:
-    """True if user has at least one genre preference."""
+    """Return True if the user has at least one genre in genre_preferences."""
     if not user_id:
         return False
     store = get_storage()
@@ -153,7 +160,18 @@ def _user_has_genre_preferences(user_id: str) -> bool:
 
 
 def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
-    """Return book recommendations (50). Anonymous or no genre prefs → top 50 popular (static JSON). Else → stored or run recommender."""
+    """Return the cached book recommendation list for the UI (up to 50).
+
+    Anonymous or no genre prefs: returns top 25 from reviews JSON (get_top50_review_books).
+    Signed-in with genre prefs: returns stored recommended_books, or runs recommender once
+    and saves. Use this for homepage/feed; use get_book_recommendations for recomputing only.
+
+    Args:
+        user_id: User email/id or None for anonymous.
+
+    Returns:
+        List of up to RECOMMENDED_BOOKS_SIZE book dicts (full records for display).
+    """
     store = get_storage()
     if not user_id or not str(user_id).strip():
         return store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
@@ -171,7 +189,17 @@ def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
 
 
 def get_recommended_events_for_user(user_id: str | None = None) -> list[dict]:
-    """Return event recommendations (10). Anonymous or no genre prefs → top 10 soonest events. Else → stored or refresh on expiry."""
+    """Return the cached event recommendation list for the UI (up to 10).
+
+    Anonymous or no genre prefs: returns soonest-upcoming events from storage.
+    Signed-in with genre prefs: returns stored recommended_events, or re-ranks on expiry.
+
+    Args:
+        user_id: User email/id or None for anonymous.
+
+    Returns:
+        List of up to RECOMMENDED_EVENTS_SIZE event dicts.
+    """
     store = get_storage()
     if not user_id or not str(user_id).strip():
         return store.get_soonest_events(RECOMMENDED_EVENTS_SIZE)[:RECOMMENDED_EVENTS_SIZE]
@@ -190,7 +218,14 @@ def get_recommended_events_for_user(user_id: str | None = None) -> list[dict]:
 
 
 def refresh_and_save_recommendations(user_id: str) -> dict:
-    """Compute 50 books + 10 events, save to user_recommendations, return that record."""
+    """Compute and persist 50 books + 10 events for the user.
+
+    Args:
+        user_id: User identifier.
+
+    Returns:
+        The user_recommendations record (recommended_books, recommended_events, timestamps).
+    """
     user_id = str(user_id).strip().lower()
     if not user_id:
         return {}
@@ -207,7 +242,11 @@ def refresh_and_save_recommendations(user_id: str) -> dict:
 
 
 def ensure_default_recommendations(user_id: str) -> None:
-    """Seed user_recommendations for new users (no genre prefs yet): top 50 popular books + top 10 soonest events. Call on account creation."""
+    """Seed user_recommendations for new users with no genre prefs.
+
+    Idempotent: no-op if user has genre prefs or already has recommendations.
+    Call from auth_service (or equivalent) on account creation.
+    """
     user_id = str(user_id).strip().lower()
     if not user_id:
         return
@@ -224,7 +263,11 @@ def ensure_default_recommendations(user_id: str) -> None:
 
 
 def on_book_added_to_shelf(user_id: str) -> None:
-    """Call after a book is added to a shelf. Increments adds_since_last_book_run; if >= ADDS_BEFORE_BOOK_RERUN (3), re-runs book recommender and resets."""
+    """Hook to call after a book is added to a shelf.
+
+    Increments adds_since_last_book_run; when it reaches ADDS_BEFORE_BOOK_RERUN (3),
+    re-runs the book recommender and resets the counter. Called from library_service.
+    """
     user_id = str(user_id).strip().lower()
     if not user_id:
         return

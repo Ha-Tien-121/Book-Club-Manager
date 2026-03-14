@@ -46,7 +46,7 @@ from backend.config import (
     CDN_BASE_URL,
     DEFAULT_BOOK_IMAGE_KEY,
     TOP50_BOOKS_S3_KEY,
-    REVIEWS_TOP50_BOOKS_S3_KEY,
+    REVIEWS_TOP25_BOOKS_S3_KEY,
     REVIEWS_TOP50_BOOKS_LOCAL_PATH,
 )
 from backend.data_loader import load_data as _load_ui_data
@@ -376,7 +376,7 @@ class LocalStorage:
         return []
 
     def get_top50_review_books(self) -> list[dict]:
-        """Default/cold-start book recs: top 50 from Amazon reviews JSON. Local: read from REVIEWS_TOP50_BOOKS_LOCAL_PATH if exists."""
+        """Default/cold-start book recs: top 25 from Amazon reviews JSON. Local: read from REVIEWS_TOP50_BOOKS_LOCAL_PATH if exists."""
         if REVIEWS_TOP50_BOOKS_LOCAL_PATH.exists():
             try:
                 data = json.loads(REVIEWS_TOP50_BOOKS_LOCAL_PATH.read_text(encoding="utf-8"))
@@ -1202,12 +1202,12 @@ class CloudStorage:
             return []
 
     def get_top50_review_books(self) -> list[dict]:
-        """Default/cold-start book recs: top 50 from Amazon reviews JSON in S3 (books/reviews_top50_books.json)."""
+        """Default/cold-start book recs: top 25 from Amazon reviews JSON in S3 (books/reviews_top25_books.json)."""
         if not DATA_BUCKET:
             return []
         try:
             s3 = boto3.client("s3")
-            resp = s3.get_object(Bucket=DATA_BUCKET, Key=REVIEWS_TOP50_BOOKS_S3_KEY)
+            resp = s3.get_object(Bucket=DATA_BUCKET, Key=REVIEWS_TOP25_BOOKS_S3_KEY)
             body = resp["Body"].read().decode("utf-8")
             data = json.loads(body)
             return data[:50] if isinstance(data, list) else []

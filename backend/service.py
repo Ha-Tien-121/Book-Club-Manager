@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from .book_recommender import BookRecommender
+from .recommender.book_recommender import BookRecommender
 
 
 # Single recommender instance; reused for all calls.

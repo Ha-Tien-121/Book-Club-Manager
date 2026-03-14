@@ -1,483 +1,568 @@
-from __future__ import annotations
-from dataclasses import dataclass
+"""Skeleton book recommender: returns top 50 books (first 50 from sample data)."""
+
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
-import numpy as np
+
 import pandas as pd
 
-try:
-    from scipy.sparse import hstack
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-    from sklearn.preprocessing import MinMaxScaler
-    HAS_ML_DEPS = True
-except ImportError:
-    hstack = None
-    TfidfVectorizer = None
-    cosine_similarity = None
-    MinMaxScaler = None
-    HAS_ML_DEPS = False
+# First 50 books from books_sample_100.json (legit data, manually embedded, no description)
+_TOP_50_JSON = """
+[
+  {
+    "parent_asin": "0701169850",
+    "title": "Chaucer",
+    "author_name": "Peter Ackroyd",
+    "average_rating": 4.5,
+    "rating_number": 29,
+    "images": "https://m.media-amazon.com/images/I/41X61VPJYKL._SX334_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "chaucer|peter ackroyd"
+  },
+  {
+    "parent_asin": "0435088688",
+    "title": "Notes from a Kidwatcher",
+    "author_name": "Yetta M. Goodman",
+    "average_rating": 5.0,
+    "rating_number": 1,
+    "images": "https://m.media-amazon.com/images/I/41bfTRxpMML._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[]",
+    "title_author_key": "notes from a kidwatcher|yetta m goodman"
+  },
+  {
+    "parent_asin": "0316185361",
+    "title": "Service",
+    "author_name": "Marcus Luttrell",
+    "average_rating": 4.7,
+    "rating_number": 3421,
+    "images": "https://m.media-amazon.com/images/I/41YQHDWRyGL._SX321_BO1,204,203,200_.jpg",
+    "categories": "[\\"Biographies & Memoirs\\"]",
+    "title_author_key": "service|marcus luttrell"
+  },
+  {
+    "parent_asin": "0545425573",
+    "title": "Monstrous Stories #4",
+    "author_name": null,
+    "average_rating": 4.4,
+    "rating_number": 40,
+    "images": "https://m.media-amazon.com/images/I/614Mx0QCe7L._SX339_BO1,204,203,200_.jpg",
+    "categories": "[\\"Children's Books\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "B00KFOP3RG",
+    "title": "Parker & Knight",
+    "author_name": "Donald Wells",
+    "average_rating": 4.5,
+    "rating_number": 381,
+    "images": "https://m.media-amazon.com/images/I/41j6GpAqFBL.jpg",
+    "categories": "[\\"Mystery, Thriller & Suspense\\"]",
+    "title_author_key": "parker & knight|donald wells"
+  },
+  {
+    "parent_asin": "B09PHG4FQ8",
+    "title": "Writings from a Black Woman Living in the Land of the Free",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 5,
+    "images": "https://m.media-amazon.com/images/I/417CItk7HML._SX387_BO1,204,203,200_.jpg",
+    "categories": "[\\"Arts & Photography\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "B0086HQWC4",
+    "title": "Child Development",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 2,
+    "images": "https://m.media-amazon.com/images/I/41b2UvkHaAL._SX331_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "1680450263",
+    "title": "Make",
+    "author_name": "Charles Platt",
+    "average_rating": 4.7,
+    "rating_number": 1366,
+    "images": "https://m.media-amazon.com/images/I/51j48HH1P9L._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[]",
+    "title_author_key": "make|charles platt"
+  },
+  {
+    "parent_asin": "1694621731",
+    "title": "Reunion",
+    "author_name": null,
+    "average_rating": 4.9,
+    "rating_number": 12,
+    "images": "https://m.media-amazon.com/images/I/313xN7wqDQL._SX331_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "1932225323",
+    "title": "Four Centuries of American Education",
+    "author_name": "David Barton",
+    "average_rating": 4.8,
+    "rating_number": 133,
+    "images": "https://m.media-amazon.com/images/I/415r5RJ7alL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[]",
+    "title_author_key": "four centuries of american education|david barton"
+  },
+  {
+    "parent_asin": "0893011673",
+    "title": "Mining Engineers and the American West",
+    "author_name": "Clark C. Spence",
+    "average_rating": 4.7,
+    "rating_number": 4,
+    "images": "https://m.media-amazon.com/images/I/51nlRLa5ycL._SX334_BO1,204,203,200_.jpg",
+    "categories": "[\\"History\\"]",
+    "title_author_key": "mining engineers and the american west|clark c spence"
+  },
+  {
+    "parent_asin": "9083256898",
+    "title": "Heart of Silk and Shadows",
+    "author_name": "Lisette Marshall",
+    "average_rating": 4.4,
+    "rating_number": 481,
+    "images": "https://m.media-amazon.com/images/I/41tMRHMU2WL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Fantasy\\"]",
+    "title_author_key": "heart of silk and shadows|lisette marshall"
+  },
+  {
+    "parent_asin": "1771682760",
+    "title": "Girl Made of Glass",
+    "author_name": "Shelby Leigh",
+    "average_rating": 4.5,
+    "rating_number": 117,
+    "images": "https://m.media-amazon.com/images/I/41-jq+4xBwL._SY344_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\", \\"Poetry\\"]",
+    "title_author_key": "girl made of glass|shelby leigh"
+  },
+  {
+    "parent_asin": "1087848539",
+    "title": "The Old Man and the Pirate Princess",
+    "author_name": "Jessica Mathews",
+    "average_rating": 3.2,
+    "rating_number": 5,
+    "images": "https://m.media-amazon.com/images/I/41FXXfN-fYL._SX384_BO1,204,203,200_.jpg",
+    "categories": "[\\"Children's Books\\"]",
+    "title_author_key": "the old man and the pirate princess|jessica mathews"
+  },
+  {
+    "parent_asin": "0710306911",
+    "title": "Japanese Girls and Women",
+    "author_name": "Alice Mabel Bacon",
+    "average_rating": 3.2,
+    "rating_number": 7,
+    "images": "https://m.media-amazon.com/images/I/21BhwngmjwL._SX317_BO1,204,203,200_.jpg",
+    "categories": "[\\"History\\"]",
+    "title_author_key": "japanese girls and women|alice mabel bacon"
+  },
+  {
+    "parent_asin": "0130840963",
+    "title": "Behavior Principles in Everyday Life",
+    "author_name": "John D. Baldwin",
+    "average_rating": 3.7,
+    "rating_number": 14,
+    "images": "https://m.media-amazon.com/images/I/41BZJS25WAL._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[]",
+    "title_author_key": "behavior principles in everyday life|john d baldwin"
+  },
+  {
+    "parent_asin": "8477110190",
+    "title": "PQL 3 - Lola",
+    "author_name": null,
+    "average_rating": 3.7,
+    "rating_number": 2,
+    "images": "https://m.media-amazon.com/images/I/51+wU+PzoWL._SX338_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "1275627234",
+    "title": "A sermon, preached at the execution of Moses Paul, an Indian",
+    "author_name": null,
+    "average_rating": 3.8,
+    "rating_number": 2,
+    "images": "https://m.media-amazon.com/images/I/51pcm5alT8L._SX382_BO1,204,203,200_.jpg",
+    "categories": "[\\"History\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "1609303687",
+    "title": "Business Associations",
+    "author_name": "William A. Klein",
+    "average_rating": 4.5,
+    "rating_number": 6,
+    "images": "https://m.media-amazon.com/images/I/41vFoSjfSQL._SX352_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": "business associations|william a klein"
+  },
+  {
+    "parent_asin": "B003P2WETK",
+    "title": "Inspector Imanishi Investigates (Soho Crime)",
+    "author_name": "Seicho Matsumoto",
+    "average_rating": 4.0,
+    "rating_number": 1138,
+    "images": "https://m.media-amazon.com/images/I/51UHERs91bL.jpg",
+    "categories": "[\\"Mystery, Thriller & Suspense\\"]",
+    "title_author_key": "inspector imanishi investigates (soho crime)|seicho matsumoto"
+  },
+  {
+    "parent_asin": "B000JDT7L6",
+    "title": "Officially Dead",
+    "author_name": "Quentin Reynolds",
+    "average_rating": 4.6,
+    "rating_number": 3,
+    "images": "https://m.media-amazon.com/images/I/41YJsa+LdKL._SX373_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": "officially dead|quentin reynolds"
+  },
+  {
+    "parent_asin": "0974028622",
+    "title": "Dine In!",
+    "author_name": "Nick Stellino",
+    "average_rating": 4.5,
+    "rating_number": 27,
+    "images": "https://m.media-amazon.com/images/I/51G21WXBNYL._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Cookbooks, Food & Wine\\"]",
+    "title_author_key": "dine in!|nick stellino"
+  },
+  {
+    "parent_asin": "B098JWSP78",
+    "title": "The Promise of Love (The Book of Love)",
+    "author_name": "Meara Platt",
+    "average_rating": 4.5,
+    "rating_number": 637,
+    "images": "https://m.media-amazon.com/images/I/51vzMDej+IS._SY344_BO1,204,203,200_.jpg",
+    "categories": "[\\"Romance\\"]",
+    "title_author_key": "the promise of love (the book of love)|meara platt"
+  },
+  {
+    "parent_asin": "B0006AOORE",
+    "title": "Statesmen of the Lost Cause",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 2,
+    "images": "https://m.media-amazon.com/images/I/51DwdP1FEiL._SX336_BO1,204,203,200_.jpg",
+    "categories": "[\\"History\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "0780274164",
+    "title": "A Monster Sandwich (The Story Box - Level 1 - Set B - for Emergent Readers) [Paperback]",
+    "author_name": "Joy Cowley",
+    "average_rating": 3.8,
+    "rating_number": 5,
+    "images": "https://m.media-amazon.com/images/I/51Al3nLgqhL._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[]",
+    "title_author_key": "a monster sandwich (the story box - level 1 - set b - for emergent readers) [paperback]|joy cowley"
+  },
+  {
+    "parent_asin": "0435088432",
+    "title": "Sounds from the Heart",
+    "author_name": "Maureen Barbieri",
+    "average_rating": 5.0,
+    "rating_number": 2,
+    "images": "https://m.media-amazon.com/images/I/41SM7VFW35L._SX301_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": "sounds from the heart|maureen barbieri"
+  },
+  {
+    "parent_asin": "0553819399",
+    "title": "Hunting Evil",
+    "author_name": "Guy Walters",
+    "average_rating": 4.2,
+    "rating_number": 634,
+    "images": "https://m.media-amazon.com/images/I/51o89h0rrsL._SX319_BO1,204,203,200_.jpg",
+    "categories": "[\\"History\\"]",
+    "title_author_key": "hunting evil|guy walters"
+  },
+  {
+    "parent_asin": "0500016550",
+    "title": "Les Chiens De Paris",
+    "author_name": "Barnaby Conrad III",
+    "average_rating": 4.6,
+    "rating_number": 8,
+    "images": "https://m.media-amazon.com/images/I/51xoVQCwaBL._SX488_BO1,204,203,200_.jpg",
+    "categories": "[\\"Crafts, Hobbies & Home\\"]",
+    "title_author_key": "les chiens de paris|barnaby conrad iii"
+  },
+  {
+    "parent_asin": "1929145667",
+    "title": "Acoustic & Digital Piano Buyer Fall 2017",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 3,
+    "images": "https://m.media-amazon.com/images/I/518HbE+JNhL._SX378_BO1,204,203,200_.jpg",
+    "categories": "[\\"Arts & Photography\\"]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "1536832286",
+    "title": "Sugary Sweets (A Taste of Love Series)",
+    "author_name": "A.M. Willard",
+    "average_rating": 4.4,
+    "rating_number": 119,
+    "images": "https://m.media-amazon.com/images/I/51yHh0rQJvL._SX322_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "sugary sweets (a taste of love series)|am willard"
+  },
+  {
+    "parent_asin": "B005GG0N1E",
+    "title": "The English Monster",
+    "author_name": "Lloyd Shepherd",
+    "average_rating": 4.0,
+    "rating_number": 177,
+    "images": "https://m.media-amazon.com/images/I/51JlBHsl0ML.jpg",
+    "categories": "[\\"Mystery, Thriller & Suspense\\"]",
+    "title_author_key": "the english monster|lloyd shepherd"
+  },
+  {
+    "parent_asin": "1852691247",
+    "title": "The Very Hungry Caterpillar",
+    "author_name": "Eric Carle",
+    "average_rating": 4.6,
+    "rating_number": 294,
+    "images": "https://m.media-amazon.com/images/I/41LCW+nsJ6S._SY340_BO1,204,203,200_.jpg",
+    "categories": "[\\"Children's Books\\"]",
+    "title_author_key": "the very hungry caterpillar|eric carle"
+  },
+  {
+    "parent_asin": "1530178770",
+    "title": "More Together",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 1,
+    "images": "https://m.media-amazon.com/images/I/61MKCqzu9rL._SX404_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "0805005277",
+    "title": "Never Sniff a Gift Fish",
+    "author_name": "Patrick J. McManus",
+    "average_rating": 4.8,
+    "rating_number": 413,
+    "images": "https://m.media-amazon.com/images/I/51d+y3WBQgL._SX340_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": "never sniff a gift fish|patrick j mcmanus"
+  },
+  {
+    "parent_asin": "1584885874",
+    "title": "Markov Chain Monte Carlo",
+    "author_name": "Dani Gamerman",
+    "average_rating": 4.4,
+    "rating_number": 19,
+    "images": "https://m.media-amazon.com/images/I/41wmzCw+buL._SX360_BO1,204,203,200_.jpg",
+    "categories": "[\\"Science & Math\\"]",
+    "title_author_key": "markov chain monte carlo|dani gamerman"
+  },
+  {
+    "parent_asin": "194557299X",
+    "title": "Therapy Mammals",
+    "author_name": "Jon Methven",
+    "average_rating": 4.2,
+    "rating_number": 24,
+    "images": "https://m.media-amazon.com/images/I/41quRCEOHmL._SX323_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "therapy mammals|jon methven"
+  },
+  {
+    "parent_asin": "0393062651",
+    "title": "A Most Dangerous Book",
+    "author_name": "Christopher B. Krebs",
+    "average_rating": 4.2,
+    "rating_number": 110,
+    "images": "https://m.media-amazon.com/images/I/41bnYeddqPL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "a most dangerous book|christopher b krebs"
+  },
+  {
+    "parent_asin": "1947844938",
+    "title": "The Prophet",
+    "author_name": "Kahlil Gibran",
+    "average_rating": 4.6,
+    "rating_number": 1367,
+    "images": "https://m.media-amazon.com/images/I/41OD1btm2EL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Literature & Fiction\\", \\"Poetry\\"]",
+    "title_author_key": "the prophet|kahlil gibran"
+  },
+  {
+    "parent_asin": "B0BW2GGCNZ",
+    "title": "The Melancholy Strumpet Master",
+    "author_name": "Zeb Beck",
+    "average_rating": 4.6,
+    "rating_number": 14,
+    "images": "https://m.media-amazon.com/images/I/41jfndqfi+L._SX322_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "the melancholy strumpet master|zeb beck"
+  },
+  {
+    "parent_asin": "0531253090",
+    "title": "Egypt (Enchantment of the World)",
+    "author_name": "Ann Heinrichs",
+    "average_rating": 5.0,
+    "rating_number": 3,
+    "images": "https://m.media-amazon.com/images/I/51fVIKoAvEL._SX429_BO1,204,203,200_.jpg",
+    "categories": "[\\"Children's Books\\"]",
+    "title_author_key": "egypt (enchantment of the world)|ann heinrichs"
+  },
+  {
+    "parent_asin": "1916260101",
+    "title": "Shane, Sheba and Sky",
+    "author_name": "Paul Viner",
+    "average_rating": 4.9,
+    "rating_number": 75,
+    "images": "https://m.media-amazon.com/images/I/41W+Wxi5W0L._SX322_BO1,204,203,200_.jpg",
+    "categories": "[\\"Biographies & Memoirs\\"]",
+    "title_author_key": "shane, sheba and sky|paul viner"
+  },
+  {
+    "parent_asin": "0674975812",
+    "title": "Law and Legitimacy in the Supreme Court",
+    "author_name": "Richard H. Fallon",
+    "average_rating": 4.7,
+    "rating_number": 8,
+    "images": "https://m.media-amazon.com/images/I/413FhkTEGiL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Politics & Social Sciences\\"]",
+    "title_author_key": "law and legitimacy in the supreme court|richard h fallon"
+  },
+  {
+    "parent_asin": "B014X8T69U",
+    "title": "Retreat Yourself",
+    "author_name": null,
+    "average_rating": 3.8,
+    "rating_number": 4,
+    "images": "https://m.media-amazon.com/images/I/51BTXHgM6lL.jpg",
+    "categories": "[]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "B07M6RG1RN",
+    "title": "Reptilian",
+    "author_name": "John J. Rust",
+    "average_rating": 4.1,
+    "rating_number": 162,
+    "images": "https://m.media-amazon.com/images/I/512aqGZvOnL.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "reptilian|john j rust"
+  },
+  {
+    "parent_asin": "1530154685",
+    "title": "Grade Five Music Theory",
+    "author_name": "Victoria Williams",
+    "average_rating": 4.6,
+    "rating_number": 87,
+    "images": "https://m.media-amazon.com/images/I/51RnXmZTT9L._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Arts & Photography\\"]",
+    "title_author_key": "grade five music theory|victoria williams"
+  },
+  {
+    "parent_asin": "158355128X",
+    "title": "Oregon Birds",
+    "author_name": "James Kavanagh",
+    "average_rating": 4.8,
+    "rating_number": 74,
+    "images": "https://m.media-amazon.com/images/I/51-Hx-hI-ML._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Science & Math\\"]",
+    "title_author_key": "oregon birds|james kavanagh"
+  },
+  {
+    "parent_asin": "B0006ENZC0",
+    "title": "Who'd a thought it!",
+    "author_name": null,
+    "average_rating": 5.0,
+    "rating_number": 1,
+    "images": "https://m.media-amazon.com/images/I/51d+WkHZvrL._SX309_BO1,204,203,200_.jpg",
+    "categories": "[]",
+    "title_author_key": null
+  },
+  {
+    "parent_asin": "0062279068",
+    "title": "Clark the Shark",
+    "author_name": "Bruce Hale",
+    "average_rating": 4.8,
+    "rating_number": 447,
+    "images": "https://m.media-amazon.com/images/I/51nRw6MzjbL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Children's Books\\", \\"Growing Up & Facts of Life\\"]",
+    "title_author_key": "clark the shark|bruce hale"
+  },
+  {
+    "parent_asin": "1940250064",
+    "title": "Primeval",
+    "author_name": "Blood Bound Books",
+    "average_rating": 3.3,
+    "rating_number": 10,
+    "images": "https://m.media-amazon.com/images/I/51wG04LErhL._SX322_BO1,204,203,200_.jpg",
+    "categories": "[\\"Literature & Fiction\\"]",
+    "title_author_key": "primeval|blood bound books"
+  },
+  {
+    "parent_asin": "1093861355",
+    "title": "The Mercenary Code (The Shattering of Kingdoms)",
+    "author_name": "Emmet Moss",
+    "average_rating": 4.4,
+    "rating_number": 521,
+    "images": "https://m.media-amazon.com/images/I/51rgTdj3XQL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "categories": "[\\"Fantasy\\"]",
+    "title_author_key": "the mercenary code (the shattering of kingdoms)|emmet moss"
+  }
+]
+"""
 
 
-@dataclass
-class RecommenderWeights:
-    """Weights for the different components of the final score."""
+def _load_dummy_books() -> list[dict]:
+    """Return the embedded top-50 book list (full book dicts for UI)."""
+    return json.loads(_TOP_50_JSON)
 
-    genre_similarity: float = 0.5
-    rating_popularity: float = 0.3
-    checkout_popularity: float = 0.2
 
 class BookRecommender:
-    """
-    Content-based book recommender.
+    """Dummy recommender: always returns the same embedded book list for service.py compatibility."""
 
-    The recommender:
-    - Learns a TF-IDF representation of book categories (genres)
-    - Normalizes rating and popularity signals
-    - Computes a weighted score that combines genre similarity,
-      rating/review popularity, and SPL checkout popularity
-    """
-
-    def __init__(
-        self,
-        data_dir: Optional[Path] = None,
-        weights: Optional[RecommenderWeights] = None,
-    ) -> None:
-        if data_dir is None:
-            project_root = Path(__file__).resolve().parents[2]
-            data_dir = project_root / "data" / "processed"
-
-        self.data_dir: Path = data_dir
-        self.weights: RecommenderWeights = weights or RecommenderWeights()
-
-        self.vectorizer: Optional[Any] = None
-        self.genre_tfidf_matrix: Optional[Any] = None
-        self.feature_matrix: Optional[Any] = None
-
-        self.books_df: Optional[pd.DataFrame] = None
-        self.book_id_to_index: Dict[str, int] = {}
-
-        self._fitted: bool = False
-
-    @staticmethod
-    def _clean_title(title: Any) -> str:
-        if pd.isna(title):
-            return ""
-        return str(title).strip().lower()
-
-    @staticmethod
-    def _prepare_categories(raw: Any) -> str:
-        if raw is None:
-            return ""
-        if isinstance(raw, list):
-            text = " ".join(str(item) for item in raw)
-        else:
-            try:
-                if pd.isna(raw):
-                    return ""
-            except (TypeError, ValueError):
-                pass
-            text = str(raw)
-
-        for ch in "[]'\"":
-            text = text.replace(ch, " ")
-        return " ".join(text.lower().split())
+    def __init__(self, data_dir=None, weights=None):
+        self.data_dir = data_dir
+        self.weights = weights
+        self._books: list[dict] = []
+        self._books_df = None
 
     def fit(self) -> None:
-        """
-        Load data, build feature matrices, and prepare lookup structures.
-        """
-        amazon_path = self.data_dir / "AMAZON_books_meta_data_first_100_rows.csv"
-        spl_checkouts_path = self.data_dir / "SPL_checkouts_first_100_rows.csv"
-        spl_catalog_path = self.data_dir / "SPL_catalog_first_100_rows.csv"
-        jsonl_books_path = self.data_dir / "first_100_books_by_parent_asin.jsonl"
-        json_books_path = self.data_dir / "books_sample_100.json"
+        """Load embedded book list and build a minimal books_df for get_top_popular_books."""
+        self._books = _load_dummy_books()
+        if not self._books:
+            self._books_df = pd.DataFrame()
+            return
+        rows = []
+        for b in self._books:
+            rows.append({
+                "parent_asin": b.get("parent_asin"),
+                "title": b.get("title"),
+                "average_rating_norm": 0.5,
+                "rating_number_norm": 0.5,
+                "checkouts_norm": 0.5,
+            })
+        self._books_df = pd.DataFrame(rows)
 
-        if amazon_path.exists():
-            amazon_df = pd.read_csv(amazon_path)
-        elif jsonl_books_path.exists():
-            rows: List[Dict[str, Any]] = []
-            with jsonl_books_path.open("r", encoding="utf-8") as file_obj:
-                for line in file_obj:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parsed = json.loads(line)
-                    source_id, payload = next(iter(parsed.items()))
-                    rows.append(
-                        {
-                            "parent_asin": str(payload.get("parent_asin") or source_id),
-                            "title": payload.get("title"),
-                            "author_name": payload.get("author_name"),
-                            "average_rating": payload.get("average_rating"),
-                            "rating_number": payload.get("rating_number"),
-                            "categories": payload.get("categories"),
-                        }
-                    )
-            amazon_df = pd.DataFrame(rows)
-        elif json_books_path.exists():
-            amazon_df = pd.read_json(json_books_path)
-        else:
-            raise FileNotFoundError(
-                "No supported books metadata file found in data/processed. "
-                "Expected one of AMAZON_books_meta_data_first_100_rows.csv, "
-                "first_100_books_by_parent_asin.jsonl, books_sample_100.json."
-            )
-
-        if spl_checkouts_path.exists():
-            checkouts_df = pd.read_csv(spl_checkouts_path)
-        else:
-            checkouts_df = pd.DataFrame(columns=["Title", "Checkouts"])
-
-        if spl_catalog_path.exists():
-            catalog_df = pd.read_csv(spl_catalog_path)
-        else:
-            catalog_df = pd.DataFrame(columns=["Title", "Author", "ISBN"])
-
-        # Standardize titles for joins.
-        amazon_df["title_clean"] = amazon_df["title"].apply(self._clean_title)
-        if "Title" not in checkouts_df.columns:
-            checkouts_df["Title"] = ""
-        if "Checkouts" not in checkouts_df.columns:
-            checkouts_df["Checkouts"] = 0
-        if "Title" not in catalog_df.columns:
-            catalog_df["Title"] = ""
-        if "Author" not in catalog_df.columns:
-            catalog_df["Author"] = ""
-        if "ISBN" not in catalog_df.columns:
-            catalog_df["ISBN"] = ""
-
-        checkouts_df["title_clean"] = checkouts_df["Title"].apply(self._clean_title)
-        catalog_df["title_clean"] = catalog_df["Title"].apply(self._clean_title)
-
-        # Aggregate checkout counts per standardized title.
-        checkouts_agg = (
-            checkouts_df.groupby("title_clean", as_index=False)["Checkouts"]
-            .sum()
-            .rename(columns={"Checkouts": "Checkouts"})
-        )
-
-        # Merge Amazon metadata with SPL checkouts (left join, keep all Amazon books).
-        merged = pd.merge(
-            amazon_df,
-            checkouts_agg,
-            on="title_clean",
-            how="left",
-        )
-
-        # Optionally enrich with author/ISBN metadata from catalog (best-effort).
-        catalog_meta = catalog_df[["title_clean", "Author", "ISBN"]].drop_duplicates(
-            "title_clean"
-        )
-        merged = pd.merge(
-            merged,
-            catalog_meta,
-            on="title_clean",
-            how="left",
-            suffixes=("", "_catalog"),
-        )
-
-        # Handle missing numeric values before scaling.
-        for col in ["average_rating", "rating_number", "Checkouts"]:
-            if col not in merged.columns:
-                merged[col] = 0.0
-            merged[col] = pd.to_numeric(merged[col], errors="coerce")
-            merged[col] = merged[col].fillna(0.0)
-
-        # Prepare genres/categories text for TF-IDF.
-        if "categories" not in merged.columns:
-            merged["categories"] = ""
-        merged["categories_text"] = merged["categories"].apply(
-            self._prepare_categories
-        )
-
-        # Normalize rating and popularity features.
-        numeric_features = merged[["average_rating", "rating_number", "Checkouts"]]
-        if HAS_ML_DEPS and MinMaxScaler is not None:
-            scaler = MinMaxScaler()
-            scaled_numeric = scaler.fit_transform(numeric_features.values)
-        else:
-            scaled_numeric = np.zeros_like(numeric_features.values, dtype=float)
-            for col_idx, col_name in enumerate(
-                ["average_rating", "rating_number", "Checkouts"]
-            ):
-                series = merged[col_name].astype(float)
-                min_v = float(series.min())
-                max_v = float(series.max())
-                if max_v <= min_v:
-                    scaled_numeric[:, col_idx] = 0.0
-                else:
-                    scaled_numeric[:, col_idx] = (series - min_v) / (max_v - min_v)
-
-        merged["average_rating_norm"] = scaled_numeric[:, 0]
-        merged["rating_number_norm"] = scaled_numeric[:, 1]
-        merged["checkouts_norm"] = scaled_numeric[:, 2]
-
-        if HAS_ML_DEPS and TfidfVectorizer is not None and hstack is not None:
-            self.vectorizer = TfidfVectorizer()
-            self.genre_tfidf_matrix = self.vectorizer.fit_transform(
-                merged["categories_text"].fillna("")
-            )
-            from scipy.sparse import csr_matrix  # lazy import for optional dependency
-
-            numeric_sparse = csr_matrix(scaled_numeric)
-            self.feature_matrix = hstack([self.genre_tfidf_matrix, numeric_sparse]).tocsr()
-        else:
-            self.vectorizer = None
-            self.genre_tfidf_matrix = None
-            self.feature_matrix = None
-
-        # Persist dataframe and lookup structures.
-        self.books_df = merged
-        self.book_id_to_index = {}
-        for idx, book_id in enumerate(merged["parent_asin"]):
-            if pd.isna(book_id):
-                continue
-            self.book_id_to_index[str(book_id)] = idx
-
-        self._fitted = True
-
-    def _ensure_fitted(self) -> None:
-        if not self._fitted or self.books_df is None:
-            raise RuntimeError("BookRecommender.fit() must be called before recommend().")
-        if HAS_ML_DEPS and self.genre_tfidf_matrix is None:
-            raise RuntimeError("Genre matrix is unavailable after fit().")
-
-    def build_user_profile(
-        self,
-        user_id: str,
-        user_genres_df: Optional["pd.DataFrame"] = None,
-        user_books_df: Optional["pd.DataFrame"] = None,
-    ) -> np.ndarray:
-        """
-        Build a user profile vector in the TF-IDF genre space.
-
-        Combines:
-        - Explicit user genre preferences (with rank weighting)
-        - Books the user has already read
-        """
-        if not HAS_ML_DEPS:
-            raise ValueError("User profile vectors require scipy/sklearn dependencies.")
-        self._ensure_fitted()
-        assert self.vectorizer is not None
-        assert self.genre_tfidf_matrix is not None
-
-        genre_vector: Optional[np.ndarray] = None
-        books_vector: Optional[np.ndarray] = None
-
-        #Genre preference vector
-        if user_genres_df is not None and not user_genres_df.empty:
-            user_rows = user_genres_df[user_genres_df["user_id"] == user_id]
-            if not user_rows.empty:
-                weighted_tokens: List[str] = []
-                for _, row in user_rows.iterrows():
-                    genre = str(row["genre"]).strip()
-                    if not genre:
-                        continue
-                    # Lower rank => higher importance. Map to repetition count.
-                    try:
-                        rank = int(row["rank"])
-                    except (TypeError, ValueError):
-                        rank = 3
-                    if rank == 1:
-                        repeat = 3
-                    elif rank == 2:
-                        repeat = 2
-                    else:
-                        repeat = 1
-                    weighted_tokens.extend([genre] * repeat)
-
-                if weighted_tokens:
-                    weighted_string = " ".join(weighted_tokens)
-                    genre_vector = self.vectorizer.transform([weighted_string]).toarray()
-
-        # Books-read profile vector
-        if user_books_df is not None and not user_books_df.empty:
-            books_row = user_books_df[user_books_df["user_id"] == user_id]
-            if not books_row.empty:
-                books_read: Sequence[str] = books_row.iloc[0]["books_read"] or []
-                indices: List[int] = []
-                for book_id in books_read:
-                    idx = self.book_id_to_index.get(str(book_id))
-                    if idx is not None:
-                        indices.append(idx)
-
-                if indices:
-                    read_matrix = self.genre_tfidf_matrix[indices]
-                    read_profile = read_matrix.mean(axis=0)
-                    books_vector = np.asarray(read_profile)
-
-        # Combine both signals
-        if genre_vector is not None and books_vector is not None:
-            final_vector = 0.7 * genre_vector + 0.3 * books_vector
-        elif genre_vector is not None:
-            final_vector = genre_vector
-        elif books_vector is not None:
-            final_vector = books_vector
-        else:
-            raise ValueError(
-                "Cannot build user profile: no genres or books found for user_id "
-                f"{user_id!r}. Provide user_genres_df and/or user_books_df."
-            )
-
-        return final_vector
+    @property
+    def books_df(self):
+        """DataFrame with parent_asin, title, *_norm columns (for get_top_popular_books)."""
+        return self._books_df
 
     def recommend(
         self,
         user_id: str,
-        user_genres_df: Optional["pd.DataFrame"] = None,
-        user_books_df: Optional["pd.DataFrame"] = None,
+        user_genres_df=None,
+        user_books_df=None,
         top_k: int = 10,
-    ) -> List[Dict[str, Any]]:
-        """
-        Recommend books for a user based on genres and previously read books.
-
-        Returns
-        -------
-        List of dicts with keys:
-            - "book_id"
-            - "title"
-            - "score"
-        """
-        self._ensure_fitted()
-        assert self.books_df is not None
-
-        if top_k <= 0:
-            return []
-
-        if HAS_ML_DEPS and self.genre_tfidf_matrix is not None and cosine_similarity is not None:
-            user_profile = self.build_user_profile(
-                user_id=user_id,
-                user_genres_df=user_genres_df,
-                user_books_df=user_books_df,
-            )
-            genre_sim = cosine_similarity(user_profile, self.genre_tfidf_matrix).ravel()
-        else:
-            preferred_genres: set[str] = set()
-            if user_genres_df is not None and not user_genres_df.empty:
-                user_rows = user_genres_df[user_genres_df["user_id"] == user_id]
-                preferred_genres.update(
-                    {
-                        str(v).strip().lower()
-                        for v in user_rows.get("genre", pd.Series(dtype=str)).tolist()
-                        if str(v).strip()
-                    }
-                )
-            if user_books_df is not None and not user_books_df.empty:
-                books_row = user_books_df[user_books_df["user_id"] == user_id]
-                if not books_row.empty:
-                    for book_id in books_row.iloc[0]["books_read"] or []:
-                        idx = self.book_id_to_index.get(str(book_id))
-                        if idx is None:
-                            continue
-                        categories_text = str(self.books_df.iloc[idx]["categories_text"])
-                        preferred_genres.update(categories_text.split())
-            if not preferred_genres:
-                raise ValueError(
-                    "Cannot build recommendations without user preference signals."
-                )
-
-            genre_sim = np.zeros(len(self.books_df), dtype=float)
-            for idx, row in self.books_df.iterrows():
-                tokens = set(str(row.get("categories_text", "")).split())
-                if not tokens:
-                    continue
-                overlap = len(tokens.intersection(preferred_genres))
-                genre_sim[idx] = overlap / max(1, len(preferred_genres))
-
-        # If the user has read books, strengthen the influence of genre similarity.
-        has_read_books = False
-        if user_books_df is not None and not user_books_df.empty:
-            books_row = user_books_df[user_books_df["user_id"] == user_id]
-            if not books_row.empty:
-                books_read = books_row.iloc[0]["books_read"] or []
-                has_read_books = bool(books_read)
-        if has_read_books:
-            genre_sim = genre_sim * 1.5
-
-        # Popularity signals (already normalized to [0, 1]).
-        rating_pop = (
-            self.books_df["average_rating_norm"] + self.books_df["rating_number_norm"]
-        ) / 2.0
-        checkout_pop = self.books_df["checkouts_norm"]
-
-        # Final weighted score.
-        w = self.weights
-        final_score = (
-            w.genre_similarity * genre_sim
-            + w.rating_popularity * rating_pop.values
-            + w.checkout_popularity * checkout_pop.values
-        )
-
-        # Exclude already read books if provided.
-        already_read_ids: set[str] = set()
-        if user_books_df is not None and not user_books_df.empty:
-            books_row = user_books_df[user_books_df["user_id"] == user_id]
-            if not books_row.empty:
-                books_read = books_row.iloc[0]["books_read"] or []
-                already_read_ids = {str(bid) for bid in books_read}
-        results: List[Dict[str, Any]] = []
-
-        # Sort indices by score descending.
-        ranked_indices = np.argsort(-final_score)
-        for idx in ranked_indices:
-            row = self.books_df.iloc[idx]
-            book_id = str(row["parent_asin"]) if not pd.isna(row["parent_asin"]) else None
-
-            if book_id is not None and book_id in already_read_ids:
-                continue
-
-            results.append(
-                {
-                    "book_id": book_id,
-                    "title": row["title"],
-                    "score": float(final_score[idx]),
-                }
-            )
-
-            if len(results) >= top_k:
-                break
-
-        return results
+    ) -> list[dict]:
+        """Return first top_k books as full book dicts (same shape as services expect)."""
+        books = self._books or _load_dummy_books()
+        return list(books)[: max(0, top_k)]
 
 
-if __name__ == "__main__":
-    recommender = BookRecommender()
-    recommender.fit()
+def recommend_for_user(user_email: str) -> list[dict]:
+    """Return the top N recommended books. Skeleton: returns first 50 from embedded data."""
+    return _load_dummy_books()
 
-    # Dummy user for quick manual testing.
-    demo_user_id = "demo_user"
 
-    # Explicit genre preferences (Ex. Romance rank 1, Sci-Fi/Fantasy rank 2).
-    user_genres_df = pd.DataFrame(
-        [
-            {"user_id": demo_user_id, "genre": "Romance", "rank": 1},
-            {"user_id": demo_user_id, "genre": "Science Fiction & Fantasy", "rank": 2},
-        ]
-    )
-
-    # Use one existing book_id as an example of already-read history.
-    sample_book_id = None
-    if recommender.books_df is not None:
-        non_null = recommender.books_df["parent_asin"].dropna()
-        if not non_null.empty:
-            sample_book_id = str(non_null.iloc[0])
-
-    user_books_df = pd.DataFrame(
-        [
-            {
-                "user_id": demo_user_id,
-                "books_read": [sample_book_id] if sample_book_id is not None else [],
-            }
-        ]
-    )
-
-    recommendations = recommender.recommend(
-        user_id=demo_user_id,
-        user_genres_df=user_genres_df,
-        user_books_df=user_books_df,
-        top_k=5,
-    )
-
-    print(recommendations)
+# For tests that import GENRE_VOCAB (ML recommender); dummy does not use it.
+GENRE_VOCAB = []
