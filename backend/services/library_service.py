@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.storage import get_storage
-from backend.recommender_service import on_book_added_to_shelf
+from backend.services.recommender_service import on_book_added_to_shelf
 
 
 def _default_library() -> dict[str, list[Any]]:

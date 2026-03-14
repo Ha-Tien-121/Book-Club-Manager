@@ -16,7 +16,9 @@ import os
 from pathlib import Path
 
 
-# Environment selection (local or aws)
+# Environment selection (local or aws).
+# Set APP_ENV=aws to use CloudStorage (DynamoDB + S3) so you can develop against AWS
+# even when local file storage is not complete.
 APP_ENV = os.getenv("APP_ENV", "local")
 IS_LOCAL = APP_ENV == "local"
 IS_AWS = APP_ENV == "aws"
@@ -88,3 +90,7 @@ EVENT_RECOMMENDATION_POOL_SIZE = 200
 
 # Auth / security tuning (bcrypt work factor)
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
+
+# Book recommender: set USE_BOOK_ML_RECOMMENDER=1 to try loading ML model; otherwise use
+# fallback (reviews_top25 from storage). Use fallback when ML artifacts are not ready.
+USE_BOOK_ML_RECOMMENDER = os.getenv("USE_BOOK_ML_RECOMMENDER", "").strip().lower() in ("1", "true", "yes")

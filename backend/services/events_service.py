@@ -6,7 +6,7 @@ This module provides a thin, storage-agnostic interface for working with
 - Fetching full event details for a given `event_id`.
 - (Future) Querying events by city/genre.
 
-Per-user saved/registered events live in `backend.user_events_service`.
+Per-user saved/registered events live in `backend.services.user_events_service`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 
 from backend.config import EVENT_RECOMMENDATION_POOL_SIZE
 from backend.storage import get_storage
-from backend import user_events_service
+from backend.services import user_events_service
 
 
 def get_event_detail(event_id: str) -> dict[str, Any]:

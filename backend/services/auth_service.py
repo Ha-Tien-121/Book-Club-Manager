@@ -24,7 +24,7 @@ import bcrypt
 
 from backend.config import BCRYPT_ROUNDS
 from backend.storage import get_storage
-from backend.recommender_service import ensure_default_recommendations
+from backend.services.recommender_service import ensure_default_recommendations
 
 
 def _hash_password(password: str) -> str:
