@@ -13,7 +13,8 @@ parent_asins to book indices (as defined  in step 1), dropping rows with parent_
 (4) constructs user-book sparse matrices, TRAIN (75%) and TEST (25%), along with corresponding 
 column vectors of ground truth book indices for evaluation, TRAIN_GROUND_TRUTH and 
 TEST_GROUND_TRUTH.
-(5) constructs sparse book similarity matrix of cosine books, BOOKS_SIMILARITY_SPARSE.
+(5) constructs sparse cosine similarity matrix of TF-IDF normalized book interactions, 
+BOOKS_SIMILARITY_SPARSE.
 
 Args:
     Books.jsonl: The input dataset of Amazon book reviews.
@@ -31,8 +32,8 @@ Returns:
                        with rating >= 3 and 0 otherwise.
     book_similarity.npz : NPZ file containing scipy.sparse.csr_matrix BOOK_SIMILARITY_SPARSE,
                           Dimension (total # books, total # books),
-                          Entry (i, j) is the cosine similarity of book i and book j based on train 
-                          user-book matrix.
+                          Entry (i, j) is the cosine similarity of book i and book j based on 
+                          train user-book matrix and normalized by TF-IDF.
     train_ground_truth.npy : NPY file containing dense numpy.ndarray TRAIN_GROUND_TRUTH,
                              Dimension (total # users, 1),
                              Each row corresponds to a user and contains the index of the held-out 
@@ -45,6 +46,10 @@ Returns:
 Note: Total # of books is determined by the number of books in the cleaned amazon 
 books meta data, meta_Books.jsonl 
 
+Usage:
+    Run script from the project root using:
+    python -m data.scripts.amazon_books_data.reviews
+
 Time: ~ 30 minutes to run
 """
 
@@ -54,16 +59,13 @@ import random
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
-from scipy.sparse import save_npz
-import sqlite3
+from scipy.sparse import csr_matrix, save_npz, diags
 
 from data.scripts.config import RAW_DIR, PROCESSED_DIR
 
 random.seed(42)
-
-def create_leave_n_out_split(candidate_df, user_idx_col_name, 
-                             book_idx_col_name, split_proportion, 
+def create_leave_n_out_split(candidate_df, user_idx_col_name,
+                             book_idx_col_name, split_proportion,
                              total_n_books=None, total_n_users=None, ground_truth_set_size=1):
     """
     Construct a sparse user-book matrix and a corresponding ground truth vector from subset of data.
@@ -142,14 +144,15 @@ def create_leave_n_out_split(candidate_df, user_idx_col_name,
         ground_truth_col_vec[user] = sampled
         held_out.update((user, sample) for sample in sampled)
 
-    mask = [(row.user_idx, row.book_idx) not in held_out 
+    mask = [(row.user_idx, row.book_idx) not in held_out
          for row in users_in_split.itertuples()]
     users_in_split = users_in_split.loc[mask]
 
     rows = users_in_split[user_idx_col_name].to_numpy()
     cols = users_in_split[book_idx_col_name].to_numpy()
     values = np.ones(len(rows), dtype=int)
-    split_matrix = csr_matrix((values, (rows, cols)), shape=(total_n_users, total_n_books), dtype=int)
+    split_matrix = csr_matrix((values, (rows, cols)), shape=(total_n_users, total_n_books),
+                              dtype=int)
 
     split_compliment = candidate_df.drop(users_in_split.index)
     return split_matrix, ground_truth_col_vec, split_compliment
@@ -164,17 +167,21 @@ OUTPUT_FILE_TEST_GROUND_TRUTH = os.path.join(PROCESSED_DIR, 'test_ground_truth.n
 BOOK_ID_TO_IDX = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 
 def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
-         output_file_train_matrix=OUTPUT_FILE_TRAIN_MATRIX, 
-         output_file_test_matrix=OUTPUT_FILE_TEST_MATRIX, 
-         output_file_book_similarity=OUTPUT_FILE_BOOK_SIMILARITY, 
-         output_file_train_ground_truth=OUTPUT_FILE_TRAIN_GROUND_TRUTH, 
-         output_file_test_ground_truth=OUTPUT_FILE_TEST_GROUND_TRUTH):
+         output_file_train_matrix=OUTPUT_FILE_TRAIN_MATRIX,
+         output_file_test_matrix=OUTPUT_FILE_TEST_MATRIX,
+         output_file_book_similarity=OUTPUT_FILE_BOOK_SIMILARITY,
+         output_file_train_ground_truth=OUTPUT_FILE_TRAIN_GROUND_TRUTH,
+         output_file_test_ground_truth=OUTPUT_FILE_TEST_GROUND_TRUTH):  # pylint: disable=too-many-arguments, too-many-positional-arguments
+    """
+    Process Amazon book reviews into train/test matrices and compute book similarity.
+    Outputs are saved as NPZ/NPY files.
+    """
     if not os.path.exists(input_file):
         raise FileNotFoundError(f"Input file not found: {input_file}")
     if not os.path.exists(book_id_to_idx):
         raise FileNotFoundError(f"Book index mapping file not found: {book_id_to_idx}")
 
-    with open(book_id_to_idx, "r") as f:
+    with open(book_id_to_idx, "r", encoding="utf-8") as f:
         book_id_to_idx = json.load(f)
     n_books = len(book_id_to_idx)
 
@@ -182,13 +189,13 @@ def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
     user_id_to_idx = {}
     next_user_idx = 0
     for chunk in pd.read_json(
-        input_file, 
-        lines=True, 
-        dtype={"user_id": "string", "parent_asin": "string", "rating": "float"}, 
+        input_file,
+        lines=True,
+        dtype={"user_id": "string", "parent_asin": "string", "rating": "float"},
         chunksize=1_000_000):
 
         chunk = chunk[["user_id", "parent_asin", "rating"]]
-        chunk = chunk[chunk["rating"] >= 3] 
+        chunk = chunk[chunk["rating"] >= 3]
         chunk["book_idx"] = chunk["parent_asin"].map(book_id_to_idx)
         chunk = chunk.dropna(subset=["book_idx"])
         chunk["book_idx"] = chunk["book_idx"].astype(int)
@@ -202,26 +209,40 @@ def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
         chunks_list.append(chunk[["user_idx","book_idx"]])
     reviews_df = pd.concat(chunks_list, ignore_index=True)
     n_users = reviews_df['user_idx'].nunique()
-    
-        
-    TRAIN, TRAIN_GROUND_TRUTH, COMPLIMENT_TRAIN = create_leave_n_out_split(candidate_df=reviews_df, user_idx_col_name='user_idx', 
-                                                                           book_idx_col_name='book_idx', split_proportion=0.75, 
-                                                                           total_n_books=n_books)
-    TEST, TEST_GROUND_TRUTH, __ = create_leave_n_out_split(candidate_df=COMPLIMENT_TRAIN, user_idx_col_name='user_idx', 
-                                                           book_idx_col_name='book_idx', split_proportion=1, total_n_books=n_books, 
-                                                           total_n_users=n_users)
+
+    train, train_ground_truth, compliment_train = create_leave_n_out_split(
+        candidate_df=reviews_df,
+        user_idx_col_name='user_idx',
+        book_idx_col_name='book_idx',
+        split_proportion=0.75,
+        total_n_books=n_books)
+    test, test_ground_truth, __ = create_leave_n_out_split(
+        candidate_df=compliment_train,
+        user_idx_col_name='user_idx',
+        book_idx_col_name='book_idx',
+        split_proportion=1,
+        total_n_books=n_books,
+        total_n_users=n_users)
     print("Built train and test user-book matrices and corresponding ground truth vectors.")
-            
+
     ### Calculate cosine similarity of columns (books) ###
-    col_norms = np.sqrt(TRAIN.power(2).sum(axis=0)).A1
+    idf = np.log((n_users + 1) / (train.getnnz(axis=0) + 1)) + 1 
+    train_tfidf = train @ diags(idf)
+    col_norms = np.sqrt(train_tfidf.power(2).sum(axis=0)).A1
     col_norms[col_norms == 0] = 1.0
-    TRAIN_normalized = TRAIN.multiply(1 / col_norms)
-    BOOK_SIMILARITY_SPARSE = TRAIN_normalized.T @ TRAIN_normalized
-    save_npz(output_file_train_matrix, TRAIN)
-    save_npz(output_file_test_matrix, TEST)
-    save_npz(output_file_book_similarity, BOOK_SIMILARITY_SPARSE)
-    np.save(output_file_train_ground_truth, TRAIN_GROUND_TRUTH)
-    np.save(output_file_test_ground_truth, TEST_GROUND_TRUTH)
+    train_normalized = train_tfidf.multiply(1 / col_norms) 
+    book_similarity_sparse = train_normalized.T @ train_normalized
+    book_similarity_sparse.data = book_similarity_sparse.data.astype("float32")
+    book_similarity_sparse.data = np.round(book_similarity_sparse.data, 2)
+    book_similarity_sparse = book_similarity_sparse.tocsr()
+    book_similarity_sparse.setdiag(0)
+    book_similarity_sparse.eliminate_zeros()
+
+    save_npz(output_file_train_matrix, train)
+    save_npz(output_file_test_matrix, test)
+    save_npz(output_file_book_similarity, book_similarity_sparse)
+    np.save(output_file_train_ground_truth, train_ground_truth)
+    np.save(output_file_test_ground_truth, test_ground_truth)
 
 if __name__ == "__main__":
     main()

@@ -28,8 +28,9 @@ classifiers = [
 ]
 dependencies = []
 
+# to package whole repo set find = {}
 [tool.setuptools]
-packages = []
+packages = { find = { where = ["data/scripts"] } }
 
 # Where can someone find out more about your project?
 [project.urls]
