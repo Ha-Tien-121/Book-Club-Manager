@@ -4,17 +4,12 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from .recommender.book_recommender import BookRecommender
+from backend.recommender.book_recommender import BookRecommender
 
 
-# Single recommender instance; reused for all calls.
-_recommender = BookRecommender()
-_recommender.fit()
-
-
-def get_recommender() -> BookRecommender:
-    """Return the shared recommender instance."""
-    return _recommender
+def get_recommender():
+    """Return a book recommender instance (same pattern as event)."""
+    return BookRecommender()
 
 
 def build_user_genres_df(
@@ -54,50 +49,16 @@ def get_recommendations(
     user_books_read_store: Dict[str, List[str]],
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
-    """
-
-    Uses genre-only profile for cold start; uses genre + books_read when history exists.
-    """
-    user_genres_df = build_user_genres_df(user_id, user_genres_store)
-    user_books_df = build_user_books_df(user_id, user_books_read_store)
-
-    return _recommender.recommend(
-        user_id=user_id,
-        user_genres_df=user_genres_df if not user_genres_df.empty else None,
-        user_books_df=user_books_df if not user_books_df.empty else None,
-        top_k=top_k,
-    )
+    """Return top_k book recommendations (same as event: caller passes user signal = book IDs)."""
+    user_book_ids = user_books_read_store.get(user_id, []) if user_id else []
+    return BookRecommender().recommend(user_book_ids, top_k=top_k)
 
 
 def get_top_popular_books(top_k: int = 10) -> List[Dict[str, Any]]:
-    """Return globally popular books for cold-start users."""
+    """Return globally popular books (cold start: recommend with empty library)."""
     if top_k <= 0:
         return []
-    books_df = _recommender.books_df
-    if books_df is None or books_df.empty:
-        return []
-
-    popularity_score = (
-        0.5 * books_df["rating_number_norm"]
-        + 0.3 * books_df["average_rating_norm"]
-        + 0.2 * books_df["checkouts_norm"]
-    )
-    ranked_indices = popularity_score.sort_values(ascending=False).index.tolist()
-
-    results: List[Dict[str, Any]] = []
-    for idx in ranked_indices:
-        row = books_df.loc[idx]
-        book_id = str(row["parent_asin"]) if not pd.isna(row["parent_asin"]) else None
-        results.append(
-            {
-                "book_id": book_id,
-                "title": row["title"],
-                "score": float(popularity_score.loc[idx]),
-            }
-        )
-        if len(results) >= top_k:
-            break
-    return results
+    return BookRecommender().recommend([], top_k=top_k)
 
 
 def mark_book_as_read(

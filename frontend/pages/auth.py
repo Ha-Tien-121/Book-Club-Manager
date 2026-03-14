@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from backend.auth_service import create_user, get_user, login_user
+from backend.services.auth_service import create_user, get_user, login_user
 
 
 def auth_panel() -> None:
