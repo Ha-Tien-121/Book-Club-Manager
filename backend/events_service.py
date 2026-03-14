@@ -26,3 +26,5 @@ def get_events_by_genre(genre: str) -> list[dict]:
     """
     _ = genre
     return []
+
+#save_events, get_saved_events, save_event
