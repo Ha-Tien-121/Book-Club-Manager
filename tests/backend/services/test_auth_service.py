@@ -23,11 +23,11 @@ if "boto3" not in sys.modules:
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
 
-# Mock recommender_service so auth_service can be imported without backend.recommender.
-if "backend.recommender_service" not in sys.modules:
-    _rec_mod = types.ModuleType("backend.recommender_service")
+# Mock backend.services.recommender_service (auth_service imports from here).
+if "backend.services.recommender_service" not in sys.modules:
+    _rec_mod = types.ModuleType("backend.services.recommender_service")
     _rec_mod.ensure_default_recommendations = MagicMock()
-    sys.modules["backend.recommender_service"] = _rec_mod
+    sys.modules["backend.services.recommender_service"] = _rec_mod
 
 # Import after mocks so auth_service gets mocked deps; we patch get_storage where it is used.
 from backend.services import auth_service  # noqa: E402
@@ -54,7 +54,7 @@ class TestCreateUser(unittest.TestCase):
         self.assertNotIn("password_hash", result)
         store.save_user_account.assert_called_once()
         store.save_user_books.assert_called_once()
-        import backend.recommender_service as _rec
+        import backend.services.recommender_service as _rec
         _rec.ensure_default_recommendations.assert_called_with("alice@example.com")
 
     def test_create_user_normalizes_email_lowercase(
@@ -115,7 +115,7 @@ class TestCreateUser(unittest.TestCase):
         auth_service.create_user("bob@example.com", "pass")
         store.save_user_account.assert_called_once()
         store.save_user_books.assert_not_called()
-        import backend.recommender_service as _rec
+        import backend.services.recommender_service as _rec
         _rec.ensure_default_recommendations.assert_called_with("bob@example.com")
 
     def test_create_user_handles_get_user_books_non_dict(

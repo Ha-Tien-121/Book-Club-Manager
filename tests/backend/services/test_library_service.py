@@ -23,11 +23,11 @@ if "boto3" not in sys.modules:
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
 
-# library_service imports on_book_added_to_shelf from backend.recommender_service.
-if "backend.recommender_service" not in sys.modules:
-    _rec_mod = types.ModuleType("backend.recommender_service")
+# library_service imports on_book_added_to_shelf from backend.services.recommender_service.
+if "backend.services.recommender_service" not in sys.modules:
+    _rec_mod = types.ModuleType("backend.services.recommender_service")
     _rec_mod.on_book_added_to_shelf = MagicMock()
-    sys.modules["backend.recommender_service"] = _rec_mod
+    sys.modules["backend.services.recommender_service"] = _rec_mod
 
 from backend.services import library_service  # noqa: E402
 
@@ -56,7 +56,7 @@ class TestAddBookToLibrary(unittest.TestCase):
         self.assertEqual(result["library"]["in_progress"], [])
         self.assertEqual(result["library"]["finished"], [])
         store.save_user_books.assert_called_once()
-        import backend.recommender_service as _rec
+        import backend.services.recommender_service as _rec
         _rec.on_book_added_to_shelf.assert_called_once_with("u@x.com")
 
     def test_invalid_shelf_raises(self, mock_get_storage: MagicMock) -> None:
@@ -68,7 +68,7 @@ class TestAddBookToLibrary(unittest.TestCase):
     def test_noop_when_book_already_only_on_shelf(
         self, mock_get_storage: MagicMock
     ) -> None:
-        import backend.recommender_service as _rec
+        import backend.services.recommender_service as _rec
         _rec.on_book_added_to_shelf.reset_mock()
 
         store = MagicMock()
@@ -282,6 +282,7 @@ class TestUpdateBookStatus(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             library_service.update_book_status("u@x.com", "B1", "bad")
         self.assertIn("invalid shelf", str(ctx.exception))
+
 
 @patch("backend.services.library_service.get_storage")
 class TestRemoveBookFromShelf(unittest.TestCase):
