@@ -68,13 +68,20 @@ def _merge_book_genres_into_preferences(rec: dict[str, Any], parent_asin: str, s
         counts[key] = counts.get(key, 0) + 1
 
 
-def add_book_to_library(user_id: str, book_id: int | str, shelf: str) -> dict[str, Any]:
+def add_book_to_library(
+    user_id: str,
+    book_id: int | str,
+    shelf: str,
+    genres_from_book: list[str] | None = None,
+) -> dict[str, Any]:
     """Add a book to one shelf; remove it from the others. Triggers recommender hook.
 
     Args:
         user_id: User email/identifier.
         book_id: Book identifier (parent_asin or internal id; stored as string).
         shelf: One of saved, in_progress, finished.
+        genres_from_book: If provided, merge these genres into genre_preferences
+            instead of fetching via get_book_metadata (e.g. from UI when book dict is available).
 
     Returns:
         Updated user_books record (library + genre_preferences).
@@ -90,6 +97,7 @@ def add_book_to_library(user_id: str, book_id: int | str, shelf: str) -> dict[st
 
     rec = store.get_user_books(user_id) or {}
     lib = rec.setdefault("library", _default_library())
+    rec.setdefault("genre_preferences", [])
 
     book_key = str(book_id)
     on_target = False
@@ -105,8 +113,17 @@ def add_book_to_library(user_id: str, book_id: int | str, shelf: str) -> dict[st
     if on_target and not on_other:
         return dict(rec)
     lib[shelf].append(book_id)
-    # Merge book's categories into genre_preferences (only genres not already there)
-    _merge_book_genres_into_preferences(rec, book_key, store)
+    # Merge book's categories into genre_preferences
+    if genres_from_book:
+        book_cats = [str(c).strip() for c in genres_from_book if str(c).strip()]
+        if book_cats:
+            _merge_genres_into_record(rec, book_cats)
+            counts = rec.setdefault("genre_counts", {})
+            for c in book_cats:
+                key = c.lower()
+                counts[key] = counts.get(key, 0) + 1
+    else:
+        _merge_book_genres_into_preferences(rec, book_key, store)
     store.save_user_books(user_id, rec)
     on_book_added_to_shelf(user_id)
     return dict(rec)

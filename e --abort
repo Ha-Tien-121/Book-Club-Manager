@@ -1,0 +1,76 @@
+[1mdiff --cc backend/config.py[m
+[1mindex 616b736,efabfdc..0000000[m
+[1m--- a/backend/config.py[m
+[1m+++ b/backend/config.py[m
+[36m@@@ -26,8 -26,6 +26,11 @@@[m [mIS_AWS = APP_ENV == "aws[m
+  BASE_DIR = Path(__file__).resolve().parents[1][m
+  PROCESSED_DIR = BASE_DIR / "data" / "processed"[m
+  USERS_DIR = BASE_DIR / "data" / "users"[m
+[32m++<<<<<<< HEAD[m
+[32m +# Local path for default book recs when not using S3 (reviews top 50).[m
+[32m +REVIEWS_TOP50_BOOKS_LOCAL_PATH = PROCESSED_DIR / "reviews_top50_books.json"[m
+[32m++=======[m
+[32m++>>>>>>> c43546d (Pull latest service files from Elsie's branch)[m
+  [m
+  # Local JSON “databases” for the mock / local mode.[m
+  USER_ACCOUNTS_PATH = PROCESSED_DIR / "user_accounts.json"[m
+[36m@@@ -35,7 -33,6 +38,10 @@@[m [mUSER_BOOKS_PATH = PROCESSED_DIR / "user[m
+  USER_CLUBS_PATH = PROCESSED_DIR / "user_clubs.json"[m
+  USER_FORUM_PATH = PROCESSED_DIR / "user_forum.json"[m
+  FORUM_DB_PATH = PROCESSED_DIR / "forum_posts.json"[m
+[32m++<<<<<<< HEAD[m
+[32m +USER_RECOMMENDATIONS_PATH = PROCESSED_DIR / "user_recommendations.json"[m
+[32m++=======[m
+[32m++>>>>>>> c43546d (Pull latest service files from Elsie's branch)[m
+  [m
+  # Separate users directory for hand-authored user data (events, etc.).[m
+  USER_EVENTS_PATH = USERS_DIR / "user_events.json"[m
+[36m@@@ -49,37 -46,15 +55,48 @@@[m [mUSER_BOOKS_TABLE = os.getenv("USER_BOOK[m
+  USER_EVENTS_TABLE = os.getenv("USER_EVENTS_TABLE", "user_events")[m
+  USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")[m
+  FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")[m
+[32m++<<<<<<< HEAD[m
+[32m +USER_FORUMS_TABLE = os.getenv("USER_FORUMS_TABLE", "user_forums")[m
+[32m +USER_RECOMMENDATIONS_TABLE = os.getenv("USER_RECOMMENDATIONS_TABLE", "user_recommendations")[m
+[32m +# user_recommendations table: partition key user_email (string). Attributes: recommended_books (50), recommended_events (10),[m
+[32m +# book_updated_at, events_soonest_expiry, adds_since_last_book_run.[m
+[32m +# user_forums table: partition key user_email (string), no sort key. Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.[m
+[32m +# GSI on forum_posts for querying thread by parent_asin (partition key = parent_asin, sort key = sk).[m
+[32m +# Set to GSI name (e.g. "parent_asin-index") or leave empty to use full load + filter.[m
+[32m +FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "").strip() or None[m
+  BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")[m
+  EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")[m
+[32m +# GSI on events for soonest-upcoming: partition key type (e.g. "event"), sort key ttl. Set to GSI name (e.g. "type-ttl-index") or leave empty to use scan.[m
+[32m +EVENTS_GSI = os.getenv("EVENTS_GSI", "").strip() or None[m
+  [m
+  # S3 bucket for book data and images.[m
+  DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")[m
+[32m +# S3 key for SPL top-50 checkouts JSON (list of book dicts).[m
+[32m +TOP50_BOOKS_S3_KEY = os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")[m
+[32m +# S3 key for default/cold-start book recs (no genre prefs): top 50 most popular from reviews.[m
+[32m +REVIEWS_TOP50_BOOKS_S3_KEY = os.getenv("REVIEWS_TOP50_BOOKS_S3_KEY", "books/reviews_top50_books.json")[m
+[32m++=======[m
+[32m++BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")[m
+[32m++EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")[m
+[32m++[m
+[32m++# S3 bucket for book data and images.[m
+[32m++DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")[m
+[32m++>>>>>>> c43546d (Pull latest service files from Elsie's branch)[m
+  # Optional base URL for serving public images (e.g. CloudFront or direct S3 URL).[m
+  CDN_BASE_URL = os.getenv("CDN_BASE_URL", f"https://{DATA_BUCKET}.s3.{AWS_REGION}.amazonaws.com")[m
+  # Default image key for books that don't have a thumbnail.[m
+  DEFAULT_BOOK_IMAGE_KEY = os.getenv("DEFAULT_BOOK_IMAGE_KEY", "images/book_icon.png")[m
+  [m
+[32m++<<<<<<< HEAD[m
+[32m +# Recommendation list sizes (stored in user_recommendations table).[m
+[32m +RECOMMENDED_BOOKS_SIZE = 50[m
+[32m +RECOMMENDED_EVENTS_SIZE = 10[m
+[32m +# Run book recommender after this many adds-to-shelf since last run.[m
+[32m +ADDS_BEFORE_BOOK_RERUN = 3[m
+[32m +# Max number of upcoming events to score for personalized event recommendations (~90–100 typical; 200 covers full pool).[m
+[32m +EVENT_RECOMMENDATION_POOL_SIZE = 200[m
+[32m +[m
+[32m++=======[m
+[32m++>>>>>>> c43546d (Pull latest service files from Elsie's branch)[m
+  # Auth / security tuning (bcrypt work factor)[m
+  BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))[m

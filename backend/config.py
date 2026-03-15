@@ -28,8 +28,8 @@ IS_AWS = APP_ENV == "aws"
 BASE_DIR = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
 USERS_DIR = BASE_DIR / "data" / "users"
-# Local path for default book recs when not using S3 (reviews top 25).
-REVIEWS_TOP50_BOOKS_LOCAL_PATH = PROCESSED_DIR / "reviews_top25_books.json"
+# Local path for default book recs when not using S3 (reviews top 50).
+REVIEWS_TOP50_BOOKS_LOCAL_PATH = PROCESSED_DIR / "reviews_top50_books.json"
 
 # Local JSON "databases" for the mock / local mode.
 USER_ACCOUNTS_PATH = PROCESSED_DIR / "user_accounts.json"
@@ -54,6 +54,8 @@ USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")
 USER_ACCOUNTS_PK = os.getenv("USER_ACCOUNTS_PK", "user_email").strip() or "user_email"
 # Partition key for user_events DynamoDB table. Match your table's key ("user_id" or "user_email").
 USER_EVENTS_PK = os.getenv("USER_EVENTS_PK", "user_email").strip() or "user_email"
+# Partition key for user_books DynamoDB table. Match your table's key ("user_id" or "user_email").
+USER_BOOKS_PK = os.getenv("USER_BOOKS_PK", "user_email").strip() or "user_email"
 FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")
 # forum_posts table key attribute names (pk/sk).
 FORUM_POSTS_PK = os.getenv("FORUM_POSTS_PK", "pk").strip() or "pk"
@@ -85,8 +87,8 @@ EVENTS_PARENT_ASIN_GSI = os.getenv("EVENTS_PARENT_ASIN_GSI", "parent_asin_ttl-in
 DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
 # S3 key for SPL top-50 checkouts JSON (list of book dicts).
 TOP50_BOOKS_S3_KEY = os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
-# S3 key for default/cold-start book recs (no genre prefs): top 25 most popular from reviews.
-REVIEWS_TOP25_BOOKS_S3_KEY = os.getenv("REVIEWS_TOP25_BOOKS_S3_KEY", "books/reviews_top25_books.json")
+# S3 key for default/cold-start book recs (no genre prefs): top 50 most popular from reviews.
+REVIEWS_TOP50_BOOKS_S3_KEY = os.getenv("REVIEWS_TOP50_BOOKS_S3_KEY", "books/reviews_top50_books.json")
 # Optional base URL for serving public images (e.g. CloudFront or direct S3 URL).
 CDN_BASE_URL = os.getenv("CDN_BASE_URL", f"https://{DATA_BUCKET}.s3.{AWS_REGION}.amazonaws.com")
 # Default image key for books that don't have a thumbnail.
@@ -104,7 +106,7 @@ EVENT_RECOMMENDATION_POOL_SIZE = 200
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 
 # Book recommender: set USE_BOOK_ML_RECOMMENDER=1 to try loading ML model; otherwise use
-# fallback (reviews_top25 from storage). Use fallback when ML artifacts are not ready.
+# fallback (reviews_top50 from storage). Use fallback when ML artifacts are not ready.
 USE_BOOK_ML_RECOMMENDER = os.getenv("USE_BOOK_ML_RECOMMENDER", "").strip().lower() in ("1", "true", "yes")
 
 # Max characters to show for forum post preview in list views (full text shown when "Open discussion").

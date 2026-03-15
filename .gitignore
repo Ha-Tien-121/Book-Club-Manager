@@ -211,6 +211,9 @@ __marimo__/
 
 # Local app user accounts/state
 data/processed/user_accounts.json
+data/processed/user_books.json
+data/processed/user_clubs.json
+data/processed/user_forum.json
 data/processed/forum_posts.json
 
 # Generated parquet shard outputs
