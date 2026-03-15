@@ -30,8 +30,8 @@ OUTPUT_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
 
 conn = sqlite3.connect(BOOK_DB)
 
-query = "SELECT average_rating, rating_number FROM books ORDER BY parent_asin"
-data = np.array(conn.execute(query).fetchall())
+QUERY = "SELECT average_rating, rating_number FROM books ORDER BY parent_asin"
+data = np.array(conn.execute(QUERY).fetchall())
 
 conn.close()
 

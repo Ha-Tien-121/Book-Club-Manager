@@ -201,8 +201,7 @@ def build_training_set(
             sim_raw = user_lib.dot(book_similarity_matrix[:, books]).diagonal()
 
             sim_scores[:, j] = sim_raw / library_sizes
-            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])
-            
+            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])      
         positives = np.column_stack([
            sim_scores[:, 0],
            popularity[:, 0],
