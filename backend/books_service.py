@@ -1,43 +1,30 @@
-"""
-Books service: business logic for book discovery and details.
+"""Books service layer."""
 
-Sits above the storage layer and provides the operations needed by the UI and API:
-book details (with and without description), trending/popular books in Seattle,
-genre-based browsing, and search. Use this module instead of calling storage
-directly when you need book data for pages, cards, or recommendations.
-"""
-
-from typing import Any, Optional
+from __future__ import annotations
 
 from backend import storage
 
 
-def get_trending_books(limit: int = 50) -> list[dict[str, Any]]:
-    """
-    Return top N most popular books in Seattle.
-    Popularity based on SPL checkouts.
-    """
-    # TODO: implement (use precomputed trending list)
-    return []
+def get_books() -> list[dict]:
+    """Return all books (metadata)."""
+    data = storage._catalog_cache()  # pylint: disable=protected-access
+    return [storage.get_book_metadata(b["source_id"]) for b in data.get("books", [])]
 
 
-def get_book_with_description(parent_asin: str) -> Optional[dict[str, Any]]:
-    """
-    Get full book with description. For book details page.
-    """
-    return storage.get_book_details(parent_asin)
+def get_books_by_genre(genre: str) -> list[dict]:
+    """Return books filtered by genre."""
+    genre = str(genre or "").strip().lower()
+    if not genre:
+        return get_books()
+    out: list[dict] = []
+    for b in get_books():
+        if any(str(g).strip().lower() == genre for g in (b.get("genres") or [])):
+            out.append(b)
+    return out
 
 
-def get_book_without_description(parent_asin: str) -> Optional[dict[str, Any]]:
-    """
-    Get book metadata without description. For homepage, library, cards.
-    """
-    return storage.get_book_metadata(parent_asin)
+def get_trending_books() -> list[dict]:
+    """Return trending books by rating_count descending."""
+    books = get_books()
+    return sorted(books, key=lambda b: int(b.get("rating_count") or 0), reverse=True)
 
-
-def get_books_by_genre(genre: str, limit: int = 50) -> list[dict[str, Any]]:
-    """
-    Get top N books in a given genre/category.
-    """
-    # TODO: implement (query by category, rank by rating/popularity)
-    return []
