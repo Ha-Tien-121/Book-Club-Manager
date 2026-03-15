@@ -27,6 +27,11 @@ if "boto3" not in sys.modules:
 if "backend.user_events_service" not in sys.modules:
     sys.modules["backend.user_events_service"] = types.ModuleType("backend.user_events_service")
 
+# events_service imports EVENT_RECOMMENDATION_POOL_SIZE from backend.config; ensure it exists.
+import backend.config as _backend_config  # noqa: E402
+if not hasattr(_backend_config, "EVENT_RECOMMENDATION_POOL_SIZE"):
+    _backend_config.EVENT_RECOMMENDATION_POOL_SIZE = 200
+
 from backend.services import events_service  # noqa: E402
 
 

@@ -47,6 +47,13 @@ Single module for reading/writing data in external systems (DynamoDB, S3, parque
 
 All environment‑specific configuration (table names, buckets) is handled here via env vars like `BOOKS_TABLE`, `EVENTS_TABLE`, `USER_LIBRARY_TABLE`, `DATA_BUCKET`.
 
+### Develop with AWS
+
+Set **`APP_ENV=aws`** so `get_storage()` returns **CloudStorage**. All services then use DynamoDB and S3 instead of local files. You can run Streamlit **locally** and still read/write AWS—only the data layer talks to AWS; the app process stays on your machine. Use this when local storage is incomplete or you want to develop against the real backend:
+
+- **Book recs:** Fallback list from S3 (`reviews_top25_books.json`). Set `USE_BOOK_ML_RECOMMENDER=0` (default) until the lite ML model is ready.
+- **Users, library, recommendations, events, forum:** CloudStorage implements these with the DynamoDB tables and GSIs in `config.py`. Ensure tables exist and partition keys match (e.g. `user_id` for user_books/user_accounts/user_events, `user_email` for user_recommendations/user_forums, `post_id` for forum_posts).
+
 ---
 
 ## Service layer
@@ -167,22 +174,22 @@ This is the module the homepage or “For You” page should call for personaliz
 ## How the pieces fit together
 
 - **Homepage (personalized):**
-  - Streamlit → `backend.recommender_service.recommend_all_for_user(user_email)`
+  - Streamlit → `backend.services.recommender_service.recommend_all_for_user(user_email)`
   - That calls the book and event recommenders, which may in the future look at:
     - user library via `library_service` / `storage`
     - tags, genres, past behavior
 
 - **Book detail page:**
-  - Streamlit → `backend.books_service.get_book_with_description(parent_asin)`
+  - Streamlit → `backend.services.books_service.get_book_with_description(parent_asin)`
   - For related content:
-    - `backend.forum_service.get_thread_for_book(parent_asin)`
-    - `backend.events_service.get_events_by_book(book_title, ...)`
+    - `backend.services.forum_service.get_thread_for_book(parent_asin)`
+    - `backend.services.events_service.get_events_by_book(book_title, ...)`
 
 - **Events page / Explore clubs:**
-  - Streamlit → `backend.events_service.get_upcoming_events(...)` or `get_trending_events(...)`
+  - Streamlit → `backend.services.events_service.get_upcoming_events(...)` or `get_trending_events(...)`
 
 - **User library page:**
-  - Mutations go through `backend.library_service` (save/read/reading/remove).
+  - Mutations go through `backend.services.library_service` (save/read/reading/remove).
   - Library changes bump an action counter in `storage`, which can be used to decide when to refresh recommendations.
 
 In general:
