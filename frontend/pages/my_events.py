@@ -42,7 +42,11 @@ def _render_my_events_tab(
         if not st.session_state.get("signed_in") or current_user is None:
             st.info("Sign in to see your events.")
         else:
-            for event in [e for e in events if e["id"] in current_user.get("club_ids", [])]:
+            for event in [
+                e
+                for e in events
+                if str(e.get("event_id") or e.get("id")) in current_user.get("club_ids", [])
+            ]:
                 st.subheader(event["name"])
                 st.caption(event.get("location", "Seattle, WA"))
                 desc = event.get("description", "") or ""
@@ -56,11 +60,12 @@ def _render_my_events_tab(
                     st.link_button(
                         "Open event listing", event["external_link"], use_container_width=False
                     )
-                if st.button("Remove event", key=f"remove_club_{event['id']}"):
+                if st.button("Remove event", key=f"remove_club_{event.get('event_id') or event['id']}"):
+                    eid = str(event.get("event_id") or event.get("id"))
                     current_user["club_ids"] = [
                         cid
                         for cid in current_user.get("club_ids", [])
-                        if int(cid) != int(event["id"])
+                        if cid != eid
                     ]
                     sync_user_clubs_and_save(store, current_user)
                     st.rerun()

@@ -1,6 +1,7 @@
 """Read and write storage helpers for books, events, users, catalogs, and forums."""
 
 import json
+import logging
 import os
 from decimal import Decimal
 from typing import Any, Optional
@@ -376,7 +377,16 @@ class LocalStorage:
             return
         store = self.load_user_store()
         uid = str(user_id).strip().lower()
-        store.setdefault("clubs", {})[uid] = {"club_ids": data.get("events", [])}
+        # Keep event identifiers as strings (event_id) so they can be joined to events.
+        raw = data.get("events", [])
+        events: list[str] = []
+        for x in raw or []:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if s:
+                events.append(s)
+        store.setdefault("clubs", {})[uid] = {"club_ids": events}
         from backend.user_store import save_user_clubs as _save
         _save(store)
 
@@ -485,15 +495,15 @@ class CloudStorage:
         books_rec = self.get_user_books(email) or _default_books_record()
         events_rec = self.get_user_events(email) or {}
         raw_club_ids = events_rec.get("events", events_rec.get("club_ids", []))
-        # Normalize to ints so UI comparison (club["id"] in club_ids) works after DynamoDB round-trip.
-        club_ids = []
+        # Keep saved events as string event_ids.
+        club_ids: list[str] = []
         for x in raw_club_ids or []:
             if x is None:
                 continue
-            try:
-                club_ids.append(int(x))
-            except (TypeError, ValueError):
-                pass
+            s = str(x).strip()
+            if not s:
+                continue
+            club_ids.append(s)
         forum_rec = self.get_user_forums(email) or {}
         acc_ui = dict(acc)
         acc_ui.setdefault("password", "")
@@ -508,36 +518,85 @@ class CloudStorage:
         """Get user library + genre_preferences from DynamoDB user_books table."""
         if not user_id:
             return None
+        from backend import config
         user_id = str(user_id).strip().lower()
+        pk = getattr(config, "USER_BOOKS_PK", "user_email").strip() or "user_email"
         try:
             table = self._table("USER_BOOKS_TABLE", "user_books")
-            resp = table.get_item(Key={"user_id": user_id})
+            resp = table.get_item(Key={pk: user_id}, ConsistentRead=True)
             item = resp.get("Item")
-            return _from_dynamo(item) if item else None
-        except Exception:
+            if not item:
+                return None
+            out = _from_dynamo(item)
+            # Normalize library shelf lists: keep original tokens as strings so we don't
+            # lose parent_asin-like IDs that happen to be numeric. Numeric IDs are
+            # still resolvable by casting back to int in the UI when needed.
+            if isinstance(out, dict) and "library" in out and isinstance(out["library"], dict):
+                for shelf in ("in_progress", "saved", "finished"):
+                    raw = out["library"].get(shelf)
+                    if raw is not None and isinstance(raw, list):
+                        tokens: list[str] = []
+                        for x in raw:
+                            if x is None:
+                                continue
+                            s = str(x).strip()
+                            if not s:
+                                continue
+                            tokens.append(s)
+                        out["library"][shelf] = tokens
+            return out
+        except Exception as e:
+            logging.warning("get_user_books failed for %s: %s", user_id, e)
             return None
 
     def save_user_books(self, user_id_or_store, rec=None) -> None:
         """Persist one user's books (user_id, rec) or full store['books'] dict."""
+        from backend import config
+        pk = getattr(config, "USER_BOOKS_PK", "user_email").strip() or "user_email"
         if rec is not None:
             user_id = str(user_id_or_store).strip().lower()
             if not user_id:
                 return
             try:
                 table = self._table("USER_BOOKS_TABLE", "user_books")
-                table.put_item(Item={"user_id": user_id, **rec})
-            except Exception:
-                pass
+                item = dict(rec)
+                item[pk] = user_id
+                # Ensure library and genre_preferences exist and are serializable.
+                item.setdefault("genre_preferences", [])
+                if "library" not in item or not isinstance(item["library"], dict):
+                    item["library"] = {"in_progress": [], "saved": [], "finished": []}
+                for shelf in ("in_progress", "saved", "finished"):
+                    raw = item["library"].get(shelf)
+                    if raw is not None:
+                        tokens: list[str] = []
+                        for x in raw:
+                            if x is None:
+                                continue
+                            s = str(x).strip()
+                            if not s:
+                                continue
+                            tokens.append(s)
+                        item["library"][shelf] = tokens
+                    else:
+                        item["library"][shelf] = []
+                table.put_item(Item=item)
+            except Exception as e:
+                logging.warning("save_user_books failed for %s: %s", user_id, e)
         else:
             for uid, r in (user_id_or_store.get("books") or {}).items():
                 if uid:
                     self.save_user_books(uid, r)
 
     def save_user_clubs(self, store) -> None:
-        """Persist store['clubs'] to DynamoDB user_events (events = club_ids)."""
+        """Persist store['clubs'] to DynamoDB user_events (events = list of event_id strings)."""
         for uid, rec in (store.get("clubs") or {}).items():
             if uid:
-                self.save_user_events(str(uid).strip().lower(), {"events": rec.get("club_ids", [])})
+                events = [
+                    str(e).strip()
+                    for e in rec.get("club_ids", []) or []
+                    if str(e).strip()
+                ]
+                self.save_user_events(str(uid).strip().lower(), {"events": events})
 
     def save_user_forum(self, store) -> None:
         """Persist store['forum'] to DynamoDB user_forums."""
@@ -675,9 +734,16 @@ class CloudStorage:
             item = dict(data)
             if pk not in item:
                 item[pk] = user_id
-            # Ensure events list is JSON/DynamoDB-serializable (list of ints).
+            # Ensure events list is JSON/DynamoDB-serializable (list of event_id strings).
             if "events" in item and item["events"] is not None:
-                item["events"] = [int(x) for x in item["events"] if x is not None]
+                cleaned: list[str] = []
+                for x in item["events"] or []:
+                    if x is None:
+                        continue
+                    s = str(x).strip()
+                    if s:
+                        cleaned.append(s)
+                item["events"] = cleaned
             table.put_item(Item=item)
         except Exception as e:
             import logging

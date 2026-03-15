@@ -24,7 +24,8 @@ def render_tabs(
     forum_posts_data: list[dict],
     books_by_id: dict[int, dict],
     books_by_source_id: dict[str, dict],
-    recommender_available: bool,
+    extended_books_by_source_id: dict[str, dict] | None = None,
+    recommender_available: bool = False,
     cached_spl_trending: Callable[[], list[dict]],
     cached_book_recommendations: Callable[[str], list[dict]],
     resolve_recommended_books: Callable[..., list[dict]],
@@ -74,7 +75,12 @@ def render_tabs(
         format_when=format_when,
         sync_user_clubs_and_save=sync_user_clubs_and_save,
     )
-    _render_library_tab(tab=tabs[3], books_by_id=books_by_id, current_user=current_user)
+    _render_library_tab(
+        tab=tabs[3],
+        books_by_id=books_by_id,
+        books_by_source_id=extended_books_by_source_id or books_by_source_id,
+        current_user=current_user,
+    )
     _render_forum_tab(
         tab=tabs[4],
         current_user=current_user,

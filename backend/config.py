@@ -54,6 +54,8 @@ USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")
 USER_ACCOUNTS_PK = os.getenv("USER_ACCOUNTS_PK", "user_email").strip() or "user_email"
 # Partition key for user_events DynamoDB table. Match your table's key ("user_id" or "user_email").
 USER_EVENTS_PK = os.getenv("USER_EVENTS_PK", "user_email").strip() or "user_email"
+# Partition key for user_books DynamoDB table. Match your table's key ("user_id" or "user_email").
+USER_BOOKS_PK = os.getenv("USER_BOOKS_PK", "user_email").strip() or "user_email"
 FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")
 # forum_posts table key attribute names (pk/sk).
 FORUM_POSTS_PK = os.getenv("FORUM_POSTS_PK", "pk").strip() or "pk"

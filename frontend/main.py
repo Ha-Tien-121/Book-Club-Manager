@@ -44,7 +44,7 @@ RECOMMENDER_AVAILABLE = True
 _FEED_CACHE_TTL = 300
 
 
-@st.cache_data(ttl=_FEED_CACHE_TTL)
+@st.cache_data(ttl=_FEED_CACHE_TTL, show_spinner=False)
 def _cached_aws_bootstrap():
     """Load bootstrap data from AWS once per TTL; avoids refetch on every rerun (e.g. carousel)."""
     raw_books = books_service.get_trending_books_reviews(50) or []
@@ -65,13 +65,13 @@ def _cached_aws_bootstrap():
     return build_ui_bootstrap(raw_books, events, forum_posts_raw)
 
 
-@st.cache_data(ttl=_FEED_CACHE_TTL)
+@st.cache_data(ttl=_FEED_CACHE_TTL, show_spinner=False)
 def _cached_spl_trending():
     """SPL trending list so Feed doesn't refetch on every carousel click."""
     return books_service.get_trending_books_spl(50) or []
 
 
-@st.cache_data(ttl=_FEED_CACHE_TTL)
+@st.cache_data(ttl=_FEED_CACHE_TTL, show_spinner=False)
 def _cached_book_recommendations(user_email: str):
     """Recommendations by user so we don't refetch on every interaction."""
     return get_book_recommendations(user_email or "", top_k=50)
@@ -290,6 +290,7 @@ def main() -> None:
         forum_posts_data=forum_posts_data,
         books_by_id=books_by_id,
         books_by_source_id=books_by_source_id,
+        extended_books_by_source_id=extended_books_by_source_id,
         recommender_available=RECOMMENDER_AVAILABLE,
         cached_spl_trending=_cached_spl_trending,
         cached_book_recommendations=_cached_book_recommendations,

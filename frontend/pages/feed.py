@@ -12,6 +12,7 @@ import streamlit as st
 from backend.config import BOOK_DESCRIPTION_PREVIEW_CHARS
 from backend.data_loader import books_to_ui_shape
 from backend.services import books_service
+from backend.services import library_service
 from backend.storage import get_book_details as storage_get_book_details
 from backend.storage import get_storage
 from frontend.pages.forums import (
@@ -28,26 +29,35 @@ def build_user_recommender_stores(
     user_email: str,
     books_by_id: dict[int, dict],
     events: list[dict],
+    books_by_source_id: dict[str, dict] | None = None,
 ) -> tuple[dict, dict, bool]:
     """Build recommender stores from user account activity."""
     if current_user is None or not user_email:
         return {}, {}, False
+    books_by_source_id = books_by_source_id or {}
     user_books_read_store: dict[str, list[str]] = {}
     user_genres_store: dict[str, list[dict]] = {}
     has_behavior_data = False
     source_ids: list[str] = []
     for shelf in ("in_progress", "saved", "finished"):
-        for book_id in current_user.get("library", {}).get(shelf, []):
-            book = books_by_id.get(book_id)
-            if book and book.get("source_id"):
-                source_ids.append(str(book["source_id"]))
+        for bid in current_user.get("library", {}).get(shelf, []):
+            # Library may store source_id (str) or numeric id (int).
+            if isinstance(bid, str) and not bid.isdigit():
+                source_ids.append(bid)
+            else:
+                book = books_by_id.get(int(bid) if isinstance(bid, str) else bid) if bid is not None else None
+                if not book and isinstance(bid, str) and bid in books_by_source_id:
+                    book = books_by_source_id[bid]
+                if book and book.get("source_id"):
+                    source_ids.append(str(book["source_id"]))
     if source_ids:
         user_books_read_store[user_email] = list(dict.fromkeys(source_ids))
         has_behavior_data = True
     genre_counts: Counter = Counter()
-    joined_ids = {int(cid) for cid in current_user.get("club_ids", [])}
+    joined_ids = {str(cid).strip() for cid in current_user.get("club_ids", [])}
     for event in events:
-        if int(event.get("id", -1)) not in joined_ids:
+        eid = str(event.get("event_id") or event.get("id", "")).strip()
+        if not eid or eid not in joined_ids:
             continue
         genre = str(event.get("genre") or "").strip()
         if genre:
@@ -193,18 +203,17 @@ def _render_feed_tab(
                     "Open event listing", event["external_link"], use_container_width=False
                 )
             if st.session_state.get("signed_in") and current_user is not None:
-                joined = event["id"] in current_user.get("club_ids", [])
+                eid = str(event.get("event_id") or event.get("id"))
+                joined = eid in current_user.get("club_ids", [])
                 if joined:
                     st.success("Saved")
-                elif st.button("Save event", key=f"feed_join_club_{event['id']}"):
-                    current_user["club_ids"].append(event["id"])
+                elif st.button("Save event", key=f"feed_join_club_{eid}"):
+                    current_user.setdefault("club_ids", [])
+                    if eid not in current_user["club_ids"]:
+                        current_user["club_ids"].append(eid)
                     sync_user_clubs_and_save(store, current_user)
-                    st.session_state["event_saved_for_club_id"] = event["id"]
                     st.session_state["active_tab_after_save"] = "feed"
                     st.rerun()
-                if st.session_state.get("event_saved_for_club_id") == event["id"]:
-                    st.success("Event saved.")
-                    st.session_state["event_saved_for_club_id"] = None
             else:
                 st.caption("Sign in to save events.")
             st.divider()
@@ -390,14 +399,22 @@ def render_book_detail_page(
             st.caption("Sign in to add books to your library.")
         else:
             library = (current_user or {}).get("library") or {}
-            book_id = book.get("id")
+            # Use stable id for library: source_id (parent_asin) when real, else numeric id.
+            source_id = (book.get("source_id") or "").strip()
+            use_source_id = source_id and not source_id.startswith("_idx_")
+            library_book_id = source_id if use_source_id else book.get("id")
+            # Check status: shelf may contain either source_id (str) or legacy numeric id (int).
             current_status = None
             for shelf_key, label in [
                 ("saved", "Saved"),
                 ("in_progress", "In Progress"),
                 ("finished", "Finished"),
             ]:
-                if book_id in (library.get(shelf_key) or []):
+                shelf_list = library.get(shelf_key) or []
+                if library_book_id in shelf_list:
+                    current_status = label
+                    break
+                if not use_source_id and book.get("id") in shelf_list:
                     current_status = label
                     break
             options = ["Not in library", "Saved", "In Progress", "Finished"]
@@ -407,21 +424,29 @@ def render_book_detail_page(
                 if current_status
                 else "Add this book to your library or choose a status."
             )
-            select_key = f"book_lib_status_{book_id}"
+            select_key = f"book_lib_status_{library_book_id}"
 
             def _apply_library_status():
                 new_status = st.session_state.get(select_key)
                 if new_status is None or current_user is None:
                     return
-                for key in ["saved", "in_progress", "finished"]:
-                    current_user["library"][key] = [
-                        bid for bid in current_user["library"][key] if bid != book_id
-                    ]
-                if new_status != "Not in library":
-                    key_map = {"Saved": "saved", "In Progress": "in_progress", "Finished": "finished"}
-                    current_user["library"][key_map[new_status]].append(book_id)
-                get_storage().save_user_books(store)
-                st.session_state["book_lib_last_msg"] = "Library updated." if current_status else "Added to your library."
+                user_id = (current_user.get("user_id") or current_user.get("email") or st.session_state.get("user_email", "") or "").strip().lower()
+                if not user_id:
+                    return
+                try:
+                    if new_status == "Not in library":
+                        library_service.remove_book_from_library(user_id, library_book_id)
+                    else:
+                        key_map = {"Saved": "saved", "In Progress": "in_progress", "Finished": "finished"}
+                        shelf = key_map.get(new_status, "saved")
+                        genres = (book.get("genres") or []) if isinstance(book.get("genres"), list) else []
+                        library_service.add_book_to_library(
+                            user_id, library_book_id, shelf, genres_from_book=genres or None
+                        )
+                    st.session_state["book_lib_last_msg"] = "Library updated." if current_status else "Added to your library."
+                except Exception:
+                    st.session_state["book_lib_last_msg"] = "Failed to update library."
+                # Streamlit reruns the script automatically after this callback; do not call st.rerun() here.
 
             st.selectbox(
                 "Library status",

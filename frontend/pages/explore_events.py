@@ -95,18 +95,17 @@ def _render_explore_events_tab(
                             "Open event listing", event["external_link"], use_container_width=False
                         )
                     if st.session_state.get("signed_in") and current_user is not None:
-                        joined = event["id"] in current_user["club_ids"]
+                        eid = str(event.get("event_id") or event.get("id"))
+                        joined = eid in current_user.get("club_ids", [])
                         if joined:
                             st.success("Saved")
-                        elif st.button("Save event", key=f"join_club_{event['id']}"):
-                            current_user["club_ids"].append(event["id"])
+                        elif st.button("Save event", key=f"join_club_{eid}"):
+                            current_user.setdefault("club_ids", [])
+                            if eid not in current_user["club_ids"]:
+                                current_user["club_ids"].append(eid)
                             sync_user_clubs_and_save(store, current_user)
-                            st.session_state["event_saved_for_club_id"] = event["id"]
                             st.session_state["active_tab_after_save"] = "explore_events"
                             st.rerun()
-                        if st.session_state.get("event_saved_for_club_id") == event["id"]:
-                            st.success("Event saved.")
-                            st.session_state["event_saved_for_club_id"] = None
                     else:
                         st.caption("Sign in to save events.")
                     st.divider()
