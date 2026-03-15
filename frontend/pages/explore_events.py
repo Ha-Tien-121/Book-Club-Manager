@@ -77,34 +77,36 @@ def _render_explore_events_tab(
             ]
         if not filtered_events:
             st.info("No events matching your filters.")
-        for event in filtered_events:
-            st.subheader(event["name"])
-            st.caption(event.get("location", "Seattle, WA"))
-            summary = event["description"][:280] + (
-                "..." if len(event["description"]) > 280 else ""
-            )
-            st.write(summary)
-            st.write(f"**When:** {format_when(event)}")
-            event_tags = event.get("tags") or [event.get("genre", "General")]
-            if event_tags:
-                render_pill_tags(event_tags)
-            if event.get("external_link"):
-                st.link_button(
-                    "Open event listing", event["external_link"], use_container_width=False
-                )
-            if st.session_state.get("signed_in") and current_user is not None:
-                joined = event["id"] in current_user["club_ids"]
-                if joined:
-                    st.success("Saved")
-                elif st.button("Save event", key=f"join_club_{event['id']}"):
-                    current_user["club_ids"].append(event["id"])
-                    sync_user_clubs_and_save(store, current_user)
-                    st.session_state["event_saved_for_club_id"] = event["id"]
-                    st.session_state["active_tab_after_save"] = "explore_events"
-                    st.rerun()
-                if st.session_state.get("event_saved_for_club_id") == event["id"]:
-                    st.success("Event saved.")
-                    st.session_state["event_saved_for_club_id"] = None
-            else:
-                st.caption("Sign in to save events.")
-            st.divider()
+        else:
+            # Scrollable list container: filters stay fixed above, events list scrolls below
+            with st.container(height=560):
+                for event in filtered_events:
+                    st.subheader(event["name"])
+                    st.caption(event.get("location", "Seattle, WA"))
+                    desc = event.get("description") or ""
+                    summary = desc[:280] + ("..." if len(desc) > 280 else "")
+                    st.write(summary)
+                    st.write(f"**When:** {format_when(event)}")
+                    event_tags = event.get("tags") or [event.get("genre", "General")]
+                    if event_tags:
+                        render_pill_tags(event_tags)
+                    if event.get("external_link"):
+                        st.link_button(
+                            "Open event listing", event["external_link"], use_container_width=False
+                        )
+                    if st.session_state.get("signed_in") and current_user is not None:
+                        joined = event["id"] in current_user["club_ids"]
+                        if joined:
+                            st.success("Saved")
+                        elif st.button("Save event", key=f"join_club_{event['id']}"):
+                            current_user["club_ids"].append(event["id"])
+                            sync_user_clubs_and_save(store, current_user)
+                            st.session_state["event_saved_for_club_id"] = event["id"]
+                            st.session_state["active_tab_after_save"] = "explore_events"
+                            st.rerun()
+                        if st.session_state.get("event_saved_for_club_id") == event["id"]:
+                            st.success("Event saved.")
+                            st.session_state["event_saved_for_club_id"] = None
+                    else:
+                        st.caption("Sign in to save events.")
+                    st.divider()

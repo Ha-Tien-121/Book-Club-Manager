@@ -297,6 +297,8 @@ def _description_from_detail(detail: dict) -> str:
         rest = text[idx:].strip()
         if len(rest) > 20:
             text = rest
+    if (text or "").strip() == "[]":
+        return ""
     return text or ""
 
 
@@ -315,7 +317,6 @@ def render_book_detail_page(
     if st.button("← Back to Feed"):
         st.session_state["show_book_detail_page"] = False
         st.rerun()
-    st.title("Book Detail")
     book = None
     selected_source_id = st.session_state.get("selected_book_source_id")
     if selected_source_id and selected_source_id in extended_books_by_source_id:
@@ -332,6 +333,7 @@ def render_book_detail_page(
         st.caption("Book not found.")
         return
 
+    st.title(book.get("title") or "Book Detail")
     source_id = (book.get("source_id") or "").strip()
     if source_id and not source_id.startswith("_idx_"):
         detail = None
@@ -358,42 +360,79 @@ def render_book_detail_page(
     with c1:
         st.image(book["cover"], use_container_width=True)
     with c2:
-        st.subheader(book["title"])
         st.caption(book["author"])
+        if book.get("genres"):
+            render_pill_tags(book["genres"])
         st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,})")
-        desc_text = (book.get("description") or "").strip() or "No description available."
-        max_preview = BOOK_DESCRIPTION_PREVIEW_CHARS
-        if len(desc_text) > max_preview:
-            st.write(desc_text[:max_preview].rstrip() + "…")
-            with st.expander("See more"):
-                st.write(desc_text)
-        else:
-            st.write(desc_text)
-        save_option = st.selectbox(
-            "Save to library as",
-            ["Saved", "In Progress", "Finished"],
-            disabled=not st.session_state.get("signed_in", False),
-        )
-        if st.button(
-            "Update status",
-            disabled=not st.session_state.get("signed_in", False),
-        ):
-            if current_user is None:
-                st.warning("Sign in to save books.")
+        raw_desc = (book.get("description") or "").strip()
+        if raw_desc == "[]":
+            raw_desc = ""
+        desc_text = raw_desc if raw_desc else ""
+        if desc_text:
+            max_preview = BOOK_DESCRIPTION_PREVIEW_CHARS
+            expand_key = f"book_desc_expanded_{book.get('source_id') or book.get('id')}"
+            is_expanded = st.session_state.get(expand_key, False)
+            if len(desc_text) > max_preview:
+                if is_expanded:
+                    st.write(desc_text)
+                    if st.button("See less", key=f"{expand_key}_btn"):
+                        st.session_state[expand_key] = False
+                        st.rerun()
+                else:
+                    st.write(desc_text[:max_preview].rstrip() + "…")
+                    if st.button("See more", key=f"{expand_key}_btn"):
+                        st.session_state[expand_key] = True
+                        st.rerun()
             else:
-                status_key_map = {
-                    "Saved": "saved",
-                    "In Progress": "in_progress",
-                    "Finished": "finished",
-                }
-                target_key = status_key_map[save_option]
+                st.write(desc_text)
+        # Library: show current status and one control to add or update
+        if not st.session_state.get("signed_in", False):
+            st.caption("Sign in to add books to your library.")
+        else:
+            library = (current_user or {}).get("library") or {}
+            book_id = book.get("id")
+            current_status = None
+            for shelf_key, label in [
+                ("saved", "Saved"),
+                ("in_progress", "In Progress"),
+                ("finished", "Finished"),
+            ]:
+                if book_id in (library.get(shelf_key) or []):
+                    current_status = label
+                    break
+            options = ["Not in library", "Saved", "In Progress", "Finished"]
+            default_idx = 0 if current_status is None else options.index(current_status)
+            st.caption(
+                "In your library: **" + (current_status or "not saved yet") + "**"
+                if current_status
+                else "Add this book to your library or choose a status."
+            )
+            select_key = f"book_lib_status_{book_id}"
+
+            def _apply_library_status():
+                new_status = st.session_state.get(select_key)
+                if new_status is None or current_user is None:
+                    return
                 for key in ["saved", "in_progress", "finished"]:
                     current_user["library"][key] = [
-                        bid for bid in current_user["library"][key] if bid != book["id"]
+                        bid for bid in current_user["library"][key] if bid != book_id
                     ]
-                current_user["library"][target_key].append(book["id"])
+                if new_status != "Not in library":
+                    key_map = {"Saved": "saved", "In Progress": "in_progress", "Finished": "finished"}
+                    current_user["library"][key_map[new_status]].append(book_id)
                 get_storage().save_user_books(store)
-                st.success(f"Saved to {save_option}.")
+                st.session_state["book_lib_last_msg"] = "Library updated." if current_status else "Added to your library."
+
+            st.selectbox(
+                "Library status",
+                options=options,
+                index=default_idx,
+                key=select_key,
+                on_change=_apply_library_status,
+            )
+            last_msg = st.session_state.pop("book_lib_last_msg", None)
+            if last_msg:
+                st.success(last_msg)
 
     st.divider()
     st.subheader("Discussions for this book")

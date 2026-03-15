@@ -241,9 +241,10 @@ def _render_forum_detail(
     reply_key = f"reply_text_{int(selected_post['id'])}"
     if st.session_state.pop("forum_reply_clear_key", None) == reply_key:
         st.session_state.pop(reply_key, None)
-    with st.form(f"reply_form_{int(selected_post['id'])}"):
-        reply = st.text_area("Write a reply", key=reply_key)
-        submit_reply = st.form_submit_button("Reply")
+    with st.expander("Write a reply", expanded=False):
+        with st.form(f"reply_form_{int(selected_post['id'])}"):
+            reply = st.text_area("Your reply", key=reply_key, placeholder="Add your reply...")
+            submit_reply = st.form_submit_button("Reply")
     if submit_reply:
         if reply.strip():
             selected_post.setdefault("comments", []).append(
@@ -276,16 +277,16 @@ def _render_forum_create_and_list(
 ) -> None:
     """Render forum create form and post list views."""
     if st.session_state.get("signed_in") and current_user is not None:
-        with st.form("new_forum_post"):
-            st.subheader("Create a discussion")
-            post_title = st.text_input("Title", key="forum_new_title")
-            post_text = st.text_area("Post", key="forum_new_post")
-            custom_tags_text = st.text_input(
-                "Additional tags (comma-separated)",
-                placeholder="example: mystery, pacing, Seattle",
-                key="forum_new_tags",
-            )
-            submitted = st.form_submit_button("Post")
+        with st.expander("Create a discussion", expanded=False):
+            with st.form("new_forum_post"):
+                post_title = st.text_input("Title", key="forum_new_title")
+                post_text = st.text_area("Post", key="forum_new_post")
+                custom_tags_text = st.text_input(
+                    "Additional tags (comma-separated)",
+                    placeholder="example: mystery, pacing, Seattle",
+                    key="forum_new_tags",
+                )
+                submitted = st.form_submit_button("Post")
         if submitted:
             if post_title.strip() and post_text.strip():
                 tags = []
@@ -324,7 +325,15 @@ def _render_forum_create_and_list(
         st.caption("Sign in to create and save forum posts.")
 
     tag_query = st.text_input("Search by tags", placeholder="Search tags...")
-    view = st.radio("View", ["All", "Saved"], horizontal=True)
+    view_col, sort_col = st.columns([3, 1])
+    with view_col:
+        view = st.radio("View", ["All", "Saved"], horizontal=True)
+    with sort_col:
+        sort_by = st.selectbox(
+            "Sort by",
+            ["Newest first", "Oldest first", "Most liked"],
+            key="forum_sort_by",
+        )
     posts = list(forum_posts_data)
     if view == "Saved":
         if current_user is None:
@@ -335,14 +344,27 @@ def _render_forum_create_and_list(
     query = tag_query.strip().lower()
     if query:
         posts = [p for p in posts if query in " ".join(build_post_tags(p)).lower()]
-    for post in posts:
-        st.markdown(f"### {post['title']}")
-        tags = build_post_tags(post)
-        st.caption(f"{post['author']} | {format_post_time(post)}")
-        render_pill_tags(tags)
-        st.write(forum_preview_text(post.get("preview", "")))
-        if st.button("Open discussion", key=f"open_forum_post_{int(post['id'])}"):
-            st.session_state["selected_forum_post_id"] = int(post["id"])
-            st.session_state["active_tab_after_save"] = "forum"
-            st.rerun()
-        st.divider()
+    # Sort: newest (created_at desc), oldest (created_at asc), most liked (likes desc)
+    if sort_by == "Newest first":
+        posts = sorted(posts, key=lambda p: int(p.get("created_at") or 0), reverse=True)
+    elif sort_by == "Oldest first":
+        posts = sorted(posts, key=lambda p: int(p.get("created_at") or 0), reverse=False)
+    elif sort_by == "Most liked":
+        posts = sorted(posts, key=lambda p: int(p.get("likes") or 0), reverse=True)
+
+    # Scrollable list container: filters stay fixed above, list scrolls below
+    if not posts:
+        st.caption("No discussions match your filters.")
+    else:
+        with st.container(height=560):
+            for post in posts:
+                st.markdown(f"### {post['title']}")
+                tags = build_post_tags(post)
+                st.caption(f"{post['author']} | {format_post_time(post)}")
+                render_pill_tags(tags)
+                st.write(forum_preview_text(post.get("preview", "")))
+                if st.button("Open discussion", key=f"open_forum_post_{int(post['id'])}"):
+                    st.session_state["selected_forum_post_id"] = int(post["id"])
+                    st.session_state["active_tab_after_save"] = "forum"
+                    st.rerun()
+                st.divider()
