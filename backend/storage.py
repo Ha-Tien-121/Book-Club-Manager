@@ -22,6 +22,22 @@ def _from_dynamo(obj: Any) -> Any:
         return [_from_dynamo(v) for v in obj]
     return obj
 
+
+def _forum_post_to_item(post: dict, pk: str, sk: str, pk_value: str) -> dict:
+    """Build a DynamoDB-put_item compatible dict. pk/sk are key attributes; table expects String (S) for both."""
+    raw_id = post.get("id") or post.get("post_id") or post.get("sk") or 0
+    try:
+        post_id = int(raw_id)
+    except (TypeError, ValueError):
+        post_id = 0
+    item = dict(post)
+    item["id"] = post_id
+    item["post_id"] = post_id
+    item[pk] = str(pk_value)
+    item[sk] = str(post_id)
+    return item
+
+
 # DynamoDB table names
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
@@ -53,13 +69,20 @@ def _get_shard_key(book_id: str) -> str:
 def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: str = "pyarrow") -> Optional[dict[str, Any]]:
     """
     Get book with description. Intended for book details page.
-    Fetches from shard parquet on S3 or local_dir.
+    Fetches from shard parquet on S3 (using shard key from parent_asin prefix) or local_dir.
     """
+    parent_asin = (parent_asin or "").strip()
+    if not parent_asin:
+        return None
     shard = _get_shard_key(parent_asin)
     if local_dir:
         path = os.path.join(local_dir, f"{shard}.parquet")
     else:
-        bucket = os.getenv("DATA_BUCKET")
+        try:
+            from backend import config
+            bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
+        except Exception:
+            bucket = os.getenv("DATA_BUCKET")
         if not bucket:
             raise RuntimeError("DATA_BUCKET env not set")
         path = f"s3://{bucket}/books/parent_asin/{shard}.parquet"
@@ -71,7 +94,11 @@ def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: 
     if match.empty:
         return None
     item = match.iloc[0].to_dict()
-    item["average_rating"] = float(item["average_rating"])
+    if "average_rating" in item and item["average_rating"] is not None:
+        try:
+            item["average_rating"] = float(item["average_rating"])
+        except (TypeError, ValueError):
+            pass
     return item
 
 
@@ -270,8 +297,12 @@ def get_storage():
     return LocalStorage()
 
 
+def _default_books_record():
+    return {"library": {"in_progress": [], "saved": [], "finished": []}, "genre_preferences": []}
+
+
 class LocalStorage:
-    """Local file-backed storage. Uses JSON under data/processed and config paths."""
+    """Local file-backed storage. Delegates to user_store and forum_store for file I/O."""
 
     def get_top50_review_books(self):
         """Return list of book dicts from reviews_top25_books.json (local path)."""
@@ -292,30 +323,125 @@ class LocalStorage:
             return data["books"]
         return []
 
-    # Stubs so callers do not get AttributeError (implement fully as needed)
-    def get_user_books(self, user_id): return None
-    def save_user_books(self, user_id, rec): pass
-    def get_user_recommendations(self, user_id): return None
-    def save_user_recommendations(self, user_id, rec): pass
-    def get_soonest_events(self, limit=10): return []
-    def get_book_metadata(self, parent_asin): return get_book_metadata(parent_asin)
-    def get_book_details(self, parent_asin): return get_book_details(parent_asin)
-    def get_event_details(self, event_id): return get_event_details(event_id)
-    def get_events_by_city(self, city_state): return []
-    def get_user_account(self, user_id): return None
-    def save_user_account(self, record): pass
-    def get_user_events(self, user_id): return None
-    def save_user_events(self, user_id, data): pass
-    def load_forum_db(self): return []
-    def save_forum_db(self, db): pass
-    def get_forum_post(self, post_id): return None
-    def update_forum_post(self, post_id, post): pass
-    def get_user_forums(self, user_id): return None
-    def save_user_forums(self, user_id, data): pass
-    def get_spl_top50_checkout_books(self): return []
-    def get_forum_thread_for_book(self, parent_asin): return []
-    def get_forum_thread(self, parent_asin): return None
-    def get_events_for_book(self, parent_asin, limit=10): return []
+    def load_user_store(self, email=None):
+        """Load full user store from local JSON (email ignored; all users in files)."""
+        from backend.user_store import load_user_store as _load
+        return _load()
+
+    def save_user_books(self, user_id_or_store, rec=None):
+        if rec is not None:
+            store = self.load_user_store()
+            store.setdefault("books", {})[str(user_id_or_store).strip().lower()] = rec
+            from backend.user_store import save_user_books as _save
+            _save(store)
+        else:
+            from backend.user_store import save_user_books as _save
+            _save(user_id_or_store)
+
+    def save_user_clubs(self, store):
+        from backend.user_store import save_user_clubs as _save
+        _save(store)
+
+    def save_user_forum(self, store):
+        from backend.user_store import save_user_forum as _save
+        _save(store)
+
+    def get_user_account(self, user_id):
+        if not user_id:
+            return None
+        store = self.load_user_store()
+        return ((store.get("accounts") or {}).get("users") or {}).get(str(user_id).strip().lower())
+
+    def get_user_books(self, user_id):
+        if not user_id:
+            return None
+        store = self.load_user_store()
+        return (store.get("books") or {}).get(str(user_id).strip().lower()) or _default_books_record()
+
+    def save_user_account(self, record):
+        store = self.load_user_store()
+        store.setdefault("accounts", {}).setdefault("users", {})[record.get("user_id") or record.get("email", "").strip().lower()] = record
+        from backend.user_store import save_user_accounts
+        save_user_accounts(store)
+
+    def get_user_events(self, user_id):
+        if not user_id:
+            return None
+        store = self.load_user_store()
+        clubs = (store.get("clubs") or {}).get(str(user_id).strip().lower()) or {}
+        return {"events": clubs.get("club_ids", [])}
+
+    def save_user_events(self, user_id, data):
+        if not user_id:
+            return
+        store = self.load_user_store()
+        uid = str(user_id).strip().lower()
+        store.setdefault("clubs", {})[uid] = {"club_ids": data.get("events", [])}
+        from backend.user_store import save_user_clubs as _save
+        _save(store)
+
+    def get_user_forums(self, user_id):
+        if not user_id:
+            return None
+        store = self.load_user_store()
+        return (store.get("forum") or {}).get(str(user_id).strip().lower()) or {}
+
+    def save_user_forums(self, user_id, data):
+        if not user_id:
+            return
+        store = self.load_user_store()
+        store.setdefault("forum", {})[str(user_id).strip().lower()] = data
+        from backend.user_store import save_user_forum as _save
+        _save(store)
+
+    def load_forum_db(self):
+        from backend.forum_store import load_forum_store
+        return load_forum_store([])
+
+    def save_forum_db(self, db):
+        if not db:
+            return
+        from backend.forum_store import save_forum_store
+        save_forum_store(db)
+
+    def get_user_recommendations(self, user_id):
+        return None  # local: no table; implement if needed
+
+    def save_user_recommendations(self, user_id, rec):
+        pass
+
+    def get_soonest_events(self, limit=10):
+        return []
+
+    def get_book_metadata(self, parent_asin):
+        return get_book_metadata(parent_asin)
+
+    def get_book_details(self, parent_asin):
+        return get_book_details(parent_asin)
+
+    def get_event_details(self, event_id):
+        return get_event_details(event_id)
+
+    def get_events_by_city(self, city_state):
+        return []
+
+    def get_forum_post(self, post_id):
+        return None
+
+    def update_forum_post(self, post_id, post):
+        pass
+
+    def get_spl_top50_checkout_books(self):
+        return []
+
+    def get_forum_thread_for_book(self, parent_asin):
+        return []
+
+    def get_forum_thread(self, parent_asin):
+        return None
+
+    def get_events_for_book(self, parent_asin, limit=10):
+        return []
 
 
 class CloudStorage:
@@ -348,6 +474,36 @@ class CloudStorage:
             return data["books"]
         return []
 
+    def load_user_store(self, email=None):
+        """Build a store-like dict for one user from DynamoDB (for frontend compatibility)."""
+        email = (email or "").strip().lower()
+        if not email:
+            return {"accounts": {"users": {}}, "books": {}, "clubs": {}, "forum": {}}
+        acc = self.get_user_account(email)
+        if not acc:
+            return {"accounts": {"users": {}}, "books": {}, "clubs": {}, "forum": {}}
+        books_rec = self.get_user_books(email) or _default_books_record()
+        events_rec = self.get_user_events(email) or {}
+        raw_club_ids = events_rec.get("events", events_rec.get("club_ids", []))
+        # Normalize to ints so UI comparison (club["id"] in club_ids) works after DynamoDB round-trip.
+        club_ids = []
+        for x in raw_club_ids or []:
+            if x is None:
+                continue
+            try:
+                club_ids.append(int(x))
+            except (TypeError, ValueError):
+                pass
+        forum_rec = self.get_user_forums(email) or {}
+        acc_ui = dict(acc)
+        acc_ui.setdefault("password", "")
+        return {
+            "accounts": {"users": {email: acc_ui}},
+            "books": {email: books_rec},
+            "clubs": {email: {"club_ids": list(club_ids)}},
+            "forum": {email: forum_rec},
+        }
+
     def get_user_books(self, user_id: str) -> Optional[dict]:
         """Get user library + genre_preferences from DynamoDB user_books table."""
         if not user_id:
@@ -361,15 +517,33 @@ class CloudStorage:
         except Exception:
             return None
 
-    def save_user_books(self, user_id: str, rec: dict) -> None:
-        if not user_id:
-            return
-        user_id = str(user_id).strip().lower()
-        try:
-            table = self._table("USER_BOOKS_TABLE", "user_books")
-            table.put_item(Item={"user_id": user_id, **rec})
-        except Exception:
-            pass
+    def save_user_books(self, user_id_or_store, rec=None) -> None:
+        """Persist one user's books (user_id, rec) or full store['books'] dict."""
+        if rec is not None:
+            user_id = str(user_id_or_store).strip().lower()
+            if not user_id:
+                return
+            try:
+                table = self._table("USER_BOOKS_TABLE", "user_books")
+                table.put_item(Item={"user_id": user_id, **rec})
+            except Exception:
+                pass
+        else:
+            for uid, r in (user_id_or_store.get("books") or {}).items():
+                if uid:
+                    self.save_user_books(uid, r)
+
+    def save_user_clubs(self, store) -> None:
+        """Persist store['clubs'] to DynamoDB user_events (events = club_ids)."""
+        for uid, rec in (store.get("clubs") or {}).items():
+            if uid:
+                self.save_user_events(str(uid).strip().lower(), {"events": rec.get("club_ids", [])})
+
+    def save_user_forum(self, store) -> None:
+        """Persist store['forum'] to DynamoDB user_forums."""
+        for uid, data in (store.get("forum") or {}).items():
+            if uid:
+                self.save_user_forums(str(uid).strip().lower(), data)
 
     def get_user_recommendations(self, user_id: str) -> Optional[dict]:
         if not user_id:
@@ -442,8 +616,10 @@ class CloudStorage:
             return None
         user_id = str(user_id).strip().lower()
         try:
+            from backend import config
+            pk = getattr(config, "USER_ACCOUNTS_PK", "user_id")
             table = self._table("USER_ACCOUNTS_TABLE", "user_accounts")
-            resp = table.get_item(Key={"user_id": user_id})
+            resp = table.get_item(Key={pk: user_id})
             item = resp.get("Item")
             return _from_dynamo(item) if item else None
         except Exception:
@@ -453,8 +629,14 @@ class CloudStorage:
         if not record:
             return
         try:
+            from backend import config
+            pk = getattr(config, "USER_ACCOUNTS_PK", "user_id")
             table = self._table("USER_ACCOUNTS_TABLE", "user_accounts")
-            table.put_item(Item=record)
+            item = dict(record)
+            # Ensure partition key is in the item (table may use user_id or user_email).
+            if pk not in item:
+                item[pk] = record.get("email") or record.get("user_id") or ""
+            table.put_item(Item=item)
         except Exception:
             pass
 
@@ -463,8 +645,10 @@ class CloudStorage:
             return None
         user_id = str(user_id).strip().lower()
         try:
+            from backend import config
+            pk = getattr(config, "USER_EVENTS_PK", "user_id")
             table = self._table("USER_EVENTS_TABLE", "user_events")
-            resp = table.get_item(Key={"user_id": user_id})
+            resp = table.get_item(Key={pk: user_id}, ConsistentRead=True)
             item = resp.get("Item")
             return _from_dynamo(item) if item else None
         except Exception:
@@ -475,55 +659,116 @@ class CloudStorage:
             return
         user_id = str(user_id).strip().lower()
         try:
+            from backend import config
+            pk = getattr(config, "USER_EVENTS_PK", "user_email")
             table = self._table("USER_EVENTS_TABLE", "user_events")
-            table.put_item(Item={"user_id": user_id, **data})
-        except Exception:
-            pass
+            item = dict(data)
+            if pk not in item:
+                item[pk] = user_id
+            # Ensure events list is JSON/DynamoDB-serializable (list of ints).
+            if "events" in item and item["events"] is not None:
+                item["events"] = [int(x) for x in item["events"] if x is not None]
+            table.put_item(Item=item)
+        except Exception as e:
+            import logging
+            logging.warning("save_user_events failed: %s", e)
 
     def load_forum_db(self) -> list:
-        """Forum posts list; from DynamoDB scan or GSI. Returns {posts: [], next_post_id: 1} shape for compatibility."""
+        """Forum posts from DynamoDB. Reads next_post_id from META row; posts from pk=POST items."""
         from backend import config
+        pk = getattr(config, "FORUM_POSTS_PK", "pk")
+        sk_name = getattr(config, "FORUM_POSTS_SK", "sk")
+        pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
+        meta_pk = getattr(config, "FORUM_POSTS_META_PK", "META")
+        next_sk = getattr(config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
         try:
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
-            resp = table.scan(Limit=500)
-            items = _from_dynamo(resp.get("Items", []))
-            next_id = max((int(p.get("id") or p.get("post_id") or 0) for p in items), default=0) + 1
+            # Get next_post_id from the counter row (pk=META, sk=next_post_id).
+            next_id = 1
+            try:
+                meta_resp = table.get_item(
+                    Key={pk: str(meta_pk), sk_name: str(next_sk)},
+                    ConsistentRead=True,
+                )
+                meta = _from_dynamo(meta_resp.get("Item"))
+                if meta:
+                    next_id = int(meta.get("next_post_id") or meta.get("value") or 1)
+            except Exception:
+                pass
+            resp = table.scan(Limit=500, ConsistentRead=True)
+            raw = _from_dynamo(resp.get("Items", []))
+            items = [p for p in raw if str(p.get(pk)) == str(pk_value)]
+            for p in items:
+                post_id = p.get(sk_name) or p.get("id") or p.get("post_id")
+                try:
+                    p["id"] = int(post_id) if post_id is not None else 0
+                except (TypeError, ValueError):
+                    p["id"] = 0
+                p["post_id"] = p["id"]
             return {"posts": items, "next_post_id": next_id}
         except Exception:
             return {"posts": [], "next_post_id": 1}
 
     def save_forum_db(self, db: dict) -> None:
-        """Persist forum state. If db has 'posts', write each to FORUM_POSTS_TABLE."""
-        if not db or not db.get("posts"):
+        """Persist forum state: write each post and update the next_post_id counter row."""
+        if not db:
             return
+        from backend import config
+        pk = getattr(config, "FORUM_POSTS_PK", "pk")
+        sk = getattr(config, "FORUM_POSTS_SK", "sk")
+        pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
+        meta_pk = getattr(config, "FORUM_POSTS_META_PK", "META")
+        next_sk = getattr(config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
         try:
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
-            for post in db.get("posts", [])[:500]:
-                item = dict(post)
-                if "id" in item and "post_id" not in item:
-                    item["post_id"] = item["id"]
+            for post in (db.get("posts") or [])[:500]:
+                item = _forum_post_to_item(post, pk, sk, pk_value)
                 table.put_item(Item=item)
-        except Exception:
-            pass
+            # Persist next_post_id as a row (pk=META, sk=next_post_id).
+            next_id = db.get("next_post_id")
+            if next_id is not None:
+                table.put_item(
+                    Item={
+                        pk: str(meta_pk),
+                        sk: str(next_sk),
+                        "next_post_id": int(next_id),
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.warning("save_forum_db failed: %s", e)
 
     def get_forum_post(self, post_id) -> Optional[dict]:
         try:
+            from backend import config
+            pk = getattr(config, "FORUM_POSTS_PK", "pk")
+            sk = getattr(config, "FORUM_POSTS_SK", "sk")
+            pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
-            resp = table.get_item(Key={"post_id": int(post_id)})
+            resp = table.get_item(Key={pk: str(pk_value), sk: str(int(post_id))})
             item = resp.get("Item")
-            return _from_dynamo(item) if item else None
+            if item:
+                item = _from_dynamo(item)
+                item.setdefault("id", item.get("post_id") or item.get("sk"))
+                item.setdefault("post_id", item.get("id"))
+            return item
         except Exception:
             return None
 
     def update_forum_post(self, post_id, post: dict) -> None:
         try:
+            from backend import config
+            pk = getattr(config, "FORUM_POSTS_PK", "pk")
+            sk = getattr(config, "FORUM_POSTS_SK", "sk")
+            pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
+            pid = int(post_id)
+            post["id"] = pid
+            post["post_id"] = pid
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
-            post["post_id"] = int(post_id)
-            if "id" not in post:
-                post["id"] = int(post_id)
-            table.put_item(Item=post)
-        except Exception:
-            pass
+            table.put_item(Item=_forum_post_to_item(post, pk, sk, pk_value))
+        except Exception as e:
+            import logging
+            logging.warning("update_forum_post failed: %s", e)
 
     def get_user_forums(self, user_id: str) -> Optional[dict]:
         if not user_id:

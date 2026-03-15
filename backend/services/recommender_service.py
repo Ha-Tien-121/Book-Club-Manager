@@ -56,7 +56,7 @@ def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool, bool
         user_books_read_store[user_id] = list(dict.fromkeys(source_ids))
     has_library = bool(user_books_read_store.get(user_id))
     # Genre preferences only (no clubs / forums).
-    prefs = user_books.get("genre_preferences") or []
+    prefs = (user_books or {}).get("genre_preferences") or []
     if prefs:
         user_genres_store[user_id] = [
             {"genre": g, "rank": rank}
@@ -132,7 +132,7 @@ def _user_has_genre_preferences(user_id: str) -> bool:
         return False
     store = get_storage()
     user_books = store.get_user_books(user_id)
-    prefs = user_books.get("genre_preferences") or []
+    prefs = (user_books or {}).get("genre_preferences") or []
     return len(prefs) > 0
 
 
@@ -183,7 +183,7 @@ def get_recommended_events_for_user(user_id: str | None = None) -> list[dict]:
     user_id = str(user_id).strip().lower()
     if not _user_has_genre_preferences(user_id):
         return store.get_soonest_events(RECOMMENDED_EVENTS_SIZE)[:RECOMMENDED_EVENTS_SIZE]
-    rec = store.get_user_recommendations(user_id)
+    rec = store.get_user_recommendations(user_id) or {}
     now = int(time.time())
     soonest = int(rec.get("events_soonest_expiry") or 0)
     if soonest <= 0 or now >= soonest:
@@ -207,9 +207,9 @@ def refresh_and_save_recommendations(user_id: str) -> dict:
     if not user_id:
         return {}
     store = get_storage()
-    rec = store.get_user_recommendations(user_id)
-    books = get_book_recommendations(user_id)
-    events = get_event_recommendations(user_id)
+    rec = store.get_user_recommendations(user_id) or {}
+    books = get_book_recommendations(user_id) or []
+    events = get_event_recommendations(user_id) or []
     rec["recommended_books"] = books[:RECOMMENDED_BOOKS_SIZE]
     rec["recommended_events"] = events[:RECOMMENDED_EVENTS_SIZE]
     rec["book_updated_at"] = int(time.time())
@@ -230,7 +230,7 @@ def ensure_default_recommendations(user_id: str) -> None:
     store = get_storage()
     if _user_has_genre_preferences(user_id):
         return
-    rec = store.get_user_recommendations(user_id)
+    rec = store.get_user_recommendations(user_id) or {}
     if rec.get("recommended_books") or rec.get("recommended_events"):
         return
     rec["recommended_books"] = store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
@@ -249,7 +249,7 @@ def on_book_added_to_shelf(user_id: str) -> None:
     if not user_id:
         return
     store = get_storage()
-    rec = store.get_user_recommendations(user_id)
+    rec = store.get_user_recommendations(user_id) or {}
     adds = int(rec.get("adds_since_last_book_run") or 0) + 1
     rec["adds_since_last_book_run"] = adds
     if adds >= ADDS_BEFORE_BOOK_RERUN:

@@ -50,7 +50,19 @@ AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 USER_BOOKS_TABLE = os.getenv("USER_BOOKS_TABLE", "user_books")
 USER_EVENTS_TABLE = os.getenv("USER_EVENTS_TABLE", "user_events")
 USER_ACCOUNTS_TABLE = os.getenv("USER_ACCOUNTS_TABLE", "user_accounts")
+# Partition key attribute name for user_accounts DynamoDB table ("user_id" or "user_email").
+USER_ACCOUNTS_PK = os.getenv("USER_ACCOUNTS_PK", "user_email").strip() or "user_email"
+# Partition key for user_events DynamoDB table. Match your table's key ("user_id" or "user_email").
+USER_EVENTS_PK = os.getenv("USER_EVENTS_PK", "user_email").strip() or "user_email"
 FORUM_POSTS_TABLE = os.getenv("FORUM_POSTS_TABLE", "forum_posts")
+# forum_posts table key attribute names (pk/sk).
+FORUM_POSTS_PK = os.getenv("FORUM_POSTS_PK", "pk").strip() or "pk"
+FORUM_POSTS_SK = os.getenv("FORUM_POSTS_SK", "sk").strip() or "sk"
+# Value for pk for all forum post items (e.g. "POST" for single partition).
+FORUM_POSTS_PK_VALUE = os.getenv("FORUM_POSTS_PK_VALUE", "POST").strip() or "POST"
+# Row in forum_posts that stores next_post_id (pk/sk identify the row, attribute holds the int).
+FORUM_POSTS_META_PK = os.getenv("FORUM_POSTS_META_PK", "META").strip() or "META"
+FORUM_POSTS_NEXT_ID_SK = os.getenv("FORUM_POSTS_NEXT_ID_SK", "next_post_id").strip() or "next_post_id"
 USER_FORUMS_TABLE = os.getenv("USER_FORUMS_TABLE", "user_forums")
 USER_RECOMMENDATIONS_TABLE = os.getenv("USER_RECOMMENDATIONS_TABLE", "user_recommendations")
 # user_recommendations table: partition key user_email (string). Attributes: recommended_books (50), recommended_events (10),
@@ -94,3 +106,19 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 # Book recommender: set USE_BOOK_ML_RECOMMENDER=1 to try loading ML model; otherwise use
 # fallback (reviews_top25 from storage). Use fallback when ML artifacts are not ready.
 USE_BOOK_ML_RECOMMENDER = os.getenv("USE_BOOK_ML_RECOMMENDER", "").strip().lower() in ("1", "true", "yes")
+
+# Max characters to show for forum post preview in list views (full text shown when "Open discussion").
+FORUM_PREVIEW_MAX_CHARS = int(os.getenv("FORUM_PREVIEW_MAX_CHARS", "280").strip() or "280")
+# Max characters for book description on detail page before "See more"; full text in expander.
+BOOK_DESCRIPTION_PREVIEW_CHARS = int(os.getenv("BOOK_DESCRIPTION_PREVIEW_CHARS", "600").strip() or "600")
+
+# Genre dropdown options (Explore Events, etc.). Matches data/scripts/amazon_books_data/books_meta_data.py.
+GENRE_DROPDOWN_OPTIONS = sorted([
+    "Action & Adventure", "Arts & Photography", "Biographies & Memoirs", "Business & Money",
+    "Children's Books", "Classics", "Comics & Graphic Novels", "Cookbooks, Food & Wine",
+    "Crafts, Hobbies & Home", "Fantasy", "History", "Growing Up & Facts of Life",
+    "LGBTQ+ Books", "Literature & Fiction", "Mystery, Thriller & Suspense",
+    "Poetry", "Politics & Social Sciences", "Religion & Spirituality", "Romance",
+    "Science & Math", "Science Fiction", "Self-Help", "Sports & Outdoors",
+    "Teen & Young Adult", "Travel",
+])

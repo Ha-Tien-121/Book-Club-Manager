@@ -27,7 +27,12 @@ def render_book_card(
 ) -> None:
     """Render book card with clickable metadata and optional detail button."""
     auth_query = f"&auth_user={quote_plus(auth_user)}" if auth_user else ""
-    href = f"?book_id={book['id']}&open=detail{auth_query}"
+    source_id = book.get("source_id")
+    if source_id:
+        href = f"?open=detail&source_id={quote_plus(str(source_id))}{auth_query}"
+    else:
+        href = f"?book_id={book['id']}&open=detail{auth_query}"
+    card_key = f"{key_prefix}_details_{source_id or book['id']}"
     stats = f"Rating: {book['rating']} ({book['rating_count']:,})"
     st.markdown(
         f'<a href="{href}" target="_self"><img src="{book["cover"]}" '
@@ -52,10 +57,13 @@ def render_book_card(
         unsafe_allow_html=True,
     )
     render_pill_tags(book.get("genres", []))
-    if show_view_details_button and st.button(
-        "View details", key=f"{key_prefix}_details_{book['id']}"
-    ):
-        st.session_state["selected_book_id"] = book["id"]
+    if show_view_details_button and st.button("View details", key=card_key):
+        if source_id:
+            st.session_state["selected_book_source_id"] = str(source_id)
+            st.session_state["selected_book_id"] = None
+        else:
+            st.session_state["selected_book_id"] = book["id"]
+            st.session_state["selected_book_source_id"] = None
         st.session_state["show_book_detail_page"] = True
         st.rerun()
 
