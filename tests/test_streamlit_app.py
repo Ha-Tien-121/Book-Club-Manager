@@ -10,8 +10,11 @@ See: https://docs.streamlit.io/library/advanced-features/app-testing
 
 from pathlib import Path
 import unittest
+from uuid import uuid4
 
 from streamlit.testing.v1 import AppTest
+from backend.services.auth_service import create_user
+from backend.storage import get_storage
 
 
 def _app_path() -> str:
@@ -22,19 +25,40 @@ def _app_path() -> str:
 class StreamlitAppTest(unittest.TestCase):
     """Tests for main Bookish Streamlit UI."""
 
-    def setUp(self) -> None:
-        self.at = AppTest.from_file(_app_path()).run()
+    timeout = 10
 
-    def _find_text_input(self, label: str):
-        """Return the first text_input element matching label (sidebar or main)."""
-        candidates = []
-        if hasattr(self.at, "sidebar") and hasattr(self.at.sidebar, "text_input"):
-            candidates.extend(list(self.at.sidebar.text_input))
-        candidates.extend(list(self.at.text_input))
-        for el in candidates:
-            if getattr(el, "label", None) == label:
-                return el
-        raise AssertionError(f"text_input with label '{label}' not found")
+    def setUp(self) -> None:
+        self.at = self._run_app()
+
+    def _run_app(self, *, session_state: dict | None = None):
+        """Run app with optional seed session state."""
+        at = AppTest.from_file(_app_path())
+        for key, value in (session_state or {}).items():
+            at.session_state[key] = value
+        return at.run(timeout=self.timeout)
+
+    @staticmethod
+    def _button_labels(at) -> list[str]:
+        """Return all rendered button labels."""
+        return [getattr(btn, "label", "") for btn in at.button]
+
+    @staticmethod
+    def _all_text(at) -> str:
+        """Flatten major text-bearing elements into one searchable string."""
+        parts = []
+        for collection in (
+            at.title,
+            at.subheader,
+            at.markdown,
+            at.caption,
+            at.success,
+            at.warning,
+            at.info,
+            at.error,
+        ):
+            for el in list(collection):
+                parts.append(getattr(el, "value", ""))
+        return " ".join(str(p) for p in parts if p)
 
     def test_app_runs_without_error(self) -> None:
         """App loads and completes one run."""
@@ -47,24 +71,20 @@ class StreamlitAppTest(unittest.TestCase):
 
     def test_feed_section_headings(self) -> None:
         """Feed contains Trending, Recommended, and Suggested sections."""
-        parts = []
-        for el in list(self.at.subheader) + list(self.at.markdown):
-            parts.append(getattr(el, "value", str(el)))
-        all_text = " ".join(parts)
+        all_text = self._all_text(self.at)
         self.assertIn("Trending in Seattle", all_text)
         self.assertIn("Recommended for you", all_text)
-        self.assertIn("Suggested book clubs", all_text)
+        self.assertIn("Suggested events", all_text)
 
-    def test_see_more_clubs_button(self) -> None:
-        """Feed has 'See More Clubs' button."""
-        button_labels = [b.label for b in self.at.button]
-        self.assertIn("See More Clubs", button_labels)
+    def test_see_more_events_button(self) -> None:
+        """Feed has 'See More Events' button."""
+        self.assertIn("See More Events", self._button_labels(self.at))
 
     def test_tabs_present(self) -> None:
         """Main navigation has expected tabs."""
         self.assertGreaterEqual(len(self.at.tabs), 1)
         tab_labels = [t.label for t in self.at.tabs]
-        expected = {"Feed", "Explore Clubs", "My Clubs", "Library", "Forum"}
+        expected = {"Feed", "Explore Events", "My Events", "Library", "Forum"}
         for label in expected:
             self.assertIn(label, tab_labels, f"Tab '{label}' not found in {tab_labels}")
 
@@ -77,6 +97,12 @@ class StreamlitAppTest(unittest.TestCase):
             sidebar_text_parts.append(getattr(el, "value", str(el)))
         sidebar_text = " ".join(sidebar_text_parts)
         self.assertIn("Bookish", sidebar_text)
+
+    def test_signed_out_auth_controls_present(self) -> None:
+        """Signed-out state shows sign-in and create-account controls."""
+        all_labels = self._button_labels(self.at)
+        self.assertIn("Sign in", all_labels)
+        self.assertIn("Create account", all_labels)
 
     def test_multiselect_genre_filter(self) -> None:
         """Feed has genre filter multiselect."""
@@ -92,48 +118,84 @@ class StreamlitAppTest(unittest.TestCase):
 
     def test_create_account_duplicate_email_shows_error(self) -> None:
         """Creating an account with an existing email shows 'Email has been taken.'."""
-        email_input = self._find_text_input("Email")
-        password_input = self._find_text_input("Password")
+        duplicate_email = f"ui-test-{uuid4().hex[:10]}@example.com"
+        create_user(email=duplicate_email, password="password123")
 
-        email_input.input("abc@gmail.com").run()
-        password_input.input("123456").run()
+        at = self._run_app(session_state={"show_create_account": True})
 
-        create_buttons = [b for b in self.at.button if b.label == "Create Account"]
-        self.assertGreaterEqual(len(create_buttons), 1, "Create Account button not found")
-        create_buttons[0].click().run()
+        email_input = next(el for el in at.text_input if el.label == "Email")
+        password_input = next(el for el in at.text_input if el.label == "Password")
+        email_input.input(duplicate_email).run(timeout=10)
+        password_input.input("123456").run(timeout=10)
+
+        submitters = [b for b in at.button if b.label == "Create account"]
+        self.assertGreaterEqual(
+            len(submitters), 1, "Create account form submit button not found"
+        )
+        submitters[0].click().run(timeout=10)
 
         error_text = " ".join(
-            [getattr(e, "value", "") for e in list(self.at.error)]
+            [getattr(e, "value", "") for e in list(at.error)]
             + [
                 getattr(e, "value", "")
-                for e in list(getattr(self.at.sidebar, "error", []))
+                for e in list(getattr(at.sidebar, "error", []))
             ]
         )
         self.assertIn("Email has been taken.", error_text)
 
+    def test_create_account_page_controls_present(self) -> None:
+        """Create account page renders expected form controls."""
+        at = self._run_app(session_state={"show_create_account": True})
+        titles = [t.value for t in at.title]
+        self.assertIn("Create account", titles)
+        input_labels = [ti.label for ti in at.text_input]
+        self.assertIn("Email", input_labels)
+        self.assertIn("Password", input_labels)
+        self.assertIn("Display name (optional)", input_labels)
+        self.assertIn("Create account", self._button_labels(at))
 
-class StreamlitAppExploreClubsTest(unittest.TestCase):
-    """Tests for Explore Clubs tab (tab label and presence)."""
+    def test_forum_detail_page_renders_for_selected_post(self) -> None:
+        """Selected forum post id routes into discussion detail UI."""
+        forum_posts = get_storage().load_forum_db().get("posts", [])
+        self.assertGreater(len(forum_posts), 0, "Expected at least one forum post fixture")
+        post_id = int(forum_posts[0]["id"])
+
+        at = self._run_app(session_state={"selected_forum_post_id": post_id})
+        all_text = self._all_text(at)
+        self.assertIn("Comments", all_text)
+        self.assertTrue(
+            any("Back to Forum" in label for label in self._button_labels(at)),
+            "Back-to-forum button not found",
+        )
+
+
+class StreamlitAppExploreEventsTest(unittest.TestCase):
+    """Tests for Explore Events tab (tab label and presence)."""
 
     def setUp(self) -> None:
-        self.at = AppTest.from_file(_app_path()).run()
+        self.at = AppTest.from_file(_app_path()).run(timeout=10)
 
-    def test_explore_clubs_tab_label(self) -> None:
-        """Explore Clubs tab exists in navigation."""
+    def test_explore_events_tab_label(self) -> None:
+        """Explore Events tab exists in navigation."""
         tab_labels = [t.label for t in self.at.tabs]
-        self.assertIn("Explore Clubs", tab_labels)
+        self.assertIn("Explore Events", tab_labels)
 
 
 class StreamlitAppForumTest(unittest.TestCase):
     """Tests for Forum tab (tab label and presence)."""
 
     def setUp(self) -> None:
-        self.at = AppTest.from_file(_app_path()).run()
+        self.at = AppTest.from_file(_app_path()).run(timeout=10)
 
     def test_forum_tab_label(self) -> None:
         """Forum tab exists in navigation."""
         tab_labels = [t.label for t in self.at.tabs]
         self.assertIn("Forum", tab_labels)
+
+    def test_forum_create_controls_visible(self) -> None:
+        """Forum list view includes discussion composer controls."""
+        all_text = " ".join(getattr(el, "value", "") for el in self.at.caption)
+        self.assertIn("Sign in to create and save forum posts.", all_text)
 
 
 if __name__ == "__main__":
