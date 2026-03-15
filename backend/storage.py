@@ -568,24 +568,34 @@ class CloudStorage:
             pass
 
     def get_soonest_events(self, limit: int = 10) -> list:
-        """Return soonest-upcoming events (by ttl). Uses EVENTS_GSI if set."""
+        """Return soonest-upcoming events (by ttl).
+
+        Tries the configured EVENTS_GSI query first, and falls back to a table
+        scan when GSI query is unavailable (for example due to IAM/index config).
+        """
         from backend import config
         gsi = getattr(config, "EVENTS_GSI", None) or os.getenv("EVENTS_GSI", "").strip() or None
         try:
             table = self._table("EVENTS_TABLE", "events")
             if gsi:
-                resp = table.query(
-                    IndexName=gsi,
-                    KeyConditionExpression=Key("type").eq("event"),
-                    Limit=limit,
-                    ScanIndexForward=True,
-                )
-            else:
-                resp = table.scan(Limit=min(limit * 3, 200))
-                items = resp.get("Items", [])
-                items = sorted(items, key=lambda x: int(x.get("ttl") or x.get("expiry") or 0))[:limit]
-                return _from_dynamo(items)
-            return _from_dynamo(resp.get("Items", []))
+                try:
+                    resp = table.query(
+                        IndexName=gsi,
+                        KeyConditionExpression=Key("type").eq("event"),
+                        Limit=limit,
+                        ScanIndexForward=True,
+                    )
+                    return _from_dynamo(resp.get("Items", []))
+                except Exception:
+                    # Fallback keeps Explore Events usable even when Query on GSI is denied.
+                    pass
+            resp = table.scan(Limit=min(limit * 3, 200))
+            items = resp.get("Items", [])
+            items = sorted(
+                items,
+                key=lambda x: int(x.get("ttl") or x.get("expiry") or 0),
+            )[:limit]
+            return _from_dynamo(items)
         except Exception:
             return []
 
