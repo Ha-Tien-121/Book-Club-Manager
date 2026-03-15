@@ -3,7 +3,7 @@ Train a logistic regression model for book recommendation using implicit feedbac
 
 This script constructs a training set using observed user-book interactions as
 positive examples and randomly sampled unread books as negative examples.
-Features are computed from item popularity statistics and similarity scores
+Features are computed from item popularity statistic and similarity scores
 between a user's library and candidate books.
 
 The model learns a global logistic regression that predicts the probability
@@ -11,10 +11,9 @@ that a user will interact with a book. At recommendation time, books are ranked
 by predicted score for each user.
 
 Key Features:
-    - Book similarity to a user's existing library
-    - Average book rating
-    - Log number of ratings (book popularity)
-    - Interaction between similarity and user library size
+    - Book similarity to a user's existing library (normalized by library size)
+    - Log (popularity=average_rating * Log(number_ratings)) of candidate books
+    - Log transformed interaction between similarity and user library size
 
 Assumptions / Limitations:
     - Observed interactions are treated as positive feedback; non-interactions
@@ -23,13 +22,12 @@ Assumptions / Limitations:
     - Predictions are used for ranking rather than calibrated probabilities.
 Usage:
     Run script from the project root using:
-    python -m backend.recommender.recomender_fitting
+    python -m backend.recommender.recommender_fitting
     
 Time: ~9 minutes to run
 
-Output:
-Learned coefficients: [similarity: -0.2672652, avg_rating: 0.32307223, 
-                      number_ratings: 0.92024347, user_library_size*similarity: 3.11933843]
+Learned coefficients: [similarity: 0.72379696, popularity: 1.1786245,
+                      user_library_size*similarity: 1.4491444]
 """
 
 
@@ -194,8 +192,7 @@ def build_training_set(
         n_samples = books_to_compute.shape[1]
 
         sim_scores = np.zeros((b, n_samples), dtype=np.float32)
-        avg_ratings = np.zeros((b, n_samples), dtype=np.float32)
-        num_ratings = np.zeros((b, n_samples), dtype=np.float32)
+        popularity = np.zeros((b, n_samples), dtype=np.float32)
 
         for j in range(n_samples):
 
@@ -204,19 +201,17 @@ def build_training_set(
             sim_raw = user_lib.dot(book_similarity_matrix[:, books]).diagonal()
 
             sim_scores[:, j] = sim_raw / library_sizes
-            avg_ratings[:, j] = book_avg_ratings_vector[books]
-            num_ratings[:, j] = book_number_ratings_vector[books]
+            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])
+            
         positives = np.column_stack([
            sim_scores[:, 0],
-           avg_ratings[:, 0],
-           num_ratings[:, 0],
-           sim_scores[:, 0] * log_library_sizes
+           popularity[:, 0],
+           np.log1p(sim_scores[:, 0] * log_library_sizes)
            ])
 
         negatives = np.column_stack([
             sim_scores[:, 1:].ravel(),
-            avg_ratings[:, 1:].ravel(),
-            num_ratings[:, 1:].ravel(),
+            popularity[:, 1:].ravel(),
             (sim_scores[:, 1:] * log_library_sizes[:, None]).ravel()
             ])
 
@@ -256,7 +251,7 @@ def train_logistic_model(
 
     x_train_scaled = scaler.fit_transform(x_train)
 
-    clf = LogisticRegression(solver="lbfgs", max_iter=1000)
+    clf = LogisticRegression(solver="saga", max_iter=3000, class_weight="balanced")
 
     clf.fit(x_train_scaled, y_train)
 

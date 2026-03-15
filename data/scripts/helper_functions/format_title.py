@@ -13,7 +13,7 @@ def format_title(titles):
     (2) removing slash and following text
     (3) removing colon and following text
     (4) removing semicolon and following text
-    (5) removing edition info in parentheses (e.g., "Title (2nd edition)")
+    (5) removing text in parentheses (e.g., "Title (2nd edition)")
     (6) removing edition info after comma (e.g., "Title, 2nd edition")
     (7) stripping whitespace on edges
     (8) normalizing multiple spaces to a single space
@@ -31,7 +31,7 @@ def format_title(titles):
         title = re.sub(r'/.*', '', title)
         title = re.sub(r':.*', '', title)
         title = re.sub(r';.*', '', title)
-        title = re.sub(r'\([^)]*edition[^)]*\)', '', title, flags=re.I)
+        title = re.sub(r'\([^)]*\)', '', title)
         title = re.sub(r',?\s*\d+(st|nd|rd|th)\s*edition', '', title, flags=re.I)
         title = title.strip()
         title = re.sub(r'\s+', ' ', title)

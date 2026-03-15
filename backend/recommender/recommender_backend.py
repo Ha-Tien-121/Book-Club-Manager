@@ -50,8 +50,9 @@ class BookRecommender:
         self.beta_scaled = beta / scaler.scale_
         self.book_similarity: csr_matrix = load_npz(BOOK_SIM_FILE).tocsr()
         ratings = np.load(BOOK_RATINGS_FILE)
-        self.book_avg_ratings = ratings["ratings_avg"].astype(np.float32)
-        self.book_num_ratings = np.log1p(ratings["log_number_ratings"]).astype(np.float32)
+        book_avg_ratings = ratings["ratings_avg"].astype(np.float32)
+        book_num_ratings = np.log1p(ratings["log_number_ratings"]).astype(np.float32)
+        self.popularity_score = np.log1p(book_avg_ratings * book_num_ratings)
 
         with open(BOOK_ID_MAP_FILE, "r", encoding="utf-8") as f:
             self.book_id_to_idx = json.load(f)
@@ -91,7 +92,7 @@ class BookRecommender:
             sim = self.book_similarity[book_indices].sum(axis=0).A1
             sim /= lib_size
         else:
-            sim = np.zeros(len(self.book_avg_ratings), dtype=np.float32)
+            sim = np.zeros(len(self.popularity_score), dtype=np.float32)
 
         log_lib_size = np.log1p(lib_size)
 
@@ -99,9 +100,8 @@ class BookRecommender:
 
         scores = (
             beta[0] * sim +
-            beta[1] * self.book_avg_ratings +
-            beta[2] * self.book_num_ratings +
-            beta[3] * sim * log_lib_size
+            beta[1] * self.popularity_score +
+            beta[2] * np.log1p(sim * log_lib_size)
         )
 
         if lib_size > 0:
