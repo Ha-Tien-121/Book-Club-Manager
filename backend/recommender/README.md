@@ -48,7 +48,7 @@ This approach favors events that are both relevant and practical to attend.
 
 Single implementation:
 
-- **`book_recommender.py`** – Single book recommender: ML (logistic regression + similarity) when artifacts exist; otherwise returns **reviews_top25_books** from `get_storage().get_top50_review_books()`.
+- **`book_recommender.py`** – Single book recommender: ML (logistic regression + similarity) when artifacts exist; otherwise returns **reviews_top50_books** from `get_storage().get_top50_review_books()`.
 
 ### How the app calls it
 
@@ -58,4 +58,4 @@ Single implementation:
 
 3. **Example:** `example_use/example_users_recs.py` uses `BookRecommender()` from `backend.recommender.book_recommender` and calls `recommender.recommend(user_book_ids, top_k=50)`.
 
-**Temporary (no ML artifacts):** Set `USE_BOOK_ML_RECOMMENDER=0` or leave unset to always use the fallback. Fallback reads **reviews_top25_books** from storage: local JSON when `APP_ENV=local`, S3 when `APP_ENV=aws`. Set `APP_ENV=aws` on EC2 to use cloud.
+**Temporary (no ML artifacts):** Set `USE_BOOK_ML_RECOMMENDER=0` or leave unset to always use the fallback. Fallback reads **reviews_top50_books** from storage: local JSON when `APP_ENV=local`, S3 when `APP_ENV=aws`. Set `APP_ENV=aws` on EC2 to use cloud.

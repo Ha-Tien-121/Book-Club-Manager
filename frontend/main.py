@@ -74,7 +74,7 @@ def _cached_spl_trending():
 @st.cache_data(ttl=_FEED_CACHE_TTL)
 def _cached_book_recommendations(user_email: str):
     """Recommendations by user so we don't refetch on every interaction."""
-    return get_book_recommendations(user_email or "", top_k=25)
+    return get_book_recommendations(user_email or "", top_k=50)
 
 
 def init_session(books: list[dict]) -> None:

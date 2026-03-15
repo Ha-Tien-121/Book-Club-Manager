@@ -2,7 +2,7 @@
 
 Same pattern as event_recommender: one class BookRecommender with
 recommend(user_book_ids, top_k). If the ML model fails to load, returns
-reviews_top25_books from storage (get_top50_review_books) instead.
+reviews_top50_books from storage (get_top50_review_books) instead.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ except Exception:
 
 
 class _FallbackBookRecommender:
-    """When ML fails to load: return reviews_top25_books from storage."""
+    """When ML fails to load: return reviews_top50_books from storage."""
 
     def recommend(
         self,

@@ -135,7 +135,7 @@ def _render_feed_tab(
             books_by_source_id=books_by_source_id,
             selected_genres=selected_genres,
             fallback_books=fallback_books,
-            top_k=25,
+            top_k=50,
         )
         if recommended_books:
             render_book_carousel(

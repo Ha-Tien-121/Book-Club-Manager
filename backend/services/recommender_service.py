@@ -7,7 +7,7 @@ Recommendations are stored in user_recommendations (not user_books).
   Event recommender uses only the user's genre_preferences.
 
 Default (anonymous or user with no library / no genre preferences):
-- Books: top 25 from static JSON (reviews_top25_books.json).
+- Books: top 50 from static JSON (reviews_top50_books.json).
 - Events: top 10 soonest events (by ttl/expiry).
 Seeded on account creation via ensure_default_recommendations(); also used for signed-out users.
 """
@@ -139,7 +139,7 @@ def _user_has_genre_preferences(user_id: str) -> bool:
 def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
     """Return the cached book recommendation list for the UI (up to 50).
 
-    Anonymous or no genre prefs: returns top 25 from reviews JSON (get_top50_review_books).
+    Anonymous or no genre prefs: returns top 50 from reviews JSON (get_top50_review_books).
     Signed-in with genre prefs: returns stored recommended_books, or runs recommender once
     and saves. Use this for homepage/feed; use get_book_recommendations for recomputing only.
 

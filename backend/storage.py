@@ -305,7 +305,7 @@ class LocalStorage:
     """Local file-backed storage. Delegates to user_store and forum_store for file I/O."""
 
     def get_top50_review_books(self):
-        """Return list of book dicts from reviews_top25_books.json (local path)."""
+        """Return list of book dicts from reviews_top50_books.json (local path)."""
         import sys
         from backend import config
         mod = sys.modules.get("backend.storage")
@@ -456,10 +456,10 @@ class CloudStorage:
         return self._dynamo().Table(name)
 
     def get_top50_review_books(self):
-        """Return list of book dicts from S3 (reviews_top25_books.json)."""
+        """Return list of book dicts from S3 (reviews_top50_books.json)."""
         from backend import config
         bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
-        key = getattr(config, "REVIEWS_TOP25_BOOKS_S3_KEY", None) or os.getenv("REVIEWS_TOP25_BOOKS_S3_KEY", "books/reviews_top25_books.json")
+        key = getattr(config, "REVIEWS_TOP50_BOOKS_S3_KEY", None) or os.getenv("REVIEWS_TOP50_BOOKS_S3_KEY", "books/reviews_top50_books.json")
         if not bucket:
             return []
         try:

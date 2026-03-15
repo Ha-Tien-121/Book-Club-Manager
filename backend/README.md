@@ -51,7 +51,7 @@ All environment‑specific configuration (table names, buckets) is handled here 
 
 Set **`APP_ENV=aws`** so `get_storage()` returns **CloudStorage**. All services then use DynamoDB and S3 instead of local files. You can run Streamlit **locally** and still read/write AWS—only the data layer talks to AWS; the app process stays on your machine. Use this when local storage is incomplete or you want to develop against the real backend:
 
-- **Book recs:** Fallback list from S3 (`reviews_top25_books.json`). Set `USE_BOOK_ML_RECOMMENDER=0` (default) until the lite ML model is ready.
+- **Book recs:** Fallback list from S3 (`reviews_top50_books.json`). Set `USE_BOOK_ML_RECOMMENDER=0` (default) until the lite ML model is ready.
 - **Users, library, recommendations, events, forum:** CloudStorage implements these with the DynamoDB tables and GSIs in `config.py`. Ensure tables exist and partition keys match (e.g. `user_id` for user_books/user_accounts/user_events, `user_email` for user_recommendations/user_forums, `post_id` for forum_posts).
 
 ---
