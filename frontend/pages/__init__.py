@@ -1,2 +1,1 @@
 """Frontend page modules."""
-

@@ -106,4 +106,3 @@ def render_book_carousel(
         ):
             st.session_state[page_state_key] = min(total_pages - 1, current_page + 1)
             st.rerun()
-
