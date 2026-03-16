@@ -174,41 +174,57 @@ def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool, bool
 
 
 def get_book_recommendations(user_id: str, top_k: int | None = None) -> list[dict]:
-    """Return book recommendations (same pattern as get_event_recommendations).
+    """Return book recommendations (content-based or fallback).
 
-    Gets user_book_ids from storage (library), then BookRecommender().recommend(user_book_ids, top_k).
-    Cold start: pass [] as user_book_ids; recommender returns popular/catalog results.
+    Uses BookRecommender().recommend_for_user() with the user's library and
+    genre_preferences. Cold start: recommender returns popular/catalog results.
     """
     top_k = top_k if top_k is not None else RECOMMENDED_BOOKS_SIZE
     user_id = str(user_id).strip().lower() if user_id else ""
-    _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
-    user_book_ids = user_books_store.get(user_id, []) if user_id else []
-    rows, _source, _err = _run_book_recommender(user_book_ids, top_k=top_k)
+    rows, _source, _err = _run_book_recommender(user_id, top_k=top_k)
     return rows
 
 
 def _run_book_recommender(
-    user_book_ids: list[str],
+    user_id: str,
     *,
     top_k: int,
 ) -> tuple[list[dict], str, str]:
-    """Run ML recommender; fall back on error.
+    """Run content-based recommender; fall back to top-50 on error.
 
     Returns:
         (rows, source, error_message)
-        - source: "ml" or "fallback"
+        - source: "content" or "fallback"
         - error_message: "" if none
     """
+    user_id = str(user_id or "").strip().lower()
+    store = get_storage()
+    user_account = store.get_user_books(user_id) if user_id else {}
+    if not isinstance(user_account, dict):
+        user_account = {}
+    user_genres_store, _, _, _ = _build_user_recommender_inputs(user_id)
+    user_genres = list(user_genres_store.get(user_id) or [])
+
     recommender = BookRecommender()
     try:
-        rows = recommender.recommend(user_book_ids, top_k=top_k)
-        return list(rows or []), "ml", ""
+        rows = recommender.recommend_for_user(
+            user_email=user_id,
+            user_account=user_account,
+            user_genres=user_genres if user_genres else None,
+            top_k=top_k,
+        )
+        return list(rows or []), "content", ""
     except Exception as e:
-        logging.exception("BookRecommender ML failed; falling back. error=%s", e)
+        logging.exception("BookRecommender failed; falling back. error=%s", e)
         try:
             from backend.recommender.book_recommender import _FallbackBookRecommender
 
-            rows = _FallbackBookRecommender().recommend(user_book_ids, top_k=top_k)
+            rows = _FallbackBookRecommender().recommend_for_user(
+                user_email=user_id,
+                user_account=user_account,
+                user_genres=user_genres if user_genres else None,
+                top_k=top_k,
+            )
             return list(rows or []), "fallback", f"{type(e).__name__}: {e}"
         except Exception as e2:
             logging.exception("FallbackBookRecommender failed. error=%s", e2)
@@ -295,6 +311,12 @@ def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
     if not store.get_user_account(user_id):
         raise ValueError("Invalid user_id")
 
+    # No genre preferences: show top 50 reviews books (same as anonymous).
+    if not _user_has_genre_preferences(user_id):
+        return _ui_shape_recommended_books(
+            store.get_top50_review_books()
+        )[:RECOMMENDED_BOOKS_SIZE]
+
     rec = store.get_user_recommendations(user_id) or {}
     books = list(rec.get("recommended_books") or [])
 
@@ -357,10 +379,8 @@ def refresh_and_save_recommendations(user_id: str) -> dict:
     store = get_storage()
     rec = store.get_user_recommendations(user_id) or {}
     # Capture source/error so we can tell in Dynamo whether ML ran.
-    _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
-    user_book_ids = user_books_store.get(user_id, []) if user_id else []
     book_rows, book_source, book_err = _run_book_recommender(
-        user_book_ids, top_k=RECOMMENDED_BOOKS_SIZE
+        user_id, top_k=RECOMMENDED_BOOKS_SIZE
     )
     books = _ui_shape_recommended_books(book_rows or [])
     events = get_event_recommendations(user_id) or []
@@ -415,10 +435,8 @@ def on_book_added_to_shelf(user_id: str) -> None:
         # Always refresh the cached recommendations when the threshold is reached.
         # The fallback recommender is still personalized (it excludes owned books),
         # so it's safe and desirable to overwrite existing lists even in fallback.
-        _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
-        user_book_ids = user_books_store.get(user_id, []) if user_id else []
         book_rows, book_source, book_err = _run_book_recommender(
-            user_book_ids, top_k=RECOMMENDED_BOOKS_SIZE
+            user_id, top_k=RECOMMENDED_BOOKS_SIZE
         )
         books = _ui_shape_recommended_books(book_rows or [])
         if books:

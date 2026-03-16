@@ -137,6 +137,22 @@ BOOK_ID_TO_IDX_S3_KEY = os.getenv(
     "BOOK_ID_TO_IDX_S3_KEY",
     f"{ML_ARTIFACTS_PREFIX}/book_id_to_idx.json",
 )
+
+# Content-based book recommender artifacts (book_tfidf.npz, book_id_to_idx.json, book_rating_norms.npz).
+# When APP_ENV=aws and local files are missing, these are loaded from S3.
+BOOK_RECOMMENDER_ARTIFACTS_S3_PREFIX = (
+    os.getenv("BOOK_RECOMMENDER_ARTIFACTS_S3_PREFIX", "books/book_recommender").strip().rstrip("/")
+)
+BOOK_TFIDF_S3_KEY = os.getenv("BOOK_TFIDF_S3_KEY", f"{BOOK_RECOMMENDER_ARTIFACTS_S3_PREFIX}/book_tfidf.npz")
+BOOK_ID_TO_IDX_ARTIFACT_S3_KEY = os.getenv(
+    "BOOK_ID_TO_IDX_ARTIFACT_S3_KEY",
+    f"{BOOK_RECOMMENDER_ARTIFACTS_S3_PREFIX}/book_id_to_idx.json",
+)
+BOOK_RATING_NORMS_S3_KEY = os.getenv(
+    "BOOK_RATING_NORMS_S3_KEY",
+    f"{BOOK_RECOMMENDER_ARTIFACTS_S3_PREFIX}/book_rating_norms.npz",
+)
+
 ML_ARTIFACTS_LOCAL_CACHE_DIR = os.getenv("ML_ARTIFACTS_LOCAL_CACHE_DIR", "/tmp/bookish-ml")
 
 # Max characters to show for forum post preview in list views (full text shown when "Open discussion").
