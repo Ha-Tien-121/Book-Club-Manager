@@ -10,7 +10,7 @@ Usage:
 import json
 import time
 
-from backend.recommender.recommender_backend import BookRecommender
+from backend.recommender.book_recommender_backend import BookRecommender
 
 start_time = time.time()
 rec = BookRecommender()
