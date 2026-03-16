@@ -189,7 +189,7 @@ def build_training_set(
             sim_raw = user_lib.dot(book_similarity_matrix[:, books]).diagonal()
 
             sim_scores[:, j] = sim_raw / library_sizes
-            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])      
+            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])
         positives = np.column_stack([
            sim_scores[:, 0],
            popularity[:, 0],
@@ -262,27 +262,27 @@ def main():
     Main function to train the logistic regression model.
     """
 
-    OUTPUT_MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-    OUTPUT_MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+    output_model_file = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    output_model_scaler_file = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
 
     npzfile = np.load(os.path.join(PROCESSED_DIR, "book_ratings.npz"))
-    BOOK_AVG_RATINGS_VECTOR = npzfile["ratings_avg"]
-    BOOK_NUMBER_RATINGS_VECTOR = npzfile["log_number_ratings"]
-    BOOK_SIMILARITY_MATRIX = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
+    book_avg_ratings_vector = npzfile["ratings_avg"]
+    book_num_ratings_vector = npzfile["log_number_ratings"]
+    book_similarity_matrix = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
 
-    USER_LIBRARY_MATRIX_TRAIN = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
-    USER_GROUND_TRUTH_BOOK_TRAIN = np.load(os.path.join(PROCESSED_DIR,
+    user_library_matrix_train = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
+    user_ground_truth_book_train = np.load(os.path.join(PROCESSED_DIR,
                                                     "train_ground_truth.npy")).flatten()
 
     print("Data loaded successfully.")
     train_logistic_model(
-            ground_truth=USER_GROUND_TRUTH_BOOK_TRAIN,
-            output_model_file=OUTPUT_MODEL_FILE,
-            output_scaler_file=OUTPUT_MODEL_SCALER_FILE,
-            user_library_matrix=USER_LIBRARY_MATRIX_TRAIN,
-            book_similarity_matrix=BOOK_SIMILARITY_MATRIX,
-            book_avg_ratings_vector=BOOK_AVG_RATINGS_VECTOR,
-            book_number_ratings_vector=BOOK_NUMBER_RATINGS_VECTOR,
+            ground_truth=user_ground_truth_book_train,
+            output_model_file=output_model_file,
+            output_scaler_file=output_model_scaler_file,
+            user_library_matrix=user_library_matrix_train,
+            book_similarity_matrix=book_similarity_matrix,
+            book_avg_ratings_vector=book_avg_ratings_vector,
+            book_number_ratings_vector=book_num_ratings_vector,
             n_neg=20
             )
 

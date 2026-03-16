@@ -208,39 +208,39 @@ def main():
     """
     Main function to run the Hit@50 evaluation for the logistic regression recommender model.
     """
-    MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-    MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
-    USER_TEST_FILE = os.path.join(PROCESSED_DIR, "test_matrix.npz")
-    BOOK_SIM_FILE = os.path.join(PROCESSED_DIR, "book_similarity.npz")
-    BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
-    GROUND_TRUTH_FILE = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
+    model_file = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    model_scaler_file = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+    user_test_file = os.path.join(PROCESSED_DIR, "test_matrix.npz")
+    book_sim_file = os.path.join(PROCESSED_DIR, "book_similarity.npz")
+    book_ratings_file = os.path.join(PROCESSED_DIR, "book_ratings.npz")
+    ground_truth_file = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
 
-    USER_LIBRARY_MATRIX_TEST = load_npz(USER_TEST_FILE).tocsr()
-    BOOK_SIMILARITY_MATRIX = load_npz(BOOK_SIM_FILE).tocsc()
-    ratings_file = np.load(BOOK_RATINGS_FILE)
-    BOOK_AVG_RATINGS_VECTOR = ratings_file["ratings_avg"].astype(np.float32)
-    BOOK_NUMBER_RATINGS_VECTOR = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
-    USER_GROUND_TRUTH_BOOK_TEST = np.load(GROUND_TRUTH_FILE).flatten()
+    user_library_test_matrix = load_npz(user_test_file).tocsr()
+    book_similarity_matrix = load_npz(book_sim_file).tocsc()
+    ratings_file = np.load(book_ratings_file)
+    book_avg_ratings_vector = ratings_file["ratings_avg"].astype(np.float32)
+    book_num_ratings_vector = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
+    user_ground_truth_book_test = np.load(ground_truth_file).flatten()
     print("Data loaded successfully.")
 
-    CLF = joblib.load(MODEL_FILE)
-    scaler = joblib.load(MODEL_SCALER_FILE)
+    clf = joblib.load(model_file)
+    scaler = joblib.load(model_scaler_file)
     print("Logistic model loaded.")
 
-    N_USERS = 10000
-    valid_users = np.where(USER_GROUND_TRUTH_BOOK_TEST != -1)[0]
+    n_users = 10000
+    valid_users = np.where(user_ground_truth_book_test != -1)[0]
     sample_users = np.random.choice(
-        valid_users, size=min(N_USERS, len(valid_users)), replace=False
+        valid_users, size=min(n_users, len(valid_users)), replace=False
     )
 
     hit50_evaluation_logistic(
-        clf=CLF,
+        clf=clf,
         scaler=scaler,
-        user_library_sparse=USER_LIBRARY_MATRIX_TEST[sample_users],
-        ground_truth=USER_GROUND_TRUTH_BOOK_TEST[sample_users],
-        book_similarity_sparse=BOOK_SIMILARITY_MATRIX,
-        book_avg_ratings=BOOK_AVG_RATINGS_VECTOR,
-        book_num_ratings=BOOK_NUMBER_RATINGS_VECTOR
+        user_library_sparse=user_library_test_matrix[sample_users],
+        ground_truth=user_ground_truth_book_test[sample_users],
+        book_similarity_sparse=book_similarity_matrix,
+        book_avg_ratings=book_avg_ratings_vector,
+        book_num_ratings=book_num_ratings_vector
         )
 
 if __name__ == "__main__":

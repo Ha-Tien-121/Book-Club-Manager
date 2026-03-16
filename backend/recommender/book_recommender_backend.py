@@ -13,7 +13,7 @@ import json
 import sqlite3
 import numpy as np
 import joblib
-from scipy.sparse import load_npz, csr_matrix
+from scipy.sparse import load_npz
 
 from data.scripts.config import PROCESSED_DIR
 from backend.recommender.config import RECOMMENDER_DIR
@@ -27,26 +27,21 @@ BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
 BOOK_ID_MAP_FILE = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 BOOK_DB = os.path.join(PROCESSED_DIR, "books.db")
 
-def load_recommender_artifacts(
-        model_file,
-        scaler_file,
-        sim_file,
-        ratings_file,
-        id_map_file
-        ):
-        clf = joblib.load(model_file)
-        beta = clf.coef_[0]
-        scaler = joblib.load(scaler_file)
-        beta_scaled = beta / scaler.scale_
-        book_similarity = load_npz(sim_file).tocsr()
-        ratings = np.load(ratings_file)
-        avg_ratings = ratings["ratings_avg"].astype(np.float32)
-        num_ratings = ratings["log_number_ratings"].astype(np.float32)
-        popularity_score = np.log1p(avg_ratings * num_ratings)
-        with open(id_map_file, "r", encoding="utf-8") as f:
-            book_id_to_idx = json.load(f)
-        idx_to_book_id = {v: k for k, v in book_id_to_idx.items()}
-        return beta_scaled, book_similarity, popularity_score, book_id_to_idx, idx_to_book_id
+def load_recommender_artifacts(model_file, scaler_file, sim_file, ratings_file, id_map_file):
+    """Load model artifacts and book data required for recommendation."""
+    clf = joblib.load(model_file)
+    beta = clf.coef_[0]
+    scaler = joblib.load(scaler_file)
+    beta_scaled = beta / scaler.scale_
+    book_similarity = load_npz(sim_file).tocsr()
+    ratings = np.load(ratings_file)
+    avg_ratings = ratings["ratings_avg"].astype(np.float32)
+    num_ratings = ratings["log_number_ratings"].astype(np.float32)
+    popularity_score = np.log1p(avg_ratings * num_ratings)
+    with open(id_map_file, "r", encoding="utf-8") as f:
+        book_id_to_idx = json.load(f)
+    idx_to_book_id = {v: k for k, v in book_id_to_idx.items()}
+    return beta_scaled, book_similarity, popularity_score, book_id_to_idx, idx_to_book_id
 
 class BookRecommender:
     """
