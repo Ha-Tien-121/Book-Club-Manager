@@ -26,8 +26,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Paths
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
+# __file__ = .../data/scripts/loaders/load_events_to_dynamodb.py
+# parents[2] -> .../data
+DATA_DIR = Path(__file__).resolve().parents[2]
+PROCESSED_DIR = DATA_DIR / "processed"
 EVENTS_JSON = Path(
     os.getenv(
         "BOOK_EVENTS_CLEAN_PATH",
@@ -38,6 +40,10 @@ EVENTS_JSON = Path(
 # DynamoDB (table must already exist)
 TABLE_NAME = os.getenv("EVENTS_TABLE", "events")
 BATCH_SIZE = 25
+
+# Default values for events table
+DEFAULT_PARENT_ASIN = "NO_PARENT_ASIN"
+DEFAULT_EVENT_TYPE = "event"
 
 def ttl_seconds_from_start_iso(start_iso: str) -> int | None:
     """Return Unix timestamp (seconds) for TTL: when the event starts. None if invalid."""
@@ -80,14 +86,19 @@ def record_to_item(record: dict) -> dict:
     if not isinstance(tags, list):
         tags = []
 
+    # parent_asin: always a non-empty string so GSI key is valid; use placeholder when unknown
+    raw_parent = _str_val(record.get("parent_asin"))
+    parent_asin = raw_parent or DEFAULT_PARENT_ASIN
+
     item = {
         "event_id": event_id,
+        "type": DEFAULT_EVENT_TYPE,
         "title": _str_val(record.get("title")),
         "description": _str_val(record.get("description")),
         "book_title": _str_val(record.get("book_title")),
         "book_author": _str_val(record.get("book_author")),
         "title_author_key": _str_val(record.get("title_author_key")),
-        "parent_asin": _str_val(record.get("parent_asin")),
+        "parent_asin": parent_asin,
         "tags": tags,
         "day_of_week_start": _str_val(record.get("day_of_week_start")),
         "start_time": _str_val(record.get("start_time")),
@@ -97,6 +108,10 @@ def record_to_item(record: dict) -> dict:
         "link": link,
         "thumbnail": _str_val(record.get("thumbnail")),
     }
+    # Only set parent_asin when non-empty so GSI key never has empty string
+    parent_asin = _str_val(record.get("parent_asin"))
+    if parent_asin:
+        item["parent_asin"] = parent_asin
     if ttl is not None:
         item["ttl"] = ttl
     return item
@@ -126,7 +141,10 @@ def load_events_to_dynamodb(
     batch = []
 
     for record in records:
+        # Require link, title, and a valid start time/ttl; skip incomplete events
         if not _str_val(record.get("link")) or not _str_val(record.get("title")):
+            continue
+        if record.get("ttl") is None or not _str_val(record.get("start_iso")):
             continue
         batch.append(record_to_item(record))
         if len(batch) >= BATCH_SIZE:

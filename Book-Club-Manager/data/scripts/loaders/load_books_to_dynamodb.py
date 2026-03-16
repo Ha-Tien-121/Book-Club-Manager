@@ -23,9 +23,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Paths (script lives at data/scripts/loaders/load_books_to_dynamodb.py -> project root is 3 levels up)
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
+# Paths
+# __file__ = .../Book-Club-Manager/data/scripts/loaders/load_books_to_dynamodb.py
+# parent      -> loaders/
+# parent[1]   -> scripts/
+# parent[2]   -> data/
+DATA_DIR = Path(__file__).resolve().parents[2]
+PROCESSED_DIR = DATA_DIR / "processed"
 BOOKS_DB = Path(os.getenv("BOOKS_DB_PATH", str(PROCESSED_DIR / "books.db")))
 
 # DynamoDB

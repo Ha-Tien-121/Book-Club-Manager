@@ -13,8 +13,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Project root (script lives at data/scripts/events/get_book_events.py -> 3 levels up)
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Data paths (anchor on data/ directory where this script lives)
+# __file__ = .../data/scripts/events/get_book_events.py
+# parents[2] -> .../data
+DATA_DIR = Path(__file__).resolve().parents[2]
 
 API_KEY = os.getenv("api_key")
 if not API_KEY:
@@ -27,7 +29,7 @@ LOCATION = "Seattle, WA"
 MAX_REQUESTS = 10
 RAW_JSON_PATH = os.getenv(
     "BOOK_EVENTS_RAW_PATH",
-    str(_REPO_ROOT / "data" / "raw" / "book_events_raw.json"),
+    str(DATA_DIR / "raw" / "book_events_raw.json"),
 )
 
 

@@ -91,7 +91,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, NamedTuple
 
-import boto3
 import pyarrow as pa
 import pyarrow.parquet as pq
 from dotenv import load_dotenv
@@ -111,13 +110,6 @@ HEAVY_4 = {
     "b005",
     "b008",
 }
-
-
-class UploadConfig(NamedTuple):
-    """Upload target configuration."""
-
-    bucket: str
-    prefix: str
 
 
 BOOK_SCHEMA = pa.schema(
@@ -269,27 +261,15 @@ def flush_buffer(
     buffer.clear()
 
 
-def upload_dir_to_s3(local_dir: Path, upload_config: UploadConfig):
-    """Upload all parquet files in local_dir to S3 under the given prefix."""
-    s3 = boto3.client("s3")
-    for file in local_dir.glob("*.parquet"):
-        key = f"{upload_config.prefix.rstrip('/')}/{file.name}"
-        s3.upload_file(str(file), upload_config.bucket, key)
-        print(f"[upload] {file} -> s3://{upload_config.bucket}/{key}")
-
-
 def shard_file(
     source: Path,
     out_dir: Path,
     batch_size: int,
     limit: Optional[int] = None,
-    target_cfg: Optional[UploadConfig] = None,
 ):
     """Stream-shard a SQLite DB or legacy JSONL source into parquet shard files."""
     if not source.exists():
         raise FileNotFoundError(f"Source not found: {source}")
-    if target_cfg and not target_cfg.bucket:
-        raise ValueError("Bucket required for upload")
     if limit is not None and limit <= 0:
         raise ValueError("limit must be positive when provided")
 
@@ -313,13 +293,6 @@ def shard_file(
         w.close()
 
     print(f"[done] processed {total} rows into {len(writers)} shards at {out_dir}")
-
-    if target_cfg:
-        upload_dir_to_s3(out_dir, target_cfg)
-        print(
-            f"[done] uploaded shards to s3://{target_cfg.bucket}/"
-            f"{target_cfg.prefix.rstrip('/')}/"
-        )
 
 
 def parse_args():
@@ -345,24 +318,9 @@ def parse_args():
         help="Optional maximum number of rows to process",
     )
     p.add_argument(
-        "--upload",
+        "--no-db",
         action="store_true",
-        help="Upload shards to S3 after writing locally",
-    )
-    p.add_argument(
-        "--upload-only",
-        action="store_true",
-        help="Stage shards in a temporary local directory and remove them after upload",
-    )
-    p.add_argument(
-        "--bucket",
-        default=os.getenv("DATA_BUCKET"),
-        help="S3 bucket (required if --upload)",
-    )
-    p.add_argument(
-        "--s3-prefix",
-        default="books/shard/parent_asin",
-        help="S3 prefix for shard files",
+        help="(Deprecated) Previously used for upload-only mode; kept for CLI compatibility, ignored.",
     )
     return p.parse_args()
 
@@ -371,29 +329,12 @@ def main():
     """CLI entrypoint."""
     start = time.time()
     args = parse_args()
-    if args.upload_only and not args.upload:
-        raise ValueError("--upload-only requires --upload")
-    target_cfg = None
-    if args.upload:
-        target_cfg = UploadConfig(bucket=args.bucket, prefix=args.s3_prefix)
-    if args.upload_only:
-        with tempfile.TemporaryDirectory(prefix="bookish-shards-") as temp_dir:
-            shard_file(
-                source=Path(args.source),
-                out_dir=Path(temp_dir),
-                batch_size=args.batch_size,
-                limit=args.limit,
-                target_cfg=target_cfg,
-            )
-            print("[done] cleaned up temporary local shard files")
-    else:
-        shard_file(
-            source=Path(args.source),
-            out_dir=Path(args.out_dir),
-            batch_size=args.batch_size,
-            limit=args.limit,
-            target_cfg=target_cfg,
-        )
+    shard_file(
+        source=Path(args.source),
+        out_dir=Path(args.out_dir),
+        batch_size=args.batch_size,
+        limit=args.limit,
+    )
     elapsed = time.time() - start
     print(f"[done] elapsed: {elapsed/60:.2f} minutes ({elapsed:.1f} seconds)")
 

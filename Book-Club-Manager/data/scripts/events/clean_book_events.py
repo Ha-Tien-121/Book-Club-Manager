@@ -25,20 +25,22 @@ try:
 except ImportError:
     _storage = None
 
-# Project root (script lives at data/scripts/events/clean_book_events.py -> 3 levels up)
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Data paths (anchor on data/ directory where this script lives)
+# __file__ = .../data/scripts/events/clean_book_events.py
+# parents[2] -> .../data
+DATA_DIR = Path(__file__).resolve().parents[2]
 
 RAW_INPUT_PATH = os.getenv(
     "BOOK_EVENTS_RAW_PATH",
-    str(_REPO_ROOT / "data" / "raw" / "book_events_raw.json"),
+    str(DATA_DIR / "raw" / "book_events_raw.json"),
 )
 CLEAN_JSON_PATH = os.getenv(
     "BOOK_EVENTS_CLEAN_PATH",
-    str(_REPO_ROOT / "data" / "processed" / "book_events_clean.json"),
+    str(DATA_DIR / "processed" / "book_events_clean.json"),
 )
 BOOKS_DB_PATH = os.getenv(
     "BOOKS_DB_PATH",
-    str(_REPO_ROOT / "data" / "processed" / "books.db"),
+    str(DATA_DIR / "processed" / "books.db"),
 )
 
 # Exact mapping to books_meta_data categories (genres) for tagging events.
@@ -192,7 +194,18 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
         token = token.strip()
         if not token:
             return None
-        for fmt in ("%b %d %Y", "%B %d %Y", "%b %d", "%B %d"):
+        # Support both \"Apr 15\" and \"15 Apr\" style tokens (month-day and day-month)
+        date_formats = (
+            "%b %d %Y",
+            "%B %d %Y",
+            "%b %d",
+            "%B %d",
+            "%d %b %Y",
+            "%d %B %Y",
+            "%d %b",
+            "%d %B",
+        )
+        for fmt in date_formats:
             try:
                 dt = datetime.strptime(token, fmt)
                 if "%Y" not in fmt:

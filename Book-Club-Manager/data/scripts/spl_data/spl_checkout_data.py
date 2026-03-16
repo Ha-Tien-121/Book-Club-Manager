@@ -49,6 +49,10 @@ OUTPUT_TOP50_CHECKOUTS_IN_BOOKS = os.path.join(
 APP_TOKEN = os.getenv("SPL_TOKEN")
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 
+# Diversity / quality constraints for top-50 SPL checkouts
+# Cap Children's Books specifically to keep overall variety; other genres are uncapped.
+MAX_CHILDRENS_BOOKS = int(os.getenv("SPL_TOP50_MAX_CHILDRENS", "10"))
+
 
 def _get_top_existing_isbns_in_dynamo(
     ordered_isbns: list[str],
@@ -306,17 +310,55 @@ def main(output_top50_in_books=OUTPUT_TOP50_CHECKOUTS_IN_BOOKS, client=None):
                 }
 
                 # Preserve order by SPL checkouts (already sorted) and enrich each Dynamo item.
+                # Additionally:
+                # - Exclude books with missing/empty images (so cards always have a cover).
+                # - Enforce variety by capping Children's Books specifically.
+                # - Cap specific overrepresented authors (e.g., Mo Willems) to keep variety.
                 enriched_items = []
+                childrens_count = 0
+                per_author_counts: dict[str, int] = {}
+
                 for isbn in ordered_isbns:
                     if isbn not in top_existing_isbns:
                         continue
                     book = books_from_dynamo.get(isbn)
                     if not book:
                         continue
+
+                    # Require a non-empty images field.
+                    images_val = book.get("images")
+                    if not images_val or (isinstance(images_val, str) and not images_val.strip()):
+                        continue
+
+                    # Cap Mo Willems titles to at most 3 in the list.
+                    author_name = str(book.get("author_name") or "").strip()
+                    author_key = author_name.lower()
+                    if author_key == "mo willems":
+                        if per_author_counts.get(author_key, 0) >= 3:
+                            continue
+
+                    # Determine primary genre/category from DynamoDB item (first category).
+                    cats = book.get("categories") or []
+                    if isinstance(cats, str):
+                        try:
+                            cats = json.loads(cats) if cats.strip() else []
+                        except (ValueError, TypeError):
+                            cats = []
+                    primary_genre = str(cats[0]).strip() if isinstance(cats, list) and cats else "Unknown"
+                    # Specifically cap Children's Books to keep list from being dominated by that genre.
+                    if primary_genre == "Children's Books":
+                        if childrens_count >= MAX_CHILDRENS_BOOKS:
+                            continue
+
                     # Attach SPL checkout count; do not override any existing fields.
                     book_with_checkouts = dict(book)
                     book_with_checkouts["checkouts"] = checkout_lookup.get(isbn, 0)
                     enriched_items.append(_to_jsonable(book_with_checkouts))
+                    if primary_genre == "Children's Books":
+                        childrens_count += 1
+                    if author_key:
+                        per_author_counts[author_key] = per_author_counts.get(author_key, 0) + 1
+
                     if len(enriched_items) >= 50:
                         break
 
