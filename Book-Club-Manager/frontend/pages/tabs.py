@@ -27,7 +27,7 @@ def render_tabs(
     extended_books_by_source_id: dict[str, dict] | None = None,
     recommender_available: bool = False,
     cached_spl_trending: Callable[[], list[dict]],
-    cached_book_recommendations: Callable[[str], list[dict]],
+    cached_book_recommendations: Callable[[str], dict],
     resolve_recommended_books: Callable[..., list[dict]],
     get_recommended_events_for_user: Callable[[str], list[dict]],
     format_when: Callable[[dict], str],

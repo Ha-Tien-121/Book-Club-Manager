@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import time
 from collections import Counter
 from typing import Callable
@@ -88,7 +89,7 @@ def _render_feed_tab(
     books_by_source_id: dict[str, dict],
     recommender_available: bool,
     cached_spl_trending: Callable[[], list[dict]],
-    cached_book_recommendations: Callable[[str], list[dict]],
+    cached_book_recommendations: Callable[[str], dict],
     resolve_recommended_books: Callable[..., list[dict]],
     get_recommended_events_for_user: Callable[[str], list[dict]],
     format_when: Callable[[dict], str],
@@ -129,6 +130,7 @@ def _render_feed_tab(
 
         st.subheader("Recommended for you")
         recommendation_rows: list[dict] = []
+        rec_updated_at = 0
         if recommender_available:
             try:
                 user_email = (
@@ -136,17 +138,38 @@ def _render_feed_tab(
                     if st.session_state.get("signed_in") and current_user is not None
                     else ""
                 )
-                recommendation_rows = cached_book_recommendations(user_email)
+                payload = cached_book_recommendations(user_email) or {}
+                rec_updated_at = int(payload.get("book_updated_at") or 0)
+                recommendation_rows = list(payload.get("recommended_books") or [])
             except (RuntimeError, ValueError, KeyError):
                 recommendation_rows = []
+                rec_updated_at = 0
         fallback_books = sorted(filtered_books, key=lambda b: b["rating_count"], reverse=True)
-        recommended_books = resolve_recommended_books(
-            recommendations=recommendation_rows,
-            books_by_source_id=books_by_source_id,
-            selected_genres=selected_genres,
-            fallback_books=fallback_books,
-            top_k=50,
-        )
+        # Resolving recommended IDs can be expensive (S3 parquet reads). Cache the resolved
+        # list in session_state keyed by the recommender output + selected genre filter so
+        # carousel paging (Streamlit reruns) stays snappy.
+        rec_ids = [
+            str(
+                r.get("book_id") or r.get("parent_asin") or r.get("source_id") or ""
+            ).strip()
+            for r in (recommendation_rows or [])
+            if r is not None
+        ]
+        rec_sig = hashlib.md5("|".join(rec_ids).encode("utf-8")).hexdigest()
+        genres_sig = hashlib.md5("|".join(sorted(selected_genres or [])).encode("utf-8")).hexdigest()
+        # Include book_updated_at so cache auto-invalidates when DynamoDB updates.
+        resolved_cache_key = f"resolved_recs::{user_email}::{rec_updated_at}::{rec_sig}::{genres_sig}"
+        if resolved_cache_key in st.session_state:
+            recommended_books = st.session_state[resolved_cache_key]
+        else:
+            recommended_books = resolve_recommended_books(
+                recommendations=recommendation_rows,
+                books_by_source_id=books_by_source_id,
+                selected_genres=selected_genres,
+                fallback_books=fallback_books,
+                top_k=50,
+            )
+            st.session_state[resolved_cache_key] = recommended_books
         if recommended_books:
             render_book_carousel(
                 section_key="recommended_feed",
@@ -188,35 +211,40 @@ def _render_feed_tab(
                 pass
         if not top_events:
             st.caption("No suggested events.")
-        for event in top_events:
-            st.subheader(event["name"])
-            st.caption(event.get("location", "Seattle, WA"))
-            desc = event.get("description", "") or ""
-            summary = desc[:280] + ("..." if len(desc) > 280 else "")
-            st.write(summary)
-            st.write(f"**When:** {format_when(event)}")
-            event_tags = event.get("tags") or [event.get("genre", "General")]
-            if event_tags:
-                render_pill_tags(event_tags)
-            if event.get("external_link"):
-                st.link_button(
-                    "Open event listing", event["external_link"], use_container_width=False
-                )
-            if st.session_state.get("signed_in") and current_user is not None:
-                eid = str(event.get("event_id") or event.get("id"))
-                joined = eid in current_user.get("club_ids", [])
-                if joined:
-                    st.success("Saved")
-                elif st.button("Save event", key=f"feed_join_club_{eid}"):
-                    current_user.setdefault("club_ids", [])
-                    if eid not in current_user["club_ids"]:
-                        current_user["club_ids"].append(eid)
-                    sync_user_clubs_and_save(store, current_user)
-                    st.session_state["active_tab_after_save"] = "feed"
-                    st.rerun()
-            else:
-                st.caption("Sign in to save events.")
-            st.divider()
+        else:
+            # Scrollable container so the Feed layout stays compact.
+            with st.container(height=620, border=True):
+                for event in top_events:
+                    st.subheader(event["name"])
+                    st.caption(event.get("location", "Seattle, WA"))
+                    desc = event.get("description", "") or ""
+                    summary = desc[:280] + ("..." if len(desc) > 280 else "")
+                    st.write(summary)
+                    st.write(f"**When:** {format_when(event)}")
+                    event_tags = event.get("tags") or [event.get("genre", "General")]
+                    if event_tags:
+                        render_pill_tags(event_tags)
+                    if event.get("external_link"):
+                        st.link_button(
+                            "Open event listing",
+                            event["external_link"],
+                            use_container_width=False,
+                        )
+                    if st.session_state.get("signed_in") and current_user is not None:
+                        eid = str(event.get("event_id") or event.get("id"))
+                        joined = eid in current_user.get("club_ids", [])
+                        if joined:
+                            st.success("Saved")
+                        elif st.button("Save event", key=f"feed_join_club_{eid}"):
+                            current_user.setdefault("club_ids", [])
+                            if eid not in current_user["club_ids"]:
+                                current_user["club_ids"].append(eid)
+                            sync_user_clubs_and_save(store, current_user)
+                            st.session_state["active_tab_after_save"] = "feed"
+                            st.rerun()
+                    else:
+                        st.caption("Sign in to save events.")
+                    st.divider()
         if st.button("See More Events", key="see_more_clubs_feed"):
             st.session_state["jump_to_explore_clubs"] = True
             st.rerun()
@@ -232,7 +260,61 @@ def resolve_recommended_books(
     """Resolve recommender IDs to loaded books and backfill from fallback list."""
     resolved: list[dict] = []
     selected = set(selected_genres)
+
+    def _normalize_genres(raw) -> list[str]:
+        """Normalize genres/categories values from detail store to list[str]."""
+        if raw is None:
+            return []
+        # Avoid truthiness on numpy arrays / pandas series
+        try:
+            import numpy as np  # type: ignore
+
+            if isinstance(raw, np.ndarray):
+                raw = raw.tolist()
+        except Exception:
+            pass
+        if isinstance(raw, list):
+            return [str(x).strip() for x in raw if x is not None and str(x).strip()]
+        if isinstance(raw, str):
+            s = raw.strip()
+            if not s:
+                return []
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return [
+                            str(x).strip()
+                            for x in parsed
+                            if x is not None and str(x).strip()
+                        ]
+                except Exception:
+                    pass
+            return [s]
+        if isinstance(raw, dict):
+            return []
+        try:
+            return [str(x).strip() for x in raw if x is not None and str(x).strip()]
+        except Exception:
+            s = str(raw).strip()
+            return [s] if s else []
     for item in recommendations:
+        # If backend stored UI-shaped recommendations, render directly (fast path).
+        if (
+            isinstance(item, dict)
+            and item.get("cover")
+            and item.get("title")
+            and item.get("author")
+            and (item.get("source_id") or item.get("id") is not None)
+        ):
+            book = item
+            if selected and not any(g in selected for g in book.get("genres", []) or []):
+                continue
+            resolved.append(book)
+            if len(resolved) >= top_k:
+                return resolved
+            continue
+
         source_id = str(
             item.get("book_id")
             or item.get("parent_asin")
@@ -243,6 +325,8 @@ def resolve_recommended_books(
             continue
         book = books_by_source_id.get(source_id)
         if book is None:
+            # No extra lookups: if we can't map it to an existing loaded book,
+            # just skip it (fast + avoids blank placeholder cards).
             continue
         if selected and not any(g in selected for g in book.get("genres", [])):
             continue
@@ -345,6 +429,7 @@ def render_book_detail_page(
     forum_store: dict,
     forum_posts_data: list[dict],
     clear_aws_bootstrap_cache: Callable[[], None] | None = None,
+    clear_book_recs_cache: Callable[[], None] | None = None,
 ) -> None:
     """Render Book Detail page with library and related forum discussions."""
     if st.button("← Back to Feed"):
@@ -354,6 +439,34 @@ def render_book_detail_page(
     selected_source_id = st.session_state.get("selected_book_source_id")
     if selected_source_id and selected_source_id in extended_books_by_source_id:
         book = extended_books_by_source_id[selected_source_id]
+    # If user navigated via source_id deep-link that's not in bootstrap data,
+    # attempt to fetch detail and build a minimal UI book dict.
+    if book is None and selected_source_id:
+        sid = str(selected_source_id).strip()
+        if sid and not sid.startswith("_idx_"):
+            detail = None
+            try:
+                detail = storage_get_book_details(sid)
+            except Exception:
+                detail = None
+            if not detail:
+                try:
+                    detail = books_service.get_book_detail(sid)
+                except Exception:
+                    detail = None
+            if detail:
+                genres = detail.get("genres") or detail.get("categories") or []
+                book = {
+                    "id": detail.get("id") or detail.get("internal_id") or 0,
+                    "source_id": detail.get("parent_asin") or sid,
+                    "title": detail.get("title") or sid,
+                    "author": detail.get("author_name") or detail.get("author") or "",
+                    "genres": genres if isinstance(genres, list) else [],
+                    "cover": detail.get("images") or detail.get("image_url") or "https://placehold.co/220x330?text=Book",
+                    "rating": float(detail.get("average_rating") or 0) if detail.get("average_rating") is not None else 0,
+                    "rating_count": int(detail.get("rating_number") or 0) if detail.get("rating_number") is not None else 0,
+                    "description": _description_from_detail(detail),
+                }
     if book is None:
         selected_id = st.session_state.get("selected_book_id")
         if selected_id is not None and selected_id in books_by_id:
@@ -470,9 +583,19 @@ def render_book_detail_page(
                         library_service.add_book_to_library(
                             user_id, library_book_id, shelf, genres_from_book=genres or None
                         )
+                        if clear_book_recs_cache is not None:
+                            clear_book_recs_cache()
+                        # Also clear any resolved-recommendations session cache so the Feed
+                        # doesn't keep showing a stale resolved list after the recommender runs.
+                        prefix = f"resolved_recs::{user_id}::"
+                        for k in list(st.session_state.keys()):
+                            if isinstance(k, str) and k.startswith(prefix):
+                                st.session_state.pop(k, None)
                     st.session_state["book_lib_last_msg"] = "Library updated." if current_status else "Added to your library."
                 except Exception:
                     st.session_state["book_lib_last_msg"] = "Failed to update library."
+                # Keep the user on the detail page after library updates.
+                st.session_state["show_book_detail_page"] = True
                 # Streamlit reruns the script automatically after this callback; do not call st.rerun() here.
 
             st.selectbox(
