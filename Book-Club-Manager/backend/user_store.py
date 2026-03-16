@@ -191,3 +191,4 @@ def create_user(store: dict, email: str, password: str) -> dict:
     save_user_forum(store)
     return users[email]
 
+
