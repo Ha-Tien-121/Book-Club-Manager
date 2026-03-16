@@ -1,56 +1,29 @@
 [
   {
     "average_rating": 4.6,
-    "title_author_key": "remarkably bright creatures|shelby van pelt",
+    "title_author_key": "demon copperhead|barbara kingsolver",
     "categories": [
-      "Mystery, Thriller & Suspense"
+      "Literature & Fiction"
     ],
-    "parent_asin": "0063204150",
-    "images": "",
-    "rating_number": 40420,
-    "author_name": "Shelby Van Pelt",
-    "title": "Remarkably Bright Creatures",
-    "checkouts": 1035
+    "parent_asin": "0063251922",
+    "images": "https://m.media-amazon.com/images/I/51s5pqj32GL._SX329_BO1,204,203,200_.jpg",
+    "rating_number": 53781,
+    "author_name": "Barbara Kingsolver",
+    "title": "Demon Copperhead",
+    "checkouts": 805
   },
   {
     "average_rating": 4.9,
-    "title_author_key": "fourth wing (the empyrean, 1)|rebecca yarros",
+    "title_author_key": "narwhalicorn and jelly|ben clanton",
     "categories": [
-      "Literature & Fiction",
-      "Action & Adventure"
+      "Children's Books"
     ],
-    "parent_asin": "1649374046",
-    "images": "https://m.media-amazon.com/images/I/51j8bRH5sDL._SX307_BO1,204,203,200_.jpg",
-    "rating_number": 41341,
-    "author_name": "Rebecca Yarros",
-    "title": "Fourth Wing (The Empyrean, 1)",
-    "checkouts": 788
-  },
-  {
-    "average_rating": 4.4,
-    "title_author_key": "tomorrow, and tomorrow, and tomorrow|gabrielle zevin",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0593321200",
-    "images": "https://m.media-amazon.com/images/I/51IIXddH0wL._SX327_BO1,204,203,200_.jpg",
-    "rating_number": 50999,
-    "author_name": "Gabrielle Zevin",
-    "title": "Tomorrow, and Tomorrow, and Tomorrow",
-    "checkouts": 759
-  },
-  {
-    "average_rating": 4.6,
-    "title_author_key": "the heaven & earth grocery store|james mcbride",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0593422945",
-    "images": "",
-    "rating_number": 3316,
-    "author_name": "James McBride",
-    "title": "The Heaven & Earth Grocery Store",
-    "checkouts": 742
+    "parent_asin": "0735266727",
+    "images": "https://m.media-amazon.com/images/I/51tJXH2FuRL._SX366_BO1,204,203,200_.jpg",
+    "rating_number": 406,
+    "author_name": "Ben Clanton",
+    "title": "Narwhalicorn and Jelly",
+    "checkouts": 441
   },
   {
     "average_rating": 4.5,
@@ -63,130 +36,20 @@
     "rating_number": 6909,
     "author_name": "Claire Keegan",
     "title": "Small Things Like These",
-    "checkouts": 623
+    "checkouts": 802
   },
   {
-    "average_rating": 4.8,
-    "title_author_key": "dog man|dav pilkey",
-    "categories": [
-      "Children's Books",
-      "Comics & Graphic Novels"
-    ],
-    "parent_asin": "1338801910",
-    "images": "https://m.media-amazon.com/images/I/51VyW1qRmSL._SX329_BO1,204,203,200_.jpg",
-    "rating_number": 4443,
-    "author_name": "Dav Pilkey",
-    "title": "Dog Man",
-    "checkouts": 618
-  },
-  {
-    "average_rating": 4,
-    "title_author_key": "yellowface|r f kuang",
+    "average_rating": 4.6,
+    "title_author_key": "parable of the sower|octavia e butler",
     "categories": [
       "Literature & Fiction"
     ],
-    "parent_asin": "0063250837",
-    "images": "",
-    "rating_number": 13658,
-    "author_name": "R. F. Kuang",
-    "title": "Yellowface",
-    "checkouts": 587
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "pigeon needs a bath!, the-pigeon series|mo willems",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "1423190874",
-    "images": "https://m.media-amazon.com/images/I/41v75rym74L._SX497_BO1,204,203,200_.jpg",
-    "rating_number": 5486,
-    "author_name": "Mo Willems",
-    "title": "Pigeon Needs a Bath!, The-Pigeon series",
-    "checkouts": 585
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "thank you book, the-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423178289",
-    "images": "https://m.media-amazon.com/images/I/51Ox3J1e6QL._SX363_BO1,204,203,200_.jpg",
-    "rating_number": 2738,
-    "author_name": "Mo Willems",
-    "title": "Thank You Book, The-An Elephant and Piggie Book",
-    "checkouts": 570
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "dog man unleashed|dav pilkey",
-    "categories": [
-      "Children's Books",
-      "Comics & Graphic Novels"
-    ],
-    "parent_asin": "0545935202",
-    "images": "https://m.media-amazon.com/images/I/51A490Wdp9L._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 20337,
-    "author_name": "Dav Pilkey",
-    "title": "Dog Man Unleashed",
-    "checkouts": 555
-  },
-  {
-    "average_rating": 4.7,
-    "title_author_key": "project hail mary|andy weir",
-    "categories": [
-      "Literature & Fiction",
-      "Action & Adventure"
-    ],
-    "parent_asin": "0593135202",
-    "images": "https://m.media-amazon.com/images/I/51kF646J6RL._SX329_BO1,204,203,200_.jpg",
-    "rating_number": 104448,
-    "author_name": "Andy Weir",
-    "title": "Project Hail Mary",
-    "checkouts": 547
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "i really like slop!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1484722620",
-    "images": "https://m.media-amazon.com/images/I/51FrhCJRElL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 810,
-    "author_name": "Mo Willems",
-    "title": "I Really Like Slop!-An Elephant and Piggie Book",
-    "checkouts": 530
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "captain underpants and the terrifying return of tippy tinkletrousers|dav pilkey",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1338347217",
-    "images": "https://m.media-amazon.com/images/I/51bEN8w3DIL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 4380,
-    "author_name": "Dav Pilkey",
-    "title": "Captain Underpants and the Terrifying Return of Tippy Tinkletrousers",
-    "checkouts": 525
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "wings of fire|mike holmes",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "1338730851",
-    "images": "https://m.media-amazon.com/images/I/51r2Tj7jorL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 5159,
-    "author_name": "Mike Holmes",
-    "title": "Wings of Fire",
-    "checkouts": 508
+    "parent_asin": "1538732181",
+    "images": "https://m.media-amazon.com/images/I/41zVmU1laSL._SX326_BO1,204,203,200_.jpg",
+    "rating_number": 15208,
+    "author_name": "Octavia E. Butler",
+    "title": "Parable of the Sower",
+    "checkouts": 721
   },
   {
     "average_rating": 4.9,
@@ -200,414 +63,7 @@
     "rating_number": 11295,
     "author_name": "Mo Willems",
     "title": "The Pigeon HAS to Go to School!",
-    "checkouts": 506
-  },
-  {
-    "average_rating": 4.3,
-    "title_author_key": "the midnight library|matt haig",
-    "categories": [
-      "Science Fiction"
-    ],
-    "parent_asin": "0525559477",
-    "images": "https://m.media-amazon.com/images/I/41ATfFjhelL._SX329_BO1,204,203,200_.jpg",
-    "rating_number": 232387,
-    "author_name": "Matt Haig",
-    "title": "The Midnight Library",
-    "checkouts": 498
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "narwhalicorn and jelly (a narwhal and jelly book #7)|ben clanton",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "0735266727",
-    "images": "https://m.media-amazon.com/images/I/51tJXH2FuRL._SX366_BO1,204,203,200_.jpg",
-    "rating_number": 406,
-    "author_name": "Ben Clanton",
-    "title": "Narwhalicorn and Jelly (A Narwhal and Jelly Book #7)",
-    "checkouts": 498
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "are you ready to play outside?-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423113470",
-    "images": "https://m.media-amazon.com/images/I/41Dbl+u7mQL._SX363_BO1,204,203,200_.jpg",
-    "rating_number": 1527,
-    "author_name": "Mo Willems",
-    "title": "Are You Ready to Play Outside?-An Elephant and Piggie Book",
-    "checkouts": 493
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "watch me throw the ball!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423113489",
-    "images": "https://m.media-amazon.com/images/I/41uxNK4OAVL._SX360_BO1,204,203,200_.jpg",
-    "rating_number": 609,
-    "author_name": "Mo Willems",
-    "title": "Watch Me Throw the Ball!-An Elephant and Piggie Book",
-    "checkouts": 482
-  },
-  {
-    "average_rating": 4.6,
-    "title_author_key": "parable of the sower (parable, 1)|octavia e butler",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "1538732181",
-    "images": "https://m.media-amazon.com/images/I/41zVmU1laSL._SX326_BO1,204,203,200_.jpg",
-    "rating_number": 15208,
-    "author_name": "Octavia E. Butler",
-    "title": "Parable of the Sower (Parable, 1)",
-    "checkouts": 470
-  },
-  {
-    "average_rating": 4.6,
-    "title_author_key": "demon copperhead|barbara kingsolver",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0063251922",
-    "images": "https://m.media-amazon.com/images/I/51s5pqj32GL._SX329_BO1,204,203,200_.jpg",
-    "rating_number": 53781,
-    "author_name": "Barbara Kingsolver",
-    "title": "Demon Copperhead",
-    "checkouts": 462
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "waiting is not easy!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "142319957X",
-    "images": "https://m.media-amazon.com/images/I/410-W1jR6jL._SX363_BO1,204,203,200_.jpg",
-    "rating_number": 14587,
-    "author_name": "Mo Willems",
-    "title": "Waiting Is Not Easy!-An Elephant and Piggie Book",
-    "checkouts": 450
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "moon rising|tui t sutherland",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "1338730894",
-    "images": "https://m.media-amazon.com/images/I/519LUQpuhcL._SX331_BO1,204,203,200_.jpg",
-    "rating_number": 2456,
-    "author_name": "Tui T. Sutherland",
-    "title": "Moon Rising",
-    "checkouts": 438
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "my friend is sad-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423102975",
-    "images": "https://m.media-amazon.com/images/I/41wfoIkn3AL._SX360_BO1,204,203,200_.jpg",
-    "rating_number": 1252,
-    "author_name": "Mo Willems",
-    "title": "My Friend is Sad-An Elephant and Piggie Book",
-    "checkouts": 432
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "the pigeon will ride the roller coaster!|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1454946865",
-    "images": "https://m.media-amazon.com/images/I/51-gH5345UL._SY498_BO1,204,203,200_.jpg",
-    "rating_number": 1280,
-    "author_name": "Mo Willems",
-    "title": "The Pigeon Will Ride the Roller Coaster!",
-    "checkouts": 428
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "pirates past noon graphic novel (magic tree house (r))|mary pope osborne",
-    "categories": [
-      "Children's Books",
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0593174801",
-    "images": "https://m.media-amazon.com/images/I/51pH9KAzePL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 116,
-    "author_name": "Mary Pope Osborne",
-    "title": "Pirates Past Noon Graphic Novel (Magic Tree House (R))",
-    "checkouts": 422
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "bob books sight words|lynn maslen kertell",
-    "categories": [
-      "Children's Books",
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0545019230",
-    "images": "https://m.media-amazon.com/images/I/512tbsxdFzL._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 6109,
-    "author_name": "Lynn Maslen Kertell",
-    "title": "Bob Books Sight Words",
-    "checkouts": 418
-  },
-  {
-    "average_rating": 4.6,
-    "title_author_key": "lessons in chemistry|bonnie garmus",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "038554734X",
-    "images": "https://m.media-amazon.com/images/I/41UG6tNeHBL._SX334_BO1,204,203,200_.jpg",
-    "rating_number": 189466,
-    "author_name": "Bonnie Garmus",
-    "title": "Lessons in Chemistry",
-    "checkouts": 411
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "the wild robot (the wild robot, 1)|peter brown",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "0316381993",
-    "images": "https://m.media-amazon.com/images/I/51FzBKG+xVL._SY344_BO1,204,203,200_.jpg",
-    "rating_number": 9516,
-    "author_name": "Peter Brown",
-    "title": "The Wild Robot (The Wild Robot, 1)",
-    "checkouts": 410
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "prince of the elves|kazu kibuishi",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "0545208890",
-    "images": "https://m.media-amazon.com/images/I/51Zc-9Ok70L._SX336_BO1,204,203,200_.jpg",
-    "rating_number": 2320,
-    "author_name": "Kazu Kibuishi",
-    "title": "Prince of the Elves",
-    "checkouts": 410
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "i want my hat back|jon klassen",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "0763655988",
-    "images": "https://m.media-amazon.com/images/I/41MhKkisOEL._SX358_BO1,204,203,200_.jpg",
-    "rating_number": 3076,
-    "author_name": "Jon Klassen",
-    "title": "I Want My Hat Back",
-    "checkouts": 408
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "i will take a nap!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1484716302",
-    "images": "https://m.media-amazon.com/images/I/41UCLLhx0UL._SX349_BO1,204,203,200_.jpg",
-    "rating_number": 1458,
-    "author_name": "Mo Willems",
-    "title": "I Will Take A Nap!-An Elephant and Piggie Book",
-    "checkouts": 407
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "captain underpants and the tyrannical retaliation of the turbo toilet 2000 (captain underpants)|dav pilkey",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1338347241",
-    "images": "https://m.media-amazon.com/images/I/51H12KvmBbL._SX336_BO1,204,203,200_.jpg",
-    "rating_number": 5837,
-    "author_name": "Dav Pilkey",
-    "title": "Captain Underpants and the Tyrannical Retaliation of the Turbo Toilet 2000 (Captain Underpants)",
-    "checkouts": 406
-  },
-  {
-    "average_rating": 4.7,
-    "title_author_key": "mary anne's bad luck mystery|ann m martin",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1338616102",
-    "images": "https://m.media-amazon.com/images/I/51+Tn6lN4wL._SX342_BO1,204,203,200_.jpg",
-    "rating_number": 968,
-    "author_name": "Ann M. Martin",
-    "title": "Mary Anne's Bad Luck Mystery",
-    "checkouts": 404
-  },
-  {
-    "average_rating": 4.7,
-    "title_author_key": "big nate|lincoln peirce",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1449497748",
-    "images": "https://m.media-amazon.com/images/I/51v7Ban7YAL._SX331_BO1,204,203,200_.jpg",
-    "rating_number": 3662,
-    "author_name": "Lincoln Peirce",
-    "title": "Big Nate",
-    "checkouts": 403
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "should i share my ice cream?-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423143434",
-    "images": "https://m.media-amazon.com/images/I/41YV63RNtTL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 3473,
-    "author_name": "Mo Willems",
-    "title": "Should I Share My Ice Cream?-An Elephant and Piggie Book",
-    "checkouts": 399
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "pigs make me sneeze!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423114116",
-    "images": "https://m.media-amazon.com/images/I/514LPe9lMBL._SX363_BO1,204,203,200_.jpg",
-    "rating_number": 1782,
-    "author_name": "Mo Willems",
-    "title": "Pigs Make Me Sneeze!-An Elephant and Piggie Book",
-    "checkouts": 396
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "dog man|dav pilkey",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "1338236598",
-    "images": "https://m.media-amazon.com/images/I/51rd+cbTvdL._SX436_BO1,204,203,200_.jpg",
-    "rating_number": 25536,
-    "author_name": "Dav Pilkey",
-    "title": "Dog Man",
-    "checkouts": 394
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "pete the cat and the cool caterpillar (i can read level 1)|james dean",
-    "categories": [
-      "Children's Books",
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0062675214",
-    "images": "https://m.media-amazon.com/images/I/51BMNw1RBcL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 1899,
-    "author_name": "James Dean",
-    "title": "Pete the Cat and the Cool Caterpillar (I Can Read Level 1)",
-    "checkouts": 390
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "i will surprise my friend!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423109627",
-    "images": "https://m.media-amazon.com/images/I/41fMXMdVZhL._SX363_BO1,204,203,200_.jpg",
-    "rating_number": 1318,
-    "author_name": "Mo Willems",
-    "title": "I Will Surprise My Friend!-An Elephant and Piggie Book",
-    "checkouts": 388
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "witches of brooklyn|sophie escabasse",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "0593119304",
-    "images": "https://m.media-amazon.com/images/I/51JkdeM0iwL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 372,
-    "author_name": "Sophie Escabasse",
-    "title": "Witches of Brooklyn",
-    "checkouts": 387
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "",
-    "categories": [
-      "Children's Books"
-    ],
-    "parent_asin": "1250220068",
-    "images": "https://m.media-amazon.com/images/I/51Xx2YM968L._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 1333,
-    "author_name": "",
-    "title": "InvestiGators",
-    "checkouts": 381
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "dog man|dav pilkey",
-    "categories": [
-      "Children's Books",
-      "Comics & Graphic Novels"
-    ],
-    "parent_asin": "0545581605",
-    "images": "https://m.media-amazon.com/images/I/41Y8g8S276L._SX336_BO1,204,203,200_.jpg",
-    "rating_number": 21481,
-    "author_name": "Dav Pilkey",
-    "title": "Dog Man",
-    "checkouts": 381
-  },
-  {
-    "average_rating": 4.7,
-    "title_author_key": "the nightingale|kristin hannah",
-    "categories": [
-      "Literature & Fiction"
-    ],
-    "parent_asin": "0312577222",
-    "images": "",
-    "rating_number": 282546,
-    "author_name": "Kristin Hannah",
-    "title": "The Nightingale",
-    "checkouts": 379
-  },
-  {
-    "average_rating": 4.8,
-    "title_author_key": "dawn and the impossible three|ann m martin",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1338067117",
-    "images": "",
-    "rating_number": 6715,
-    "author_name": "Ann M. Martin",
-    "title": "Dawn and the Impossible Three",
-    "checkouts": 378
+    "checkouts": 609
   },
   {
     "average_rating": 4.7,
@@ -621,61 +77,235 @@
     "rating_number": 12442,
     "author_name": "Raina Telgemeier",
     "title": "Ghosts",
-    "checkouts": 375
-  },
-  {
-    "average_rating": 4.9,
-    "title_author_key": "i love my new toy!-an elephant and piggie book|mo willems",
-    "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
-    ],
-    "parent_asin": "1423109619",
-    "images": "",
-    "rating_number": 974,
-    "author_name": "Mo Willems",
-    "title": "I Love My New Toy!-An Elephant and Piggie Book",
-    "checkouts": 374
+    "checkouts": 525
   },
   {
     "average_rating": 4.6,
-    "title_author_key": "big nate|lincoln peirce",
+    "title_author_key": "lessons in chemistry|bonnie garmus",
     "categories": [
-      "Children's Books",
-      "Growing Up & Facts of Life"
+      "Literature & Fiction"
     ],
-    "parent_asin": "1449462294",
-    "images": "https://m.media-amazon.com/images/I/51g5vhxRjbS._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 6464,
-    "author_name": "Lincoln Peirce",
-    "title": "Big Nate",
-    "checkouts": 373
+    "parent_asin": "038554734X",
+    "images": "https://m.media-amazon.com/images/I/41UG6tNeHBL._SX334_BO1,204,203,200_.jpg",
+    "rating_number": 189466,
+    "author_name": "Bonnie Garmus",
+    "title": "Lessons in Chemistry",
+    "checkouts": 481
+  },
+  {
+    "average_rating": 4.3,
+    "title_author_key": "the midnight library|matt haig",
+    "categories": [
+      "Science Fiction"
+    ],
+    "parent_asin": "0525559477",
+    "images": "https://m.media-amazon.com/images/I/41ATfFjhelL._SX329_BO1,204,203,200_.jpg",
+    "rating_number": 232387,
+    "author_name": "Matt Haig",
+    "title": "The Midnight Library",
+    "checkouts": 457
   },
   {
     "average_rating": 4.9,
-    "title_author_key": "let's go for a drive!-an elephant and piggie book|mo willems",
+    "title_author_key": "graphix dog man|dav pilkey",
+    "categories": [
+      "Children's Books",
+      "Comics & Graphic Novels"
+    ],
+    "parent_asin": "1338323210",
+    "images": "https://m.media-amazon.com/images/I/51TnbzizBpL._SX336_BO1,204,203,200_.jpg",
+    "rating_number": 30840,
+    "author_name": "Dav Pilkey",
+    "title": "GRAPHIX Dog Man",
+    "checkouts": 449
+  },
+  {
+    "average_rating": 4.8,
+    "title_author_key": "bob books sight words|lynn maslen kertell",
+    "categories": [
+      "Children's Books",
+      "Literature & Fiction"
+    ],
+    "parent_asin": "0545019230",
+    "images": "https://m.media-amazon.com/images/I/512tbsxdFzL._SX218_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "rating_number": 6109,
+    "author_name": "Lynn Maslen Kertell",
+    "title": "Bob Books Sight Words",
+    "checkouts": 445
+  },
+  {
+    "average_rating": 4.8,
+    "title_author_key": "the wild robot|peter brown",
+    "categories": [
+      "Children's Books"
+    ],
+    "parent_asin": "0316381993",
+    "images": "https://m.media-amazon.com/images/I/51FzBKG+xVL._SY344_BO1,204,203,200_.jpg",
+    "rating_number": 9516,
+    "author_name": "Peter Brown",
+    "title": "The Wild Robot",
+    "checkouts": 444
+  },
+  {
+    "average_rating": 4.9,
+    "title_author_key": "fourth wing|rebecca yarros",
+    "categories": [
+      "Literature & Fiction",
+      "Action & Adventure"
+    ],
+    "parent_asin": "1649374046",
+    "images": "https://m.media-amazon.com/images/I/51j8bRH5sDL._SX307_BO1,204,203,200_.jpg",
+    "rating_number": 41341,
+    "author_name": "Rebecca Yarros",
+    "title": "Fourth Wing",
+    "checkouts": 844
+  },
+  {
+    "average_rating": 4.8,
+    "title_author_key": "captain underpants and the tyrannical retaliation of the turbo toilet 2000|dav pilkey",
     "categories": [
       "Children's Books",
       "Growing Up & Facts of Life"
     ],
-    "parent_asin": "1423164822",
-    "images": "https://m.media-amazon.com/images/I/515pQRFltqL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
-    "rating_number": 4526,
-    "author_name": "Mo Willems",
-    "title": "Let's Go for a Drive!-An Elephant and Piggie Book",
-    "checkouts": 371
+    "parent_asin": "1338347241",
+    "images": "https://m.media-amazon.com/images/I/51H12KvmBbL._SX336_BO1,204,203,200_.jpg",
+    "rating_number": 5837,
+    "author_name": "Dav Pilkey",
+    "title": "Captain Underpants and the Tyrannical Retaliation of the Turbo Toilet 2000",
+    "checkouts": 425
   },
   {
-    "average_rating": 5,
-    "title_author_key": "",
+    "average_rating": 4.8,
+    "title_author_key": "captain underpants and the terrifying return of tippy tinkletrousers|dav pilkey",
     "categories": [
-      "Children's Books"
+      "Children's Books",
+      "Growing Up & Facts of Life"
     ],
-    "parent_asin": "1368072240",
-    "images": "https://m.media-amazon.com/images/I/51+ixs4EidL._SX362_BO1,204,203,200_.jpg",
-    "rating_number": 906,
-    "author_name": "",
-    "title": "An Elephant & Piggie Biggie! Volume 5 (An Elephant and Piggie Book)",
-    "checkouts": 371
+    "parent_asin": "1338347217",
+    "images": "https://m.media-amazon.com/images/I/51bEN8w3DIL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "rating_number": 4380,
+    "author_name": "Dav Pilkey",
+    "title": "Captain Underpants and the Terrifying Return of Tippy Tinkletrousers",
+    "checkouts": 421
+  },
+  {
+    "average_rating": 4.7,
+    "title_author_key": "the house in the cerulean sea|tj klune",
+    "categories": [
+      "LGBTQ+",
+      "Literature & Fiction"
+    ],
+    "parent_asin": "1250217288",
+    "images": "https://m.media-amazon.com/images/I/51E5BR5V9nL._SX319_BO1,204,203,200_.jpg",
+    "rating_number": 40408,
+    "author_name": "TJ Klune",
+    "title": "The House in the Cerulean Sea",
+    "checkouts": 418
+  },
+  {
+    "average_rating": 4.5,
+    "title_author_key": "the housemaid|freida mcfadden",
+    "categories": [
+      "Literature & Fiction"
+    ],
+    "parent_asin": "1538742578",
+    "images": "https://m.media-amazon.com/images/I/41zWWzbiHpL._SX331_BO1,204,203,200_.jpg",
+    "rating_number": 168023,
+    "author_name": "Freida McFadden",
+    "title": "The Housemaid",
+    "checkouts": 405
+  },
+  {
+    "average_rating": 4.9,
+    "title_author_key": "thank you book, the-an elephant and piggie book|mo willems",
+    "categories": [
+      "Children's Books",
+      "Growing Up & Facts of Life"
+    ],
+    "parent_asin": "1423178289",
+    "images": "https://m.media-amazon.com/images/I/51Ox3J1e6QL._SX363_BO1,204,203,200_.jpg",
+    "rating_number": 2738,
+    "author_name": "Mo Willems",
+    "title": "Thank You Book, The-An Elephant and Piggie Book",
+    "checkouts": 535
+  },
+  {
+    "average_rating": 4.8,
+    "title_author_key": "on tyranny graphic edition|timothy snyder",
+    "categories": [
+      "Politics & Social Sciences"
+    ],
+    "parent_asin": "1984859153",
+    "images": "https://m.media-amazon.com/images/I/412BP+rM0BL._SX356_BO1,204,203,200_.jpg",
+    "rating_number": 2441,
+    "author_name": "Timothy Snyder",
+    "title": "On Tyranny Graphic Edition",
+    "checkouts": 388
+  },
+  {
+    "average_rating": 4.7,
+    "title_author_key": "a fever in the heartland|timothy egan",
+    "categories": [
+      "History"
+    ],
+    "parent_asin": "0735225265",
+    "images": "https://m.media-amazon.com/images/I/51yOWfXnudL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "rating_number": 1791,
+    "author_name": "Timothy Egan",
+    "title": "A Fever in the Heartland",
+    "checkouts": 372
+  },
+  {
+    "average_rating": 4.5,
+    "title_author_key": "piranesi|susanna clarke",
+    "categories": [
+      "Literature & Fiction"
+    ],
+    "parent_asin": "163557563X",
+    "images": "https://m.media-amazon.com/images/I/412kWXy8VIL._SY291_BO1,204,203,200_QL40_FMwebp_.jpg",
+    "rating_number": 25618,
+    "author_name": "Susanna Clarke",
+    "title": "Piranesi",
+    "checkouts": 346
+  },
+  {
+    "average_rating": 4.9,
+    "title_author_key": "pigeon finds a hot dog!, the|mo willems",
+    "categories": [
+      "Children's Books",
+      "Growing Up & Facts of Life"
+    ],
+    "parent_asin": "0786818697",
+    "images": "https://m.media-amazon.com/images/I/41li0RB1mBL._SY498_BO1,204,203,200_.jpg",
+    "rating_number": 2904,
+    "author_name": "Mo Willems",
+    "title": "Pigeon Finds a Hot Dog!, The",
+    "checkouts": 575
+  },
+  {
+    "average_rating": 4.4,
+    "title_author_key": "crying in h mart|michelle zauner",
+    "categories": [
+      "Biographies & Memoirs"
+    ],
+    "parent_asin": "0525657746",
+    "images": "https://m.media-amazon.com/images/I/41FjAZwaZcL._SX328_BO1,204,203,200_.jpg",
+    "rating_number": 19326,
+    "author_name": "Michelle Zauner",
+    "title": "Crying in H Mart",
+    "checkouts": 343
+  },
+  {
+    "average_rating": 4.9,
+    "title_author_key": "garfield fat cat 3-pack, vol. 14|jim davis",
+    "categories": [
+      "Comics & Graphic Novels"
+    ],
+    "parent_asin": "0345491750",
+    "images": "https://m.media-amazon.com/images/I/51U4c8Zfd6L._SX469_BO1,204,203,200_.jpg",
+    "rating_number": 250,
+    "author_name": "Jim Davis",
+    "title": "Garfield Fat Cat 3-Pack, Vol. 14",
+    "checkouts": 338
   }
 ]

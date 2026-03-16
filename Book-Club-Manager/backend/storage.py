@@ -10,6 +10,8 @@ import boto3
 from boto3.dynamodb.conditions import Key
 import pandas as pd
 
+from backend import config as _config
+
 
 def _from_dynamo(obj: Any) -> Any:
     """Convert DynamoDB item to JSON-friendly types (Decimal -> int/float)."""
@@ -21,6 +23,18 @@ def _from_dynamo(obj: Any) -> Any:
         return {k: _from_dynamo(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_from_dynamo(v) for v in obj]
+    return obj
+
+
+def _to_dynamo(obj: Any) -> Any:
+    """Convert JSON data to DynamoDB types (float -> Decimal)."""
+    if isinstance(obj, float):
+        # Cast via string to avoid float precision issues in Decimal
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _to_dynamo(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_dynamo(v) for v in obj]
     return obj
 
 
@@ -81,12 +95,18 @@ def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: 
     else:
         try:
             from backend import config
+
             bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
+            prefix = getattr(config, "BOOK_SHARDS_S3_PREFIX", None) or os.getenv(
+                "BOOK_SHARDS_S3_PREFIX",
+                "books/shard/book_shards",
+            )
         except Exception:
             bucket = os.getenv("DATA_BUCKET")
+            prefix = os.getenv("BOOK_SHARDS_S3_PREFIX", "books/shard/book_shards")
         if not bucket:
             raise RuntimeError("DATA_BUCKET env not set")
-        path = f"s3://{bucket}/books/parent_asin/{shard}.parquet"
+        path = f"s3://{bucket}/{prefix.rstrip('/')}/{shard}.parquet"
 
     df = pd.read_parquet(path, engine=engine)
     if "parent_asin" not in df.columns:
@@ -107,7 +127,8 @@ def get_book_metadata(parent_asin: str) -> Optional[dict[str, Any]]:
     """
     Get book metadata without description from DynamoDB. Intended for homepage, library, etc.
     """
-    dynamodb = boto3.resource("dynamodb")
+    # Pin region so local dev doesn't depend on AWS default region.
+    dynamodb = boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
     table = dynamodb.Table(BOOKS_TABLE)
     try:
         resp = table.get_item(Key={"parent_asin": parent_asin})
@@ -124,7 +145,7 @@ def get_event_details(event_id: str) -> Optional[dict[str, Any]]:
     """
     Get all event details from DynamoDB.
     """
-    dynamodb = boto3.resource("dynamodb")
+    dynamodb = boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
     table = dynamodb.Table(EVENTS_TABLE)
     try:
         resp = table.get_item(Key={"event_id": event_id})
@@ -153,8 +174,7 @@ def increment_library_actions_since_recs(
     - Assumes USER_LIBRARY_TABLE has partition key `user_id`.
     - Does not run the recommender; callers decide what to do.
     """
-    # TODO: implement
-    dynamodb = boto3.resource("dynamodb")
+    dynamodb = boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
     table = dynamodb.Table(USER_LIBRARY_TABLE)
 
     try:
@@ -189,8 +209,7 @@ def reset_library_actions_since_recs(
     Reset the user's library action counter back to 0.
     Returns True on success, False otherwise.
     """
-    # TODO: implement
-    dynamodb = boto3.resource("dynamodb")
+    dynamodb = boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
     table = dynamodb.Table(USER_LIBRARY_TABLE)
     try:
         table.update_item(
@@ -214,10 +233,6 @@ def get_cached_event_recs(user_id: str) -> Optional[dict[str, Any]]:
         "next_expiry": <ISO 8601 string or epoch>,
       }
     """
-    # TODO: implement using a DynamoDB table or another store.
-    # Examples of what you might do here:
-    # - Look up an item by user_id in a `user_event_recs` table.
-    # - Deserialize any JSON payload stored for the recommendations.
     return None
 
 
@@ -229,10 +244,6 @@ def put_cached_event_recs(user_id: str, payload: dict[str, Any]) -> bool:
     events. The `payload` should already contain `events`, `generated_at`, and
     `next_expiry` fields.
     """
-    # TODO: implement using a DynamoDB table or another store.
-    # Examples of what you might do here:
-    # - Upsert an item in a `user_event_recs` table keyed by user_id.
-    # - Serialize `payload` to JSON if storing as a single string attribute.
     return False
 
 
@@ -240,7 +251,6 @@ def get_catalog(parent_asin: str) -> Optional[list[dict[str, Any]]]:
     """
     Get all catalog data matching the book.
     """
-    # TODO: implement
     return None
 
 
@@ -248,7 +258,6 @@ def get_user_accounts(user_id: str) -> Optional[dict[str, Any]]:
     """
     Get user account data.
     """
-    # TODO: implement
     return None
 
 
@@ -256,7 +265,6 @@ def get_user_books(user_id: str) -> Optional[list[dict[str, Any]]]:
     """
     Get user's books.
     """
-    # TODO: implement
     return None
 
 
@@ -264,7 +272,6 @@ def get_user_clubs(user_id: str) -> Optional[list[dict[str, Any]]]:
     """
     Get user's clubs.
     """
-    # TODO: implement
     return None
 
 
@@ -272,7 +279,6 @@ def get_user_forums(user_id: str) -> Optional[list[dict[str, Any]]]:
     """
     Get user's forum activity.
     """
-    # TODO: implement
     return None
 
 
@@ -280,7 +286,6 @@ def get_form_thread(parent_asin: str) -> Optional[dict[str, Any]]:
     """
     Get forum thread for a book.
     """
-    # TODO: implement
     return None
 
 
@@ -305,6 +310,26 @@ def _default_books_record():
 class LocalStorage:
     """Local file-backed storage. Delegates to user_store and forum_store for file I/O."""
 
+    _cache: dict[str, Any] = {}
+
+    def _load_json_file(self, path, *, cache_key: str) -> Any:
+        """Load JSON from disk with a simple in-process cache."""
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        try:
+            if not path or not path.exists():
+                self._cache[cache_key] = None
+                return None
+            import json
+
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._cache[cache_key] = data
+            return data
+        except Exception:
+            self._cache[cache_key] = None
+            return None
+
     def get_top50_review_books(self):
         """Return list of book dicts from reviews_top50_books.json (local path)."""
         import sys
@@ -313,11 +338,12 @@ class LocalStorage:
         path = getattr(mod, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None) if mod else None
         if path is None:
             path = getattr(config, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None)
+        # Fall back to the smaller reviews_top25_books.json if top-50 isn't present locally.
         if not path or not path.exists():
+            path = getattr(config, "PROCESSED_DIR", None) / "reviews_top25_books.json"
+        data = self._load_json_file(path, cache_key=f"reviews::{str(path)}")
+        if not data:
             return []
-        import json
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
         if isinstance(data, list):
             return data
         if isinstance(data, dict) and "books" in data:
@@ -415,25 +441,129 @@ class LocalStorage:
         save_forum_store(db)
 
     def get_user_recommendations(self, user_id):
-        return None  # local: no table; implement if needed
+        if not user_id:
+            return None
+        from backend import config
+
+        path = getattr(config, "USER_RECOMMENDATIONS_PATH", None)
+        if not path:
+            return None
+        uid = str(user_id).strip().lower()
+        try:
+            if not path.exists():
+                return None
+            import json
+
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+            if not isinstance(data, dict):
+                return None
+            rec = data.get(uid)
+            return rec if isinstance(rec, dict) else None
+        except Exception:
+            return None
 
     def save_user_recommendations(self, user_id, rec):
-        pass
+        if not user_id:
+            return
+        from backend import config
+
+        path = getattr(config, "USER_RECOMMENDATIONS_PATH", None)
+        if not path:
+            return
+        uid = str(user_id).strip().lower()
+        try:
+            import json
+
+            # Ensure directory exists.
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data: dict = {}
+            if path.exists():
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        loaded = json.load(f) or {}
+                    if isinstance(loaded, dict):
+                        data = loaded
+                except Exception:
+                    data = {}
+            data[uid] = rec or {}
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            return
 
     def get_soonest_events(self, limit=10):
-        return []
+        from backend import config
+
+        path = getattr(config, "PROCESSED_DIR", None) / "book_events_clean.json"
+        data = self._load_json_file(path, cache_key="book_events_clean")
+        if not isinstance(data, list):
+            return []
+        # Match CloudStorage semantics: return soonest by ttl (ascending).
+        items = sorted(
+            (e for e in data if isinstance(e, dict)),
+            key=lambda x: int(x.get("ttl") or x.get("expiry") or 0),
+        )
+        return items[: max(0, int(limit))]
 
     def get_book_metadata(self, parent_asin):
-        return get_book_metadata(parent_asin)
+        # Local metadata comes from the curated review list(s).
+        pid = str(parent_asin or "").strip()
+        if not pid:
+            return None
+        # Try reviews list first.
+        for b in (self.get_top50_review_books() or []):
+            if isinstance(b, dict) and str(b.get("parent_asin") or b.get("source_id") or "").strip() == pid:
+                return dict(b)
+        # Try SPL trending list (if available locally).
+        for b in (self.get_spl_top50_checkout_books() or []):
+            if isinstance(b, dict) and str(b.get("parent_asin") or b.get("source_id") or "").strip() == pid:
+                return dict(b)
+        return None
+
+    def get_books_metadata_batch(self, parent_asins: list[str]) -> dict[str, dict]:
+        ids = [str(x).strip() for x in (parent_asins or []) if str(x).strip()]
+        if not ids:
+            return {}
+        wanted = set(ids)
+        out: dict[str, dict] = {}
+        for b in (self.get_top50_review_books() or []):
+            if not isinstance(b, dict):
+                continue
+            pid = str(b.get("parent_asin") or b.get("source_id") or "").strip()
+            if pid and pid in wanted and pid not in out:
+                out[pid] = dict(b)
+        for b in (self.get_spl_top50_checkout_books() or []):
+            if not isinstance(b, dict):
+                continue
+            pid = str(b.get("parent_asin") or b.get("source_id") or "").strip()
+            if pid and pid in wanted and pid not in out:
+                out[pid] = dict(b)
+        return out
 
     def get_book_details(self, parent_asin):
-        return get_book_details(parent_asin)
+        # Local details are limited; return metadata (no S3/parquet reads).
+        return self.get_book_metadata(parent_asin)
 
     def get_event_details(self, event_id):
-        return get_event_details(event_id)
+        eid = str(event_id or "").strip()
+        if not eid:
+            return None
+        for e in self.get_soonest_events(500) or []:
+            if str(e.get("event_id") or "").strip() == eid:
+                return dict(e)
+        return None
 
     def get_events_by_city(self, city_state):
-        return []
+        city_state = str(city_state or "").strip()
+        if not city_state:
+            return []
+        events = [
+            e
+            for e in (self.get_soonest_events(500) or [])
+            if str(e.get("city_state") or "").strip() == city_state
+        ]
+        return events
 
     def get_forum_post(self, post_id):
         return None
@@ -442,6 +572,16 @@ class LocalStorage:
         pass
 
     def get_spl_top50_checkout_books(self):
+        from backend import config
+
+        path = getattr(config, "PROCESSED_DIR", None) / "spl_top50_checkouts_in_books.json"
+        data = self._load_json_file(path, cache_key="spl_top50_checkouts_in_books")
+        if not data:
+            return []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("books") or data.get("items") or []
         return []
 
     def get_forum_thread_for_book(self, parent_asin):
@@ -451,14 +591,27 @@ class LocalStorage:
         return None
 
     def get_events_for_book(self, parent_asin, limit=10):
-        return []
+        pid = str(parent_asin or "").strip()
+        if not pid:
+            return []
+        events = [
+            e
+            for e in (self.get_soonest_events(500) or [])
+            if str(e.get("parent_asin") or "").strip() == pid
+        ]
+        return events[: max(0, int(limit))]
 
 
 class CloudStorage:
     """AWS-backed storage (S3, DynamoDB). Use APP_ENV=aws to develop against AWS."""
 
     def _dynamo(self):
-        return boto3.resource("dynamodb")
+        # Always pin region so local dev doesn't depend on AWS CLI default region.
+        return boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
+
+    def _s3(self):
+        # Always pin region (bucket is regional and credentials may have default region elsewhere).
+        return boto3.client("s3", region_name=getattr(_config, "AWS_REGION", None))
 
     def _table(self, config_attr: str, env_fallback: str):
         from backend import config
@@ -467,16 +620,17 @@ class CloudStorage:
 
     def get_top50_review_books(self):
         """Return list of book dicts from S3 (reviews_top50_books.json)."""
-        from backend import config
-        bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
-        key = getattr(config, "REVIEWS_TOP50_BOOKS_S3_KEY", None) or os.getenv("REVIEWS_TOP50_BOOKS_S3_KEY", "books/reviews_top50_books.json")
+        bucket = getattr(_config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
+        key = getattr(_config, "REVIEWS_TOP50_BOOKS_S3_KEY", None) or os.getenv(
+            "REVIEWS_TOP50_BOOKS_S3_KEY", "books/reviews_top50_books.json"
+        )
         if not bucket:
             return []
         try:
-            s3 = boto3.client("s3")
-            resp = s3.get_object(Bucket=bucket, Key=key)
+            resp = self._s3().get_object(Bucket=bucket, Key=key)
             data = json.loads(resp["Body"].read().decode("utf-8"))
-        except Exception:
+        except Exception as e:
+            logging.warning("get_top50_review_books (S3) failed: %s", e)
             return []
         if isinstance(data, list):
             return data
@@ -613,7 +767,8 @@ class CloudStorage:
             resp = table.get_item(Key={"user_email": user_id})
             item = resp.get("Item")
             return _from_dynamo(item) if item else None
-        except Exception:
+        except Exception as e:
+            logging.warning("get_user_recommendations failed for %s: %s", user_id, e)
             return None
 
     def save_user_recommendations(self, user_id: str, rec: dict) -> None:
@@ -622,9 +777,10 @@ class CloudStorage:
         user_id = str(user_id).strip().lower()
         try:
             table = self._table("USER_RECOMMENDATIONS_TABLE", "user_recommendations")
-            table.put_item(Item={"user_email": user_id, **rec})
-        except Exception:
-            pass
+            item = {"user_email": user_id, **rec}
+            table.put_item(Item=_to_dynamo(item))
+        except Exception as e:
+            logging.warning("save_user_recommendations failed for %s: %s", user_id, e)
 
     def get_soonest_events(self, limit: int = 10) -> list:
         """Return soonest-upcoming events (by ttl).
@@ -632,8 +788,7 @@ class CloudStorage:
         Tries the configured EVENTS_GSI query first, and falls back to a table
         scan when GSI query is unavailable (for example due to IAM/index config).
         """
-        from backend import config
-        gsi = getattr(config, "EVENTS_GSI", None) or os.getenv("EVENTS_GSI", "").strip() or None
+        gsi = getattr(_config, "EVENTS_GSI", None) or os.getenv("EVENTS_GSI", "").strip() or None
         try:
             table = self._table("EVENTS_TABLE", "events")
             if gsi:
@@ -659,13 +814,64 @@ class CloudStorage:
             return []
 
     def get_book_metadata(self, parent_asin: str): return get_book_metadata(parent_asin)
+    def get_books_metadata_batch(self, parent_asins: list[str]) -> dict[str, dict]:
+        """Batch fetch book metadata from DynamoDB by parent_asin.
+
+        Returns mapping parent_asin -> metadata dict for items that exist.
+        Uses BatchGetItem (up to 100 keys/request).
+        """
+        ids = [str(x).strip() for x in (parent_asins or []) if str(x).strip()]
+        if not ids:
+            return {}
+        # Deduplicate while preserving order (stable).
+        ids = list(dict.fromkeys(ids))
+        out: dict[str, dict] = {}
+        try:
+            client = boto3.client(
+                "dynamodb", region_name=getattr(_config, "AWS_REGION", None)
+            )
+            table = self._table("BOOKS_TABLE", "books").name
+            # DynamoDB BatchGetItem limit: 100 keys.
+            for i in range(0, len(ids), 100):
+                chunk = ids[i : i + 100]
+                req = {
+                    table: {
+                        "Keys": [{"parent_asin": {"S": pid}} for pid in chunk]
+                    }
+                }
+                resp = client.batch_get_item(RequestItems=req)
+                items = (resp.get("Responses") or {}).get(table) or []
+                # items are in Dynamo wire format; reuse boto3 TypeDeserializer via resource
+                # by round-tripping through Table? We'll do lightweight manual decode via _from_dynamo
+                # by first converting attribute values with boto3.dynamodb.types.TypeDeserializer if available.
+                try:
+                    from boto3.dynamodb.types import TypeDeserializer
+
+                    deser = TypeDeserializer()
+
+                    def _decode_item(it: dict) -> dict:
+                        return {k: deser.deserialize(v) for k, v in it.items()}
+
+                    decoded = [_decode_item(it) for it in items]
+                except Exception:
+                    decoded = items  # best-effort; may already be plain dicts in some envs
+                for it in decoded:
+                    try:
+                        meta = _from_dynamo(it)
+                    except Exception:
+                        meta = it
+                    pid = str((meta or {}).get("parent_asin") or "").strip()
+                    if pid:
+                        out[pid] = dict(meta)
+        except Exception as e:
+            logging.warning("get_books_metadata_batch failed: %s", e)
+        return out
     def get_book_details(self, parent_asin: str): return get_book_details(parent_asin)
     def get_event_details(self, event_id: str): return get_event_details(event_id)
 
     def get_events_by_city(self, city_state: str) -> list:
         """Query events by city_state using EVENTS_CITY_STATE_GSI if set."""
-        from backend import config
-        gsi = getattr(config, "EVENTS_CITY_STATE_GSI", None) or os.getenv("EVENTS_CITY_STATE_GSI", "").strip() or None
+        gsi = getattr(_config, "EVENTS_CITY_STATE_GSI", None) or os.getenv("EVENTS_CITY_STATE_GSI", "").strip() or None
         if not gsi:
             return []
         try:
@@ -685,8 +891,7 @@ class CloudStorage:
             return None
         user_id = str(user_id).strip().lower()
         try:
-            from backend import config
-            pk = getattr(config, "USER_ACCOUNTS_PK", "user_id")
+            pk = getattr(_config, "USER_ACCOUNTS_PK", "user_id")
             table = self._table("USER_ACCOUNTS_TABLE", "user_accounts")
             resp = table.get_item(Key={pk: user_id})
             item = resp.get("Item")
@@ -698,8 +903,7 @@ class CloudStorage:
         if not record:
             return
         try:
-            from backend import config
-            pk = getattr(config, "USER_ACCOUNTS_PK", "user_id")
+            pk = getattr(_config, "USER_ACCOUNTS_PK", "user_id")
             table = self._table("USER_ACCOUNTS_TABLE", "user_accounts")
             item = dict(record)
             # Ensure partition key is in the item (table may use user_id or user_email).
@@ -714,8 +918,7 @@ class CloudStorage:
             return None
         user_id = str(user_id).strip().lower()
         try:
-            from backend import config
-            pk = getattr(config, "USER_EVENTS_PK", "user_id")
+            pk = getattr(_config, "USER_EVENTS_PK", "user_id")
             table = self._table("USER_EVENTS_TABLE", "user_events")
             resp = table.get_item(Key={pk: user_id}, ConsistentRead=True)
             item = resp.get("Item")
@@ -728,8 +931,7 @@ class CloudStorage:
             return
         user_id = str(user_id).strip().lower()
         try:
-            from backend import config
-            pk = getattr(config, "USER_EVENTS_PK", "user_email")
+            pk = getattr(_config, "USER_EVENTS_PK", "user_email")
             table = self._table("USER_EVENTS_TABLE", "user_events")
             item = dict(data)
             if pk not in item:
@@ -751,12 +953,11 @@ class CloudStorage:
 
     def load_forum_db(self) -> list:
         """Forum posts from DynamoDB. Reads next_post_id from META row; posts from pk=POST items."""
-        from backend import config
-        pk = getattr(config, "FORUM_POSTS_PK", "pk")
-        sk_name = getattr(config, "FORUM_POSTS_SK", "sk")
-        pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
-        meta_pk = getattr(config, "FORUM_POSTS_META_PK", "META")
-        next_sk = getattr(config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
+        pk = getattr(_config, "FORUM_POSTS_PK", "pk")
+        sk_name = getattr(_config, "FORUM_POSTS_SK", "sk")
+        pk_value = getattr(_config, "FORUM_POSTS_PK_VALUE", "POST")
+        meta_pk = getattr(_config, "FORUM_POSTS_META_PK", "META")
+        next_sk = getattr(_config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
         try:
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
             # Get next_post_id from the counter row (pk=META, sk=next_post_id).
@@ -789,12 +990,11 @@ class CloudStorage:
         """Persist forum state: write each post and update the next_post_id counter row."""
         if not db:
             return
-        from backend import config
-        pk = getattr(config, "FORUM_POSTS_PK", "pk")
-        sk = getattr(config, "FORUM_POSTS_SK", "sk")
-        pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
-        meta_pk = getattr(config, "FORUM_POSTS_META_PK", "META")
-        next_sk = getattr(config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
+        pk = getattr(_config, "FORUM_POSTS_PK", "pk")
+        sk = getattr(_config, "FORUM_POSTS_SK", "sk")
+        pk_value = getattr(_config, "FORUM_POSTS_PK_VALUE", "POST")
+        meta_pk = getattr(_config, "FORUM_POSTS_META_PK", "META")
+        next_sk = getattr(_config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
         try:
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
             for post in (db.get("posts") or [])[:500]:
@@ -816,10 +1016,9 @@ class CloudStorage:
 
     def get_forum_post(self, post_id) -> Optional[dict]:
         try:
-            from backend import config
-            pk = getattr(config, "FORUM_POSTS_PK", "pk")
-            sk = getattr(config, "FORUM_POSTS_SK", "sk")
-            pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
+            pk = getattr(_config, "FORUM_POSTS_PK", "pk")
+            sk = getattr(_config, "FORUM_POSTS_SK", "sk")
+            pk_value = getattr(_config, "FORUM_POSTS_PK_VALUE", "POST")
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
             resp = table.get_item(Key={pk: str(pk_value), sk: str(int(post_id))})
             item = resp.get("Item")
@@ -833,10 +1032,9 @@ class CloudStorage:
 
     def update_forum_post(self, post_id, post: dict) -> None:
         try:
-            from backend import config
-            pk = getattr(config, "FORUM_POSTS_PK", "pk")
-            sk = getattr(config, "FORUM_POSTS_SK", "sk")
-            pk_value = getattr(config, "FORUM_POSTS_PK_VALUE", "POST")
+            pk = getattr(_config, "FORUM_POSTS_PK", "pk")
+            sk = getattr(_config, "FORUM_POSTS_SK", "sk")
+            pk_value = getattr(_config, "FORUM_POSTS_PK_VALUE", "POST")
             pid = int(post_id)
             post["id"] = pid
             post["post_id"] = pid
@@ -884,8 +1082,7 @@ class CloudStorage:
         return data if isinstance(data, list) else data.get("books", data.get("items", []))
 
     def get_forum_thread_for_book(self, parent_asin: str) -> list:
-        from backend import config
-        gsi = getattr(config, "FORUM_POSTS_GSI", None) or os.getenv("FORUM_POSTS_GSI", "").strip() or None
+        gsi = getattr(_config, "FORUM_POSTS_GSI", None) or os.getenv("FORUM_POSTS_GSI", "").strip() or None
         if not gsi:
             return []
         try:
@@ -904,8 +1101,7 @@ class CloudStorage:
         return {"posts": posts} if posts else None
 
     def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list:
-        from backend import config
-        gsi = getattr(config, "EVENTS_PARENT_ASIN_GSI", None) or os.getenv("EVENTS_PARENT_ASIN_GSI", "").strip() or None
+        gsi = getattr(_config, "EVENTS_PARENT_ASIN_GSI", None) or os.getenv("EVENTS_PARENT_ASIN_GSI", "").strip() or None
         if not gsi:
             return []
         try:

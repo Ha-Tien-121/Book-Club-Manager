@@ -85,6 +85,8 @@ EVENTS_PARENT_ASIN_GSI = os.getenv("EVENTS_PARENT_ASIN_GSI", "parent_asin_ttl-in
 
 # S3 bucket for book data and images.
 DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
+# S3 prefix for sharded book Parquet files keyed by parent_asin.
+BOOK_SHARDS_S3_PREFIX = os.getenv("BOOK_SHARDS_S3_PREFIX", "books/shard/parent_asin")
 # S3 key for SPL top-50 checkouts JSON (list of book dicts).
 TOP50_BOOKS_S3_KEY = os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
 # S3 key for default/cold-start book recs (no genre prefs): top 50 most popular from reviews.
@@ -107,7 +109,35 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 
 # Book recommender: set USE_BOOK_ML_RECOMMENDER=1 to try loading ML model; otherwise use
 # fallback (reviews_top50 from storage). Use fallback when ML artifacts are not ready.
-USE_BOOK_ML_RECOMMENDER = os.getenv("USE_BOOK_ML_RECOMMENDER", "").strip().lower() in ("1", "true", "yes")
+USE_BOOK_ML_RECOMMENDER = os.getenv("USE_BOOK_ML_RECOMMENDER", "1").strip().lower() in ("1", "true", "yes")
+
+# ML artifact location (optional). When running with APP_ENV=aws, the recommender can
+# download missing artifacts from S3 into a local cache dir (e.g. /tmp) at runtime.
+# Set these env vars in your deployment so instances/containers can self-bootstrap.
+# If unset, the recommender will only load from the local filesystem.
+ML_ARTIFACTS_BUCKET = os.getenv("ML_ARTIFACTS_BUCKET", DATA_BUCKET)
+ML_ARTIFACTS_PREFIX = os.getenv("ML_ARTIFACTS_PREFIX", "books").strip().strip("/")
+BOOK_RECOMMENDER_MODEL_S3_KEY = os.getenv(
+    "BOOK_RECOMMENDER_MODEL_S3_KEY",
+    f"{ML_ARTIFACTS_PREFIX}/book_recommender_model.pkl",
+)
+BOOK_RECOMMENDER_SCALER_S3_KEY = os.getenv(
+    "BOOK_RECOMMENDER_SCALER_S3_KEY",
+    f"{ML_ARTIFACTS_PREFIX}/feature_scaler.pkl",
+)
+BOOK_SIMILARITY_S3_KEY = os.getenv(
+    "BOOK_SIMILARITY_S3_KEY",
+    f"{ML_ARTIFACTS_PREFIX}/book_similarity.npz",
+)
+BOOK_RATINGS_S3_KEY = os.getenv(
+    "BOOK_RATINGS_S3_KEY",
+    f"{ML_ARTIFACTS_PREFIX}/book_ratings.npz",
+)
+BOOK_ID_TO_IDX_S3_KEY = os.getenv(
+    "BOOK_ID_TO_IDX_S3_KEY",
+    f"{ML_ARTIFACTS_PREFIX}/book_id_to_idx.json",
+)
+ML_ARTIFACTS_LOCAL_CACHE_DIR = os.getenv("ML_ARTIFACTS_LOCAL_CACHE_DIR", "/tmp/bookish-ml")
 
 # Max characters to show for forum post preview in list views (full text shown when "Open discussion").
 FORUM_PREVIEW_MAX_CHARS = int(os.getenv("FORUM_PREVIEW_MAX_CHARS", "280").strip() or "280")

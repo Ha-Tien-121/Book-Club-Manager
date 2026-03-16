@@ -10,7 +10,7 @@ from backend import config
 from backend.data_loader import books_to_ui_shape, build_ui_bootstrap, load_data
 from backend.services import books_service, events_service
 from backend.services.recommender_service import (
-    get_book_recommendations,
+    get_recommended_books_for_user,
     get_recommended_events_for_user,
 )
 from backend.config import GENRE_DROPDOWN_OPTIONS
@@ -67,14 +67,27 @@ def _cached_aws_bootstrap():
 
 @st.cache_data(ttl=_FEED_CACHE_TTL, show_spinner=False)
 def _cached_spl_trending():
-    """SPL trending list so Feed doesn't refetch on every carousel click."""
+    """Trending list so Feed doesn't refetch on every carousel click.
+
+    - AWS + Local: SPL top-50 checkouts ("Trending in Seattle").
+      In local mode this reads `data/processed/spl_top50_checkouts_in_books.json`.
+    """
     return books_service.get_trending_books_spl(50) or []
 
 
 @st.cache_data(ttl=_FEED_CACHE_TTL, show_spinner=False)
 def _cached_book_recommendations(user_email: str):
-    """Recommendations by user so we don't refetch on every interaction."""
-    return get_book_recommendations(user_email or "", top_k=50)
+    """Recommendations by user so we don't refetch on every interaction.
+
+    Returns a dict so callers can key further caches off book_updated_at.
+    """
+    email = (user_email or "").strip().lower()
+    storage = get_storage()
+    rec = storage.get_user_recommendations(email) or {}
+    return {
+        "book_updated_at": int(rec.get("book_updated_at") or 0),
+        "recommended_books": get_recommended_books_for_user(email),
+    }
 
 
 def init_session(books: list[dict]) -> None:
@@ -82,7 +95,9 @@ def init_session(books: list[dict]) -> None:
     st.session_state.setdefault("signed_in", False)
     st.session_state.setdefault("user_email", "")
     st.session_state.setdefault("user_name", "")
-    st.session_state.setdefault("selected_book_id", books[0]["id"])
+    # Local dev can start with an empty dataset if processed files are missing.
+    first_id = books[0]["id"] if books else None
+    st.session_state.setdefault("selected_book_id", first_id)
     st.session_state.setdefault("selected_book_source_id", None)
     st.session_state.setdefault("show_book_detail_page", False)
     st.session_state.setdefault("selected_forum_post_id", None)
@@ -105,7 +120,8 @@ def handle_query_navigation(
     """Handle deep-link query params for book detail and forum detail navigation."""
     open_val = st.query_params.get("open")
     source_id_param = (st.query_params.get("source_id") or "").strip()
-    if open_val == "detail" and source_id_param and source_id_param in extended_books_by_source_id:
+    # Allow deep-link to any source_id; detail page can fetch metadata on demand.
+    if open_val == "detail" and source_id_param:
         st.session_state["selected_book_source_id"] = source_id_param
         st.session_state["selected_book_id"] = None
         st.session_state["show_book_detail_page"] = True
@@ -147,7 +163,22 @@ def main() -> None:
     if getattr(config, "IS_AWS", False):
         data = _cached_aws_bootstrap()
     else:
-        data = load_data()
+        # Keep local mode close to AWS by using services + build_ui_bootstrap too.
+        raw_books = books_service.get_trending_books_reviews(50) or []
+        try:
+            spl = books_service.get_trending_books_spl(50) or []
+            seen = {b.get("parent_asin") or b.get("source_id") for b in raw_books}
+            for b in spl:
+                aid = b.get("parent_asin") or b.get("source_id")
+                if aid and aid not in seen:
+                    seen.add(aid)
+                    raw_books.append(b)
+        except Exception:
+            pass
+        events = events_service.get_explore_events(36) or []
+        forum_db = storage.load_forum_db()
+        forum_posts_raw = forum_db.get("posts", []) if isinstance(forum_db, dict) else []
+        data = build_ui_bootstrap(raw_books, events, forum_posts_raw)
     books = data["books"]
     books_by_id = data["books_by_id"]
     books_by_source_id = data["books_by_source_id"]
@@ -228,6 +259,7 @@ def main() -> None:
             forum_store=forum_store,
             forum_posts_data=forum_posts_data,
             clear_aws_bootstrap_cache=_cached_aws_bootstrap.clear,
+            clear_book_recs_cache=_cached_book_recommendations.clear,
         )
         return
 
