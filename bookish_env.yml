@@ -8,6 +8,7 @@ dependencies:
   - pandas
   - numpy
   - scipy
+  - scikit-learn
   - requests
   - python-dotenv
   - pylint=4.0.4
