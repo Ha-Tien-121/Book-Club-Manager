@@ -62,6 +62,25 @@ def test_books_from_services_to_ui_shape_normalizes_fields() -> None:
     assert b["spl_available"] is False
 
 
+def test_books_from_services_to_ui_shape_parses_categories_string_and_handles_bad_literal() -> None:
+    """Covers branches where categories is a string, including bad ast.literal_eval."""
+    # First book: categories as a list-like string literal.
+    # Second book: categories as a non-list string that triggers the exception path.
+    raw = [
+        {"parent_asin": "P1", "title": "T1", "author_name": "A1", "categories": "['X', ' Y ']"},
+        {"parent_asin": "P2", "title": "T2", "author_name": "A2", "categories": "Not a list"},
+    ]
+
+    out = dl.books_to_ui_shape(raw, max_count=10)
+
+    assert len(out) == 2
+    b1, b2 = out
+    # First book: parsed list literal, trimmed genres.
+    assert b1["genres"] == ["X", "Y"]
+    # Second book: falls back to treating the string as a single category.
+    assert b2["genres"] == ["Not a list"]
+
+
 def test_events_to_clubs_ui_shape_parses_tags_and_links_book() -> None:
     books = [{"id": 1, "source_id": "P1", "title": "Book One"}]
     books_by_source_id: Dict[str, Dict[str, Any]] = {str(b["source_id"]): b for b in books}
@@ -101,6 +120,36 @@ def test_events_to_clubs_ui_shape_parses_tags_and_links_book() -> None:
     assert c["external_link"] == "https://example.com"
 
 
+def test_events_to_clubs_ui_shape_tag_sources_and_genre_fallbacks() -> None:
+    """Covers tags as set/string and genre/General fallbacks."""
+    books_by_source_id: Dict[str, Dict[str, Any]] = {}
+    events = [
+        # tags as set
+        {"id": 1, "tags": {"A", "B"}, "genre": "Fantasy"},
+        # tags as comma/semicolon-separated string
+        {"id": 2, "tags": "X, Y; Z", "genre": "Mystery"},
+        # no tags but explicit genre
+        {"id": 3, "genre": "Sci-Fi"},
+        # no tags and no genre -> "General"
+        {"id": 4},
+    ]
+
+    clubs = dl._events_to_clubs_ui_shape(events, books_by_source_id)
+
+    assert len(clubs) == 4
+    # First: tags from set, order-insensitive but not empty.
+    assert set(clubs[0]["tags"]) == {"A", "B"}
+    assert clubs[0]["genre"] == "Fantasy"
+    # Second: string split into tags.
+    assert clubs[1]["tags"] == ["X", "Y", "Z"]
+    assert clubs[1]["genre"] == "Mystery"
+    # Third: falls back to ['Sci-Fi'] tag.
+    assert clubs[2]["tags"] == ["Sci-Fi"]
+    # Fourth: falls back to ['General'] tag and "General" genre.
+    assert clubs[3]["tags"] == ["General"]
+    assert clubs[3]["genre"] == "General"
+
+
 def test_forum_posts_to_ui_shape_uses_tags_and_truncates_preview() -> None:
     long_text = "x" * 150
     posts = [
@@ -128,6 +177,31 @@ def test_forum_posts_to_ui_shape_uses_tags_and_truncates_preview() -> None:
     assert len(p["preview"]) <= 121  # 120 chars plus ellipsis
 
 
+def test_forum_posts_to_ui_shape_uses_genre_when_no_tags_and_handles_empty_text() -> None:
+    posts = [
+        {
+            "id": None,
+            "title": None,
+            "author": None,
+            "genre": "Sci-Fi",
+            "text": "",
+            "replies": None,
+            "likes": None,
+        }
+    ]
+
+    ui = dl._forum_posts_to_ui_shape(posts)
+
+    assert len(ui) == 1
+    p = ui[0]
+    # Defaults for id/title/author/genre and preview fallback.
+    assert p["id"] == 1
+    assert p["title"] == "Post"
+    assert p["author"] == "Anonymous"
+    assert p["genre"] == "Sci-Fi"
+    assert p["preview"] == "No preview."
+
+
 def test_read_jsonl_dict_lines_reads_non_empty_lines(tmp_path: Path) -> None:
     path = tmp_path / "data.jsonl"
     path.write_text('{"a": 1}\n\n{"b": 2}\n', encoding="utf-8")
@@ -135,6 +209,14 @@ def test_read_jsonl_dict_lines_reads_non_empty_lines(tmp_path: Path) -> None:
     rows = dl._read_jsonl_dict_lines(path)
 
     assert rows == [{"a": 1}, {"b": 2}]
+
+
+def test_read_jsonl_dict_lines_missing_file_returns_empty(tmp_path: Path) -> None:
+    path = tmp_path / "missing.jsonl"
+
+    rows = dl._read_jsonl_dict_lines(path)
+
+    assert rows == []
 
 
 def test_read_isbn_index_file_builds_uppercase_set(tmp_path: Path) -> None:
@@ -147,11 +229,21 @@ def test_read_isbn_index_file_builds_uppercase_set(tmp_path: Path) -> None:
     assert result == {"ABC", "DEF"}
 
 
+def test_read_isbn_index_file_missing_file_returns_empty_set(tmp_path: Path) -> None:
+    path = tmp_path / "missing.json"
+
+    result = dl._read_isbn_index_file(path)
+
+    assert result == set()
+
+
 def test_parse_tags_handles_valid_and_invalid_strings() -> None:
     assert dl._parse_tags("") == []
     assert dl._parse_tags("['A', ' B ']") == ["a", "b"]
     # Invalid literal should return empty list
     assert dl._parse_tags("not-a-list") == []
+    # Literal that parses but is not a list should return empty list as well.
+    assert dl._parse_tags("{'a': 1}") == []
 
 
 def test_build_ui_bootstrap_creates_fallbacks_for_clubs_and_forum() -> None:
