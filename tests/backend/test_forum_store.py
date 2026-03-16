@@ -109,6 +109,48 @@ def test_load_forum_store_invalid_json_falls_back_to_empty_store(tmp_path: Path)
     assert store["posts"] == []
 
 
+def test_load_forum_store_with_non_list_posts_resets_to_empty(tmp_path: Path) -> None:
+    """If posts is not a list, load_forum_store resets it to an empty list (covers line 41)."""
+    forum_path = tmp_path / "forum.json"
+    # posts is an object instead of a list to trigger normalization.
+    bad_store = {"next_post_id": 10, "posts": {"id": 1}}
+    forum_path.write_text(json.dumps(bad_store), encoding="utf-8")
+    forum_store.FORUM_DB_PATH = forum_path  # type: ignore[attr-defined]
+    forum_store.PROCESSED_DIR = tmp_path  # type: ignore[attr-defined]
+
+    store = forum_store.load_forum_store(seed_posts=[])
+
+    assert store["posts"] == []
+
+
+def test_load_forum_store_normalizes_comment_fields(tmp_path: Path) -> None:
+    """Comments missing liked_by/likes get defaulted (covers lines 51-52)."""
+    forum_path = tmp_path / "forum.json"
+    raw_store = {
+        "next_post_id": 2,
+        "posts": [
+            {
+                "id": 1,
+                "title": "With comments",
+                "author": "u@x.com",
+                "preview": "Hi",
+                "comments": [{}],  # missing liked_by and likes
+            }
+        ],
+    }
+    forum_path.write_text(json.dumps(raw_store), encoding="utf-8")
+    forum_store.FORUM_DB_PATH = forum_path  # type: ignore[attr-defined]
+    forum_store.PROCESSED_DIR = tmp_path  # type: ignore[attr-defined]
+
+    store = forum_store.load_forum_store(seed_posts=[])
+
+    comments = store["posts"][0]["comments"]
+    assert len(comments) == 1
+    comment = comments[0]
+    assert comment["liked_by"] == []
+    assert comment["likes"] == 0
+
+
 def test_save_forum_store_writes_json(tmp_path: Path) -> None:
     forum_path = tmp_path / "forum.json"
     forum_store.FORUM_DB_PATH = forum_path  # type: ignore[attr-defined]
