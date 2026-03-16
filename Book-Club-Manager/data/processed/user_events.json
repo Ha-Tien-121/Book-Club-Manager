@@ -1,0 +1,24 @@
+{
+    "demo1@gmail.com": {
+      "event_ids": []
+    },
+    "demo2@gmail.com": {
+      "event_ids": [
+        "e814083f919d61d0"
+      ]
+    },
+    "demo3@gmail.com": {
+      "event_ids": [
+        "df1030e42967dfd4",
+        "b503870a09872383"
+      ]
+    },
+    "demo4@gmail.com": {
+      "event_ids": [
+        "eb29a441ce9d0008"
+      ]
+    },
+    "demo5@gmail.com": {
+      "event_ids": []
+    }
+  }
