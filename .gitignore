@@ -213,6 +213,7 @@ Book-Club-Manager/data/processed/user_accounts.json
 Book-Club-Manager/data/processed/user_books.json
 Book-Club-Manager/data/processed/user_clubs.json
 Book-Club-Manager/data/processed/user_forum.json
+Book-Club-Manager/data/processed/user_recommendations.json
 Book-Club-Manager/data/processed/forum_posts.json
 
 # Generated parquet shard outputs (inner project)
@@ -224,3 +225,6 @@ Book-Club-Manager/data/processed/books.db
 Book-Club-Manager/data/processed/*.npz
 Book-Club-Manager/data/processed/book_id_to_idx.json
 Book-Club-Manager/data/raw/
+
+# Streamlit local config (inner project)
+Book-Club-Manager/.streamlit/

@@ -4,7 +4,7 @@ Uses Maanya's logic: TF-IDF on genres + average_rating + rating_number.
 
 Two modes:
 - Precomputed (full catalog): If data/processed has book_tfidf.npz, book_id_to_idx.json,
-  book_rating_norms.npz (from scripts/build_recommender_artifacts.py), loads those and
+  book_rating_norms.npz (from data/scripts/build_recommender_artifacts.py), loads those and
   queries books.db only for top-k metadata. Use this for 1M+ books.
 - In-memory (small catalog): Otherwise loads from reviews_top25 + spl_top50 JSON and
   fits in memory. No books.db required.
@@ -176,7 +176,7 @@ class ContentBasedBookRecommender:
         idx_path: Path,
         norms_path: Path,
     ) -> None:
-        """Load artifacts built by scripts/build_recommender_artifacts.py."""
+        """Load artifacts built by data/scripts/build_recommender_artifacts.py."""
         self.book_tfidf = sparse.load_npz(str(tfidf_path))
         with idx_path.open("r", encoding="utf-8") as f:
             self.book_id_to_idx = json.load(f)
