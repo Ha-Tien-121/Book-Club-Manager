@@ -27,12 +27,12 @@ Single module for reading/writing data in external systems (DynamoDB, S3, parque
     Read a full event record from the `events` DynamoDB table.
 
 - **Users / library / forums / catalogs**
-  - `get_catalog(parent_asin)` (TODO)  
-  - `get_user_accounts(user_id)` (TODO)  
-  - `get_user_books(user_id)` (TODO)  
-  - `get_user_clubs(user_id)` (TODO)  
-  - `get_user_forums(user_id)` (TODO)  
-  - `get_form_thread(parent_asin)` (TODO) – forum thread for a book.
+  - `get_catalog(parent_asin)`  
+  - `get_user_accounts(user_id)`  
+  - `get_user_books(user_id)`  
+  - `get_user_clubs(user_id)`  
+  - `get_user_forums(user_id)`  
+  - `get_form_thread(parent_asin)` – forum thread for a book.
 
 - **Library action counters (for triggering recommendations)**
   - `increment_library_actions_since_recs(user_id, threshold=3, counter_attr="actions_since_recs")`  
@@ -41,8 +41,8 @@ Single module for reading/writing data in external systems (DynamoDB, S3, parque
     Reset the counter to 0 once recommendations have been refreshed.
 
 - **(Optional) cached event recommendations**
-  - `get_cached_event_recs(user_id)` (TODO)  
-  - `put_cached_event_recs(user_id, payload)` (TODO)  
+  - `get_cached_event_recs(user_id)`  
+  - `put_cached_event_recs(user_id, payload)`  
     Placeholders in case we later store per‑user event rec JSON with `generated_at` / `next_expiry`.
 
 All environment‑specific configuration (table names, buckets) is handled here via env vars like `BOOKS_TABLE`, `EVENTS_TABLE`, `USER_LIBRARY_TABLE`, `DATA_BUCKET`.
@@ -60,46 +60,46 @@ Set **`APP_ENV=aws`** so `get_storage()` returns **CloudStorage**. All services 
 
 Service modules define the **operations the UI/API should call**. They encapsulate business rules and orchestrate storage/recommenders.
 
-### `books_service.py` (In Progress)
+### `books_service.py`
 
 Operations for book discovery and book detail pages.
 
-- `get_trending_books(limit=50)` (TODO)  
+- `get_trending_books(limit=50)`  
   Top N popular books in Seattle (likely from SPL checkouts).
 - `get_book_with_description(parent_asin)`  
   For the book detail page; wraps `storage.get_book_details`.
 - `get_book_without_description(parent_asin)`  
   For cards / library / lists; wraps `storage.get_book_metadata`.
-- `get_books_by_genre(genre, limit=50)` (TODO)  
+- `get_books_by_genre(genre, limit=50)`  
   Genre/category browsing.
 
-### `events_service.py` (In Progress)
+### `events_service.py`
 
 Operations for book‑related events and clubs.
 
 - `get_event_detail(event_id)`  
   For the event detail page; wraps `storage.get_event_details`.
-- `get_trending_events(limit=10)` (TODO)  
+- `get_trending_events(limit=10)`  
   High‑level “featured / popular” events.
-- `get_upcoming_events(limit=10)` (TODO)  
+- `get_upcoming_events(limit=10)`  
   Soonest events, sorted by start time.
-- `get_events_by_tag(tag, limit=10)` (TODO)  
+- `get_events_by_tag(tag, limit=10)`  
   Filter by tag (e.g. Romance, Fantasy).
-- `get_events_by_book(book_title, limit=10)` (TODO)  
+- `get_events_by_book(book_title, limit=10)`  
   Events that discuss a specific book.
-- `search_events(query, limit=20)` (TODO)  
+- `search_events(query, limit=20)`  
   Keyword search over titles / books / descriptions.
 
-### `library_service.py` (In Progress)
+### `library_service.py`
 
 Single entry point for **user library mutations**. Every change to a user’s library should go through here so we can track actions and hook into recommendations.
 
 - `save_book_to_library(user_id, parent_asin)` (skeleton)  
-  TODO: write to the library table, then calls `storage.increment_library_actions_since_recs`.
+  Writes to the library table, then calls `storage.increment_library_actions_since_recs`.
 - `set_book_status(user_id, parent_asin, status)` (skeleton)  
-  TODO: mark a book as saved / reading / read, then bump the action counter.
+  Marks a book as saved / reading / read, then bumps the action counter.
 - `remove_book_from_library(user_id, parent_asin)` (skeleton)  
-  TODO: remove a book from the library, then bump the action counter.
+  Removes a book from the library, then bumps the action counter.
 - `acknowledge_recommendations_ran(user_id)`  
   Resets the library action counter via `storage.reset_library_actions_since_recs`.
 
@@ -114,15 +114,15 @@ The typical pattern is:
 Operations for book discussion threads and posts.
 
 - `get_thread_for_book(parent_asin)` (skeleton)  
-  TODO: load the thread for a given book (wraps a storage helper).
+  Loads the thread for a given book (wraps a storage helper).
 - `list_threads_for_user(user_id, limit=20)` (skeleton)  
-  TODO: recent threads the user has participated in.
+  Recent threads the user has participated in.
 - `add_post_to_thread(parent_asin, user_id, content)` (skeleton)  
-  TODO: add a new top‑level post in a book’s thread.
+  Adds a new top‑level post in a book’s thread.
 - `reply_to_post(thread_id, post_id, user_id, content)` (skeleton)  
-  TODO: add a reply to an existing post.
+  Adds a reply to an existing post.
 - `toggle_hide_post(thread_id, post_id, hidden)` (skeleton)  
-  TODO: soft‑hide/unhide posts for moderation.
+  Soft‑hide/unhide posts for moderation.
 
 ### `auth_service.py` (planned) 
 

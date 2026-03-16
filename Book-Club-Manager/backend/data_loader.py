@@ -246,9 +246,33 @@ def load_data() -> dict:
 
     For AWS, the frontend should call the services directly and then build_ui_bootstrap().
     """
+    # Primary local bootstrap: small JSONL excerpt.
     books_parent = _read_jsonl_dict_lines(
         PROCESSED_DIR / "first_100_books_by_parent_asin.jsonl"
     )
+    # Fallback: use reviews list (already in repo) when JSONL excerpt is missing.
+    if not books_parent:
+        reviews_path = PROCESSED_DIR / "reviews_top25_books.json"
+        if reviews_path.exists():
+            try:
+                with reviews_path.open("r", encoding="utf-8") as f:
+                    reviews = json.load(f) or []
+                if isinstance(reviews, dict) and "books" in reviews:
+                    reviews = reviews.get("books") or []
+                if isinstance(reviews, list):
+                    # Convert list[book_dict] into the JSONL-like [{asin: meta}] rows
+                    # expected by the existing parsing logic below.
+                    tmp: list[dict] = []
+                    for b in reviews:
+                        if not isinstance(b, dict):
+                            continue
+                        asin = str(b.get("parent_asin") or b.get("source_id") or "").strip()
+                        if not asin:
+                            continue
+                        tmp.append({asin: b})
+                    books_parent = tmp
+            except Exception:
+                books_parent = []
     catalog_isbns = _read_isbn_index_file(
         PROCESSED_DIR / "first_100_spl_catalog_by_isbn.json"
     )
@@ -260,7 +284,12 @@ def load_data() -> dict:
     for idx, row in enumerate(books_parent, start=1):
         source_id, meta = next(iter(row.items()))
         cats = meta.get("categories") or []
-        genres = [str(c) for c in cats[:3]] or ["General"]
+        if isinstance(cats, str):
+            try:
+                cats = ast.literal_eval(cats) if ("[" in cats or "{" in cats) else [cats]
+            except Exception:
+                cats = [cats] if cats else []
+        genres = [str(c).strip() for c in (cats if isinstance(cats, list) else [])[:3] if str(c).strip()] or ["General"]
         desc = meta.get("description") or []
         if isinstance(desc, list):
             description = " ".join(str(x) for x in desc[:3]).strip()

@@ -14,6 +14,8 @@ Seeded on account creation via ensure_default_recommendations(); also used for s
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 
 from backend import storage
@@ -25,6 +27,111 @@ from backend.config import (
 from backend.storage import get_storage
 from backend.recommender.book_recommender import BookRecommender
 from backend.recommender.event_recommender import EventRecommender
+
+
+def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
+    """Convert stored/recommender book rows to the UI card shape.
+
+    We intentionally store the UI shape in DynamoDB so the Feed can render quickly
+    without resolving IDs via additional DynamoDB/S3 lookups on every rerun.
+    """
+    out: list[dict] = []
+    # Enrich sparse recommendation rows with DynamoDB book metadata in one batch.
+    store = get_storage()
+    to_enrich: list[str] = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        if r.get("cover") and r.get("title") and r.get("author"):
+            continue
+        asin = str(r.get("parent_asin") or r.get("book_id") or r.get("source_id") or "").strip()
+        if asin and (not r.get("title") or not (r.get("author_name") or r.get("author")) or not (r.get("images") or r.get("cover"))):
+            to_enrich.append(asin)
+    meta_by_asin: dict[str, dict] = {}
+    try:
+        if to_enrich and hasattr(store, "get_books_metadata_batch"):
+            meta_by_asin = store.get_books_metadata_batch(to_enrich) or {}
+    except Exception:
+        meta_by_asin = {}
+    # Note: we intentionally do not fall back to S3-parquet detail fetch here.
+    # That path reads large shards and is too slow to run synchronously when
+    # saving recommendations (and would make every recommender run feel stuck).
+
+    def _genres_from_raw(raw) -> list[str]:
+        if raw is None:
+            return []
+        if isinstance(raw, list):
+            return [str(x).strip() for x in raw if x is not None and str(x).strip()]
+        if isinstance(raw, str):
+            s = raw.strip()
+            if not s:
+                return []
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed if x is not None and str(x).strip()]
+                except Exception:
+                    pass
+            return [s]
+        return []
+
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        # Already UI-shaped.
+        if r.get("cover") and r.get("title") and r.get("author"):
+            out.append(
+                {
+                    "id": r.get("id") or 0,
+                    "source_id": r.get("source_id") or r.get("parent_asin") or r.get("book_id") or "",
+                    "title": r.get("title") or "",
+                    "author": r.get("author") or "",
+                    "genres": list(r.get("genres") or []),
+                    "cover": r.get("cover") or "https://placehold.co/220x330?text=Book",
+                    "rating": r.get("rating") or 0,
+                    "rating_count": r.get("rating_count") or 0,
+                }
+            )
+            continue
+
+        asin = str(r.get("parent_asin") or r.get("book_id") or r.get("source_id") or "").strip()
+        if not asin:
+            continue
+        if meta_by_asin and asin in meta_by_asin:
+            # Don't overwrite explicit values (e.g. ML might provide some fields),
+            # but fill in blanks from the canonical books table.
+            m = meta_by_asin.get(asin) or {}
+            for k, v in m.items():
+                if k not in r or r.get(k) in (None, "", [], {}):
+                    r[k] = v
+        genres = _genres_from_raw(r.get("genres"))
+        if not genres:
+            genres = _genres_from_raw(r.get("categories"))
+        cover = (r.get("images") or r.get("image_url") or r.get("cover") or "").strip() if isinstance(r.get("images") or r.get("image_url") or r.get("cover"), str) else r.get("images") or r.get("image_url") or r.get("cover")
+        if not cover:
+            cover = "https://placehold.co/220x330?text=Book"
+        try:
+            rating = float(r.get("average_rating") or r.get("rating") or 0)
+        except Exception:
+            rating = 0
+        try:
+            rating_count = int(r.get("rating_number") or r.get("rating_count") or 0)
+        except Exception:
+            rating_count = 0
+        out.append(
+            {
+                "id": 0,
+                "source_id": asin,
+                "title": r.get("title") or "",
+                "author": r.get("author_name") or r.get("author") or "",
+                "genres": genres,
+                "cover": cover,
+                "rating": rating,
+                "rating_count": rating_count,
+            }
+        )
+    return out
 
 
 def _build_user_recommender_inputs(user_id: str) -> tuple[dict, dict, bool, bool]:
@@ -76,8 +183,36 @@ def get_book_recommendations(user_id: str, top_k: int | None = None) -> list[dic
     user_id = str(user_id).strip().lower() if user_id else ""
     _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
     user_book_ids = user_books_store.get(user_id, []) if user_id else []
+    rows, _source, _err = _run_book_recommender(user_book_ids, top_k=top_k)
+    return rows
+
+
+def _run_book_recommender(
+    user_book_ids: list[str],
+    *,
+    top_k: int,
+) -> tuple[list[dict], str, str]:
+    """Run ML recommender; fall back on error.
+
+    Returns:
+        (rows, source, error_message)
+        - source: "ml" or "fallback"
+        - error_message: "" if none
+    """
     recommender = BookRecommender()
-    return recommender.recommend(user_book_ids, top_k=top_k)
+    try:
+        rows = recommender.recommend(user_book_ids, top_k=top_k)
+        return list(rows or []), "ml", ""
+    except Exception as e:
+        logging.exception("BookRecommender ML failed; falling back. error=%s", e)
+        try:
+            from backend.recommender.book_recommender import _FallbackBookRecommender
+
+            rows = _FallbackBookRecommender().recommend(user_book_ids, top_k=top_k)
+            return list(rows or []), "fallback", f"{type(e).__name__}: {e}"
+        except Exception as e2:
+            logging.exception("FallbackBookRecommender failed. error=%s", e2)
+            return [], "fallback", f"{type(e2).__name__}: {e2}"
 
 
 def get_event_recommendations(user_id: str, top_k: int | None = None) -> list[dict]:
@@ -139,9 +274,10 @@ def _user_has_genre_preferences(user_id: str) -> bool:
 def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
     """Return the cached book recommendation list for the UI (up to 50).
 
-    Anonymous or no genre prefs: returns top 50 from reviews JSON (get_top50_review_books).
-    Signed-in with genre prefs: returns stored recommended_books, or runs recommender once
-    and saves. Use this for homepage/feed; use get_book_recommendations for recomputing only.
+    Anonymous: returns top 50 from reviews JSON (get_top50_review_books).
+    Signed-in: returns stored recommended_books, or runs the book recommender and saves.
+    The book recommender uses only the user's library; if the library is empty it
+    falls back to popular/top-50 results.
 
     Args:
         user_id: User email/id or None for anonymous.
@@ -150,19 +286,31 @@ def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
         List of up to RECOMMENDED_BOOKS_SIZE book dicts (full records for display).
     """
     store = get_storage()
+    # Anonymous: always use static top-50 reviews.
     if not user_id or not str(user_id).strip():
         return store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
+
     user_id = str(user_id).strip().lower()
-    if not _user_has_genre_preferences(user_id):
-        return store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
-    rec = store.get_user_recommendations(user_id)
+    # Validate user exists.
+    if not store.get_user_account(user_id):
+        raise ValueError("Invalid user_id")
+
+    rec = store.get_user_recommendations(user_id) or {}
     books = list(rec.get("recommended_books") or [])
+
     if not books:
-        books = get_book_recommendations(user_id)[:RECOMMENDED_BOOKS_SIZE]
+        # Run book recommender once and cache result.
+        books = _ui_shape_recommended_books(get_book_recommendations(user_id))[:RECOMMENDED_BOOKS_SIZE]
         rec["recommended_books"] = books
         rec["book_updated_at"] = int(time.time())
         store.save_user_recommendations(user_id, rec)
-    return books[:RECOMMENDED_BOOKS_SIZE]
+
+    if not books:
+        # Ultimate fallback: static top-50 when recommender produced nothing.
+        return store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
+
+    # Ensure UI shape (backward compatible with older stored records).
+    return _ui_shape_recommended_books(books)[:RECOMMENDED_BOOKS_SIZE]
 
 
 def get_recommended_events_for_user(user_id: str | None = None) -> list[dict]:
@@ -208,11 +356,22 @@ def refresh_and_save_recommendations(user_id: str) -> dict:
         return {}
     store = get_storage()
     rec = store.get_user_recommendations(user_id) or {}
-    books = get_book_recommendations(user_id) or []
+    # Capture source/error so we can tell in Dynamo whether ML ran.
+    _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
+    user_book_ids = user_books_store.get(user_id, []) if user_id else []
+    book_rows, book_source, book_err = _run_book_recommender(
+        user_book_ids, top_k=RECOMMENDED_BOOKS_SIZE
+    )
+    books = _ui_shape_recommended_books(book_rows or [])
     events = get_event_recommendations(user_id) or []
     rec["recommended_books"] = books[:RECOMMENDED_BOOKS_SIZE]
     rec["recommended_events"] = events[:RECOMMENDED_EVENTS_SIZE]
     rec["book_updated_at"] = int(time.time())
+    rec["book_recs_source"] = book_source
+    if book_err:
+        rec["book_recs_error"] = book_err
+    else:
+        rec.pop("book_recs_error", None)
     rec["events_soonest_expiry"] = _events_soonest_expiry(events)
     store.save_user_recommendations(user_id, rec)
     return rec
@@ -233,7 +392,7 @@ def ensure_default_recommendations(user_id: str) -> None:
     rec = store.get_user_recommendations(user_id) or {}
     if rec.get("recommended_books") or rec.get("recommended_events"):
         return
-    rec["recommended_books"] = store.get_top50_review_books()[:RECOMMENDED_BOOKS_SIZE]
+    rec["recommended_books"] = _ui_shape_recommended_books(store.get_top50_review_books())[:RECOMMENDED_BOOKS_SIZE]
     rec["recommended_events"] = store.get_soonest_events(RECOMMENDED_EVENTS_SIZE)[:RECOMMENDED_EVENTS_SIZE]
     rec["events_soonest_expiry"] = _events_soonest_expiry(rec["recommended_events"])
     store.save_user_recommendations(user_id, rec)
@@ -253,8 +412,22 @@ def on_book_added_to_shelf(user_id: str) -> None:
     adds = int(rec.get("adds_since_last_book_run") or 0) + 1
     rec["adds_since_last_book_run"] = adds
     if adds >= ADDS_BEFORE_BOOK_RERUN:
-        books = get_book_recommendations(user_id)
-        rec["recommended_books"] = books[:RECOMMENDED_BOOKS_SIZE]
+        # Always refresh the cached recommendations when the threshold is reached.
+        # The fallback recommender is still personalized (it excludes owned books),
+        # so it's safe and desirable to overwrite existing lists even in fallback.
+        _, user_books_store, _, _ = _build_user_recommender_inputs(user_id)
+        user_book_ids = user_books_store.get(user_id, []) if user_id else []
+        book_rows, book_source, book_err = _run_book_recommender(
+            user_book_ids, top_k=RECOMMENDED_BOOKS_SIZE
+        )
+        books = _ui_shape_recommended_books(book_rows or [])
+        if books:
+            rec["recommended_books"] = books[:RECOMMENDED_BOOKS_SIZE]
         rec["book_updated_at"] = int(time.time())
+        rec["book_recs_source"] = book_source
+        if book_err:
+            rec["book_recs_error"] = book_err
+        else:
+            rec.pop("book_recs_error", None)
         rec["adds_since_last_book_run"] = 0
     store.save_user_recommendations(user_id, rec)
