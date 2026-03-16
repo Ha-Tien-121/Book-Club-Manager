@@ -40,7 +40,8 @@ def inject_styles() -> None:
             --theme-coral: #d9624c;
             --theme-yellow: #ffd84d;
             --theme-blue: #274594;
-            --theme-gray: #d3d3d3;
+            --theme-gray: #d3d3d3;         /* neutral gray for borders */
+            --theme-gray-warm: #e3d9d7;    /* warmer gray for hovers/fills */
         }
         /* Base and layout */
         .stApp, [data-testid="stAppViewContainer"], .main .block-container {
@@ -93,7 +94,7 @@ def inject_styles() -> None:
             font-size: 2.25rem !important;
             letter-spacing: 0.04em;
         }
-        /* Sidebar buttons (Create account, Sign in): blue with white text, no white background */
+        /* Sidebar buttons (Create account, Sign in): #b87048 (brown) with white text */
         [data-testid="stSidebar"] .stButton > button,
         [data-testid="stSidebar"] form .stButton > button,
         [data-testid="stSidebar"] form button[type="submit"],
@@ -101,12 +102,12 @@ def inject_styles() -> None:
         [data-testid="stSidebar"] button[kind="secondary"],
         [data-testid="stSidebar"] [data-testid="stFormSubmitButton"] > button,
         [data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button {
-            background-color: var(--theme-blue) !important;
+            background-color: var(--theme-brown) !important;
             color: #ffffff !important;
         }
         /* Override Streamlit secondary/default button style so Sign in is not white */
         [data-testid="stSidebar"] form [data-baseweb="button"] {
-            background-color: var(--theme-blue) !important;
+            background-color: var(--theme-brown) !important;
             color: #ffffff !important;
         }
         /* White text for Sign in and all sidebar button labels (including form submit) */
@@ -146,20 +147,20 @@ def inject_styles() -> None:
         .stTabs [aria-selected="true"] {
             color: var(--theme-blue) !important;
         }
-        /* Pills: terracotta border, off-white background */
+        /* Pills: genre tags – warm grey so they don't compete with alerts/buttons */
         .pill {
             display: inline-block;
             padding: 4px 10px;
             border-radius: 999px;
-            border: 1px solid var(--theme-terracotta);
-            background: var(--theme-cream);
-            color: var(--theme-brown);
+            border: 1px solid var(--theme-gray);
+            background: var(--theme-gray-warm);
+            color: #555555;
             font-family: 'Lato', sans-serif;
             font-size: 0.75rem;
             margin-right: 0.35rem;
             margin-top: 0.25rem;
         }
-        /* Buttons: blue with white text; hover = #d3d3d3 */
+        /* Buttons: blue with white text; hover = warm grey */
         .stButton > button,
         button[kind="primary"],
         button[kind="secondary"] {
@@ -176,7 +177,7 @@ def inject_styles() -> None:
         .stButton > button:hover *,
         button[kind="primary"]:hover,
         button[kind="secondary"]:hover {
-            background-color: var(--theme-gray) !important;
+            background-color: var(--theme-gray-warm) !important;
             color: var(--theme-dark) !important;
         }
         .stButton > button:hover * {
@@ -197,6 +198,34 @@ def inject_styles() -> None:
         [data-testid="stVerticalBlock"] > div[style*="border"] {
             border-color: var(--theme-terracotta) !important;
             background: var(--theme-cream);
+        }
+        /* Success / Saved in main content: light dusty rose tint from scheme */
+        [data-testid="stAlert"],
+        .stAlert,
+        div[data-testid="stAlert"] > div {
+            background-color: #f5e8e6 !important;
+            border: 1px solid var(--theme-dusty-rose) !important;
+            border-left: 4px solid var(--theme-dusty-rose) !important;
+            color: var(--theme-dark) !important;
+        }
+        [data-testid="stAlert"] *,
+        .stAlert * {
+            color: var(--theme-dark) !important;
+        }
+        /* Sidebar welcome / signed-in messages: softer, more welcoming than Saved */
+        [data-testid="stSidebar"] [data-testid="stAlert"],
+        [data-testid="stSidebar"] .stAlert,
+        [data-testid="stSidebar"] div[data-testid="stAlert"] > div {
+            background-color: #fdf4f1 !important;  /* very light warm tint */
+            border-radius: 12px !important;
+            border: none !important;
+            box-shadow: 0 0 0 1px rgba(215,118,137,0.25);
+            padding: 0.6rem 0.9rem !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stAlert"] *,
+        [data-testid="stSidebar"] .stAlert * {
+            color: var(--theme-dark) !important;
+            font-weight: 500;
         }
         </style>
         """,
