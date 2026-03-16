@@ -16,7 +16,8 @@ from typing import Any, Dict, List
 
 def _ensure_inner_project_on_path() -> None:
     """Ensure inner Book-Club-Manager root is on sys.path when running from outer root."""
-    tests_dir = Path(__file__).resolve().parents[1]
+    # tests/backend/recommender/... → parents[2] is tests/, parent is repo root.
+    tests_dir = Path(__file__).resolve().parents[2]
     repo_root = tests_dir.parent
     inner_root = repo_root / "Book-Club-Manager"
     if inner_root.is_dir() and str(inner_root) not in sys.path:
