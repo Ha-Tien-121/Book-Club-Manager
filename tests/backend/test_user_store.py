@@ -98,6 +98,13 @@ def test_migrate_legacy_user_accounts_returns_none_when_no_users() -> None:
     assert user_store._migrate_legacy_user_accounts(data) is None
 
 
+def test_migrate_legacy_user_accounts_returns_none_when_no_legacy_fields() -> None:
+    """Users exist but without library/club_ids -> treated as non-legacy."""
+    data = {"users": {"u@example.com": {"name": "User", "password": "pw"}}}
+
+    assert user_store._migrate_legacy_user_accounts(data) is None
+
+
 def test_migrate_legacy_user_accounts_splits_into_four_stores(tmp_path: Path) -> None:
     # Legacy structure with library/club_ids/forum_posts.
     legacy = {
@@ -167,6 +174,29 @@ def test_load_user_store_uses_migrated_when_available(tmp_path: Path) -> None:
 
     # Because migration occurs, top-level keys should be accounts/books/clubs/forum.
     assert {"accounts", "books", "clubs", "forum"} <= set(store.keys())
+
+
+def test_load_user_store_without_migration_normalizes_accounts_users(tmp_path: Path) -> None:
+    """When accounts file lacks a proper users dict, load_user_store resets it and returns non-migrated structure."""
+    # accounts JSON missing 'users' key entirely
+    bad_accounts = {"not_users": 1}
+    accounts_path = tmp_path / "accounts.json"
+    accounts_path.write_text(json.dumps(bad_accounts), encoding="utf-8")
+
+    with patch.object(user_store, "USER_ACCOUNTS_PATH", accounts_path), patch.object(
+        user_store, "USER_BOOKS_PATH", tmp_path / "books.json"
+    ), patch.object(
+        user_store, "USER_CLUBS_PATH", tmp_path / "clubs.json"
+    ), patch.object(
+        user_store, "USER_FORUM_PATH", tmp_path / "forum.json"
+    ), patch.object(
+        user_store, "PROCESSED_DIR", tmp_path
+    ):
+        store = user_store.load_user_store()
+
+    # No migration performed -> accounts/books/clubs/forum come from direct load.
+    assert set(store.keys()) == {"accounts", "books", "clubs", "forum"}
+    assert store["accounts"] == {"users": {}}
 
 
 def test_save_user_helpers_delegate_to_save_json_store(tmp_path: Path) -> None:
