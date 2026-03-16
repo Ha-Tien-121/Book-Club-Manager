@@ -45,23 +45,10 @@ from backend.recommender.config import RECOMMENDER_DIR
 
 np.random.seed(42)
 
-MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
-USER_TEST_FILE = os.path.join(PROCESSED_DIR, "test_matrix.npz")
-BOOK_SIM_FILE = os.path.join(PROCESSED_DIR, "book_similarity.npz")
-BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
-GROUND_TRUTH_FILE = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
-
-USER_LIBRARY_MATRIX_TEST = load_npz(USER_TEST_FILE).tocsr()
-BOOK_SIMILARITY_MATRIX = load_npz(BOOK_SIM_FILE).tocsc()
-ratings_file = np.load(BOOK_RATINGS_FILE)
-BOOK_AVG_RATINGS_VECTOR = ratings_file["ratings_avg"].astype(np.float32)
-BOOK_NUMBER_RATINGS_VECTOR = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
-USER_GROUND_TRUTH_BOOK_TEST = np.load(GROUND_TRUTH_FILE).flatten()
-print("Data loaded successfully.")
 
 def hit50_evaluation_logistic(
     clf,
+    scaler,
     user_library_sparse: csr_matrix,
     ground_truth: np.ndarray,
     book_similarity_sparse,
@@ -144,6 +131,8 @@ def hit50_evaluation_logistic(
         top-K recommendation list. The fraction of users for which this occurs
         is reported as the Hit@K score.
         """
+    if top_k >= len(book_avg_ratings):
+        raise ValueError(f"top_k ({top_k}) must be less than n_books ({len(book_avg_ratings)})")
 
     beta = clf.coef_[0]
     beta_scaled = beta / scaler.scale_
@@ -214,26 +203,41 @@ def hit50_evaluation_logistic(
 
     return np.mean(hits_model), np.mean(hits_pop)
 
-CLF = joblib.load(MODEL_FILE)
-scaler = joblib.load(MODEL_SCALER_FILE)
-print("Logistic model loaded.")
-
-N_USERS = 10000
-valid_users = np.where(USER_GROUND_TRUTH_BOOK_TEST != -1)[0]
-sample_users = np.random.choice(
-    valid_users, size=min(N_USERS, len(valid_users)), replace=False
-)
-user_library_batch = USER_LIBRARY_MATRIX_TEST[sample_users]
-ground_truth_batch = USER_GROUND_TRUTH_BOOK_TEST[sample_users]
 
 def main():
     """
     Main function to run the Hit@50 evaluation for the logistic regression recommender model.
     """
+    MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+    USER_TEST_FILE = os.path.join(PROCESSED_DIR, "test_matrix.npz")
+    BOOK_SIM_FILE = os.path.join(PROCESSED_DIR, "book_similarity.npz")
+    BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
+    GROUND_TRUTH_FILE = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
+
+    USER_LIBRARY_MATRIX_TEST = load_npz(USER_TEST_FILE).tocsr()
+    BOOK_SIMILARITY_MATRIX = load_npz(BOOK_SIM_FILE).tocsc()
+    ratings_file = np.load(BOOK_RATINGS_FILE)
+    BOOK_AVG_RATINGS_VECTOR = ratings_file["ratings_avg"].astype(np.float32)
+    BOOK_NUMBER_RATINGS_VECTOR = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
+    USER_GROUND_TRUTH_BOOK_TEST = np.load(GROUND_TRUTH_FILE).flatten()
+    print("Data loaded successfully.")
+
+    CLF = joblib.load(MODEL_FILE)
+    scaler = joblib.load(MODEL_SCALER_FILE)
+    print("Logistic model loaded.")
+
+    N_USERS = 10000
+    valid_users = np.where(USER_GROUND_TRUTH_BOOK_TEST != -1)[0]
+    sample_users = np.random.choice(
+        valid_users, size=min(N_USERS, len(valid_users)), replace=False
+    )
+
     hit50_evaluation_logistic(
         clf=CLF,
-        user_library_sparse=user_library_batch,
-        ground_truth=ground_truth_batch,
+        scaler=scaler,
+        user_library_sparse=USER_LIBRARY_MATRIX_TEST[sample_users],
+        ground_truth=USER_GROUND_TRUTH_BOOK_TEST[sample_users],
         book_similarity_sparse=BOOK_SIMILARITY_MATRIX,
         book_avg_ratings=BOOK_AVG_RATINGS_VECTOR,
         book_num_ratings=BOOK_NUMBER_RATINGS_VECTOR

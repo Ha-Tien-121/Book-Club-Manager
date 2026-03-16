@@ -27,6 +27,26 @@ BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
 BOOK_ID_MAP_FILE = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 BOOK_DB = os.path.join(PROCESSED_DIR, "books.db")
 
+def load_recommender_artifacts(
+        model_file,
+        scaler_file,
+        sim_file,
+        ratings_file,
+        id_map_file
+        ):
+        clf = joblib.load(model_file)
+        beta = clf.coef_[0]
+        scaler = joblib.load(scaler_file)
+        beta_scaled = beta / scaler.scale_
+        book_similarity = load_npz(sim_file).tocsr()
+        ratings = np.load(ratings_file)
+        avg_ratings = ratings["ratings_avg"].astype(np.float32)
+        num_ratings = ratings["log_number_ratings"].astype(np.float32)
+        popularity_score = np.log1p(avg_ratings * num_ratings)
+        with open(id_map_file, "r", encoding="utf-8") as f:
+            book_id_to_idx = json.load(f)
+        idx_to_book_id = {v: k for k, v in book_id_to_idx.items()}
+        return beta_scaled, book_similarity, popularity_score, book_id_to_idx, idx_to_book_id
 
 class BookRecommender:
     """
@@ -44,22 +64,14 @@ class BookRecommender:
         book similarity matrix, rating statistics, and book ID mappings.
         Also initializes access to user storage.
         """
-        clf = joblib.load(MODEL_FILE)
-        beta = clf.coef_[0]
-        scaler = joblib.load(MODEL_SCALER_FILE)
-        self.beta_scaled = beta / scaler.scale_
-        self.book_similarity: csr_matrix = load_npz(BOOK_SIM_FILE).tocsr()
-        ratings = np.load(BOOK_RATINGS_FILE)
-        book_avg_ratings = ratings["ratings_avg"].astype(np.float32)
-        book_num_ratings = np.log1p(ratings["log_number_ratings"]).astype(np.float32)
-        self.popularity_score = np.log1p(book_avg_ratings * book_num_ratings)
-
-        with open(BOOK_ID_MAP_FILE, "r", encoding="utf-8") as f:
-            self.book_id_to_idx = json.load(f)
-
-        self.idx_to_book_id = {
-            v: k for k, v in self.book_id_to_idx.items()
-        }
+        (self.beta_scaled,
+         self.book_similarity,
+         self.popularity_score,
+         self.book_id_to_idx,
+         self.idx_to_book_id,
+         ) = load_recommender_artifacts(
+             MODEL_FILE, MODEL_SCALER_FILE, BOOK_SIM_FILE, BOOK_RATINGS_FILE, BOOK_ID_MAP_FILE
+             )
         self.storage = LocalStorage()
 
     def recommend(self, user_id: str, top_k: int = 50):
@@ -76,6 +88,8 @@ class BookRecommender:
         list of dict
             List of recommended books with metadata (title, author, rating, etc.).
     """
+        if top_k >= len(self.book_id_to_idx):
+            raise ValueError(f"top_k ({top_k}) must be less than n_books ({len(self.book_id_to_idx)})")
 
         user_books = self.storage.get_user_books(user_id)
 

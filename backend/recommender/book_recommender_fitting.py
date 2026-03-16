@@ -22,7 +22,7 @@ Assumptions / Limitations:
     - Predictions are used for ranking rather than calibrated probabilities.
 Usage:
     Run script from the project root using:
-    python -m backend.recommender.recommender_fitting
+    python -m backend.recommender.book_recommender_fitting
     
 Time: ~9 minutes to run
 
@@ -42,20 +42,6 @@ from data.scripts.config import PROCESSED_DIR
 from backend.recommender.config import RECOMMENDER_DIR
 
 np.random.seed(42)
-
-OUTPUT_MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-OUTPUT_MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
-
-npzfile = np.load(os.path.join(PROCESSED_DIR, "book_ratings.npz"))
-BOOK_AVG_RATINGS_VECTOR = npzfile["ratings_avg"]
-BOOK_NUMBER_RATINGS_VECTOR = npzfile["log_number_ratings"]
-BOOK_SIMILARITY_MATRIX = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
-
-USER_LIBRARY_MATRIX_TRAIN = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
-USER_GROUND_TRUTH_BOOK_TRAIN = np.load(os.path.join(PROCESSED_DIR,
-                                                    "train_ground_truth.npy")).flatten()
-
-print("Data loaded successfully.")
 
 
 def sample_negative_books(
@@ -114,10 +100,10 @@ def sample_negative_books(
 
 def build_training_set(
     ground_truth,
-    user_library_matrix=USER_LIBRARY_MATRIX_TRAIN,
-    book_similarity_matrix=BOOK_SIMILARITY_MATRIX,
-    book_avg_ratings_vector=BOOK_AVG_RATINGS_VECTOR,
-    book_number_ratings_vector=BOOK_NUMBER_RATINGS_VECTOR,
+    user_library_matrix,
+    book_similarity_matrix,
+    book_avg_ratings_vector,
+    book_number_ratings_vector,
     n_neg=5,
     batch_size=10000
 ):
@@ -158,6 +144,8 @@ def build_training_set(
     """
 
     train_users_idx = np.where(ground_truth != -1)[0]
+    if len(train_users_idx) == 0:
+        return np.empty((0, 3), dtype=np.float32), np.empty(0, dtype=np.int8)
 
     x_rows = []
     y_rows = []
@@ -230,21 +218,28 @@ def build_training_set(
 
 
 def train_logistic_model(
-    ground_truth=USER_GROUND_TRUTH_BOOK_TRAIN,
+    ground_truth,
+    output_model_file,
+    output_scaler_file,
+    user_library_matrix,
+    book_similarity_matrix,
+    book_avg_ratings_vector,
+    book_number_ratings_vector,
     batch_size=10000,
-    n_neg=5,
-    output_model_file=OUTPUT_MODEL_FILE,
-    output_scaler_file=OUTPUT_MODEL_SCALER_FILE
+    n_neg=5
 ):
     """
     Train logistic regression model and save model + scaler.
     """
 
     x_train, y_train = build_training_set(
-        ground_truth=ground_truth,
-        batch_size=batch_size,
-        n_neg=n_neg
-    )
+        ground_truth= ground_truth,
+        user_library_matrix=user_library_matrix,
+        book_similarity_matrix=book_similarity_matrix,
+        book_avg_ratings_vector=book_avg_ratings_vector,
+        book_number_ratings_vector=book_number_ratings_vector,
+        n_neg=n_neg,
+        batch_size=batch_size)
 
     scaler = StandardScaler()
 
@@ -267,7 +262,29 @@ def main():
     Main function to train the logistic regression model.
     """
 
-    train_logistic_model(n_neg=20)
+    OUTPUT_MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    OUTPUT_MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+
+    npzfile = np.load(os.path.join(PROCESSED_DIR, "book_ratings.npz"))
+    BOOK_AVG_RATINGS_VECTOR = npzfile["ratings_avg"]
+    BOOK_NUMBER_RATINGS_VECTOR = npzfile["log_number_ratings"]
+    BOOK_SIMILARITY_MATRIX = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
+
+    USER_LIBRARY_MATRIX_TRAIN = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
+    USER_GROUND_TRUTH_BOOK_TRAIN = np.load(os.path.join(PROCESSED_DIR,
+                                                    "train_ground_truth.npy")).flatten()
+
+    print("Data loaded successfully.")
+    train_logistic_model(
+            ground_truth=USER_GROUND_TRUTH_BOOK_TRAIN,
+            output_model_file=OUTPUT_MODEL_FILE,
+            output_scaler_file=OUTPUT_MODEL_SCALER_FILE,
+            user_library_matrix=USER_LIBRARY_MATRIX_TRAIN,
+            book_similarity_matrix=BOOK_SIMILARITY_MATRIX,
+            book_avg_ratings_vector=BOOK_AVG_RATINGS_VECTOR,
+            book_number_ratings_vector=BOOK_NUMBER_RATINGS_VECTOR,
+            n_neg=20
+            )
 
 
 if __name__ == "__main__":
