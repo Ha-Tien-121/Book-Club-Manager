@@ -3,7 +3,7 @@ Train a logistic regression model for book recommendation using implicit feedbac
 
 This script constructs a training set using observed user-book interactions as
 positive examples and randomly sampled unread books as negative examples.
-Features are computed from item popularity statistics and similarity scores
+Features are computed from item popularity statistic and similarity scores
 between a user's library and candidate books.
 
 The model learns a global logistic regression that predicts the probability
@@ -11,10 +11,9 @@ that a user will interact with a book. At recommendation time, books are ranked
 by predicted score for each user.
 
 Key Features:
-    - Book similarity to a user's existing library
-    - Average book rating
-    - Log number of ratings (book popularity)
-    - Interaction between similarity and user library size
+    - Book similarity to a user's existing library (normalized by library size)
+    - Log (popularity=average_rating * Log(number_ratings)) of candidate books
+    - Log transformed interaction between similarity and user library size
 
 Assumptions / Limitations:
     - Observed interactions are treated as positive feedback; non-interactions
@@ -23,13 +22,12 @@ Assumptions / Limitations:
     - Predictions are used for ranking rather than calibrated probabilities.
 Usage:
     Run script from the project root using:
-    python -m backend.recommender.recomender_fitting
+    python -m backend.recommender.book_recommender_fitting
     
 Time: ~9 minutes to run
 
-Output:
-Learned coefficients: [similarity: -0.2672652, avg_rating: 0.32307223, 
-                      number_ratings: 0.92024347, user_library_size*similarity: 3.11933843]
+Learned coefficients: [similarity: 0.72379696, popularity: 1.1786245,
+                      user_library_size*similarity: 1.4491444]
 """
 
 
@@ -44,20 +42,6 @@ from data.scripts.config import PROCESSED_DIR
 from backend.recommender.config import RECOMMENDER_DIR
 
 np.random.seed(42)
-
-OUTPUT_MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-OUTPUT_MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
-
-npzfile = np.load(os.path.join(PROCESSED_DIR, "book_ratings.npz"))
-BOOK_AVG_RATINGS_VECTOR = npzfile["ratings_avg"]
-BOOK_NUMBER_RATINGS_VECTOR = npzfile["log_number_ratings"]
-BOOK_SIMILARITY_MATRIX = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
-
-USER_LIBRARY_MATRIX_TRAIN = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
-USER_GROUND_TRUTH_BOOK_TRAIN = np.load(os.path.join(PROCESSED_DIR,
-                                                    "train_ground_truth.npy")).flatten()
-
-print("Data loaded successfully.")
 
 
 def sample_negative_books(
@@ -116,10 +100,10 @@ def sample_negative_books(
 
 def build_training_set(
     ground_truth,
-    user_library_matrix=USER_LIBRARY_MATRIX_TRAIN,
-    book_similarity_matrix=BOOK_SIMILARITY_MATRIX,
-    book_avg_ratings_vector=BOOK_AVG_RATINGS_VECTOR,
-    book_number_ratings_vector=BOOK_NUMBER_RATINGS_VECTOR,
+    user_library_matrix,
+    book_similarity_matrix,
+    book_avg_ratings_vector,
+    book_number_ratings_vector,
     n_neg=5,
     batch_size=10000
 ):
@@ -160,6 +144,8 @@ def build_training_set(
     """
 
     train_users_idx = np.where(ground_truth != -1)[0]
+    if len(train_users_idx) == 0:
+        return np.empty((0, 3), dtype=np.float32), np.empty(0, dtype=np.int8)
 
     x_rows = []
     y_rows = []
@@ -194,8 +180,7 @@ def build_training_set(
         n_samples = books_to_compute.shape[1]
 
         sim_scores = np.zeros((b, n_samples), dtype=np.float32)
-        avg_ratings = np.zeros((b, n_samples), dtype=np.float32)
-        num_ratings = np.zeros((b, n_samples), dtype=np.float32)
+        popularity = np.zeros((b, n_samples), dtype=np.float32)
 
         for j in range(n_samples):
 
@@ -204,19 +189,16 @@ def build_training_set(
             sim_raw = user_lib.dot(book_similarity_matrix[:, books]).diagonal()
 
             sim_scores[:, j] = sim_raw / library_sizes
-            avg_ratings[:, j] = book_avg_ratings_vector[books]
-            num_ratings[:, j] = book_number_ratings_vector[books]
+            popularity[:, j] = np.log1p(book_avg_ratings_vector[books] * book_number_ratings_vector[books])
         positives = np.column_stack([
            sim_scores[:, 0],
-           avg_ratings[:, 0],
-           num_ratings[:, 0],
-           sim_scores[:, 0] * log_library_sizes
+           popularity[:, 0],
+           np.log1p(sim_scores[:, 0] * log_library_sizes)
            ])
 
         negatives = np.column_stack([
             sim_scores[:, 1:].ravel(),
-            avg_ratings[:, 1:].ravel(),
-            num_ratings[:, 1:].ravel(),
+            popularity[:, 1:].ravel(),
             (sim_scores[:, 1:] * log_library_sizes[:, None]).ravel()
             ])
 
@@ -236,27 +218,34 @@ def build_training_set(
 
 
 def train_logistic_model(
-    ground_truth=USER_GROUND_TRUTH_BOOK_TRAIN,
+    ground_truth,
+    output_model_file,
+    output_scaler_file,
+    user_library_matrix,
+    book_similarity_matrix,
+    book_avg_ratings_vector,
+    book_number_ratings_vector,
     batch_size=10000,
-    n_neg=5,
-    output_model_file=OUTPUT_MODEL_FILE,
-    output_scaler_file=OUTPUT_MODEL_SCALER_FILE
+    n_neg=5
 ):
     """
     Train logistic regression model and save model + scaler.
     """
 
     x_train, y_train = build_training_set(
-        ground_truth=ground_truth,
-        batch_size=batch_size,
-        n_neg=n_neg
-    )
+        ground_truth= ground_truth,
+        user_library_matrix=user_library_matrix,
+        book_similarity_matrix=book_similarity_matrix,
+        book_avg_ratings_vector=book_avg_ratings_vector,
+        book_number_ratings_vector=book_number_ratings_vector,
+        n_neg=n_neg,
+        batch_size=batch_size)
 
     scaler = StandardScaler()
 
     x_train_scaled = scaler.fit_transform(x_train)
 
-    clf = LogisticRegression(solver="lbfgs", max_iter=1000)
+    clf = LogisticRegression(solver="saga", max_iter=3000, class_weight="balanced")
 
     clf.fit(x_train_scaled, y_train)
 
@@ -273,7 +262,29 @@ def main():
     Main function to train the logistic regression model.
     """
 
-    train_logistic_model(n_neg=20)
+    output_model_file = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    output_model_scaler_file = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+
+    npzfile = np.load(os.path.join(PROCESSED_DIR, "book_ratings.npz"))
+    book_avg_ratings_vector = npzfile["ratings_avg"]
+    book_num_ratings_vector = npzfile["log_number_ratings"]
+    book_similarity_matrix = load_npz(os.path.join(PROCESSED_DIR, "book_similarity.npz")).tocsc()
+
+    user_library_matrix_train = load_npz(os.path.join(PROCESSED_DIR, "train_matrix.npz")).tocsr()
+    user_ground_truth_book_train = np.load(os.path.join(PROCESSED_DIR,
+                                                    "train_ground_truth.npy")).flatten()
+
+    print("Data loaded successfully.")
+    train_logistic_model(
+            ground_truth=user_ground_truth_book_train,
+            output_model_file=output_model_file,
+            output_scaler_file=output_model_scaler_file,
+            user_library_matrix=user_library_matrix_train,
+            book_similarity_matrix=book_similarity_matrix,
+            book_avg_ratings_vector=book_avg_ratings_vector,
+            book_number_ratings_vector=book_num_ratings_vector,
+            n_neg=20
+            )
 
 
 if __name__ == "__main__":

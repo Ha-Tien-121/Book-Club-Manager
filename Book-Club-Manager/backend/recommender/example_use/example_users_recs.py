@@ -8,7 +8,7 @@ Usage (from project root):
 import json
 import time
 
-from backend.recommender.book_recommender import BookRecommender
+from backend.recommender.book_recommender_backend import BookRecommender
 
 start_time = time.time()
 recommender = BookRecommender()

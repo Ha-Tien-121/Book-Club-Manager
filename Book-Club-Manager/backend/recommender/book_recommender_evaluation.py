@@ -15,10 +15,10 @@ which measures the proportion of users whose held-out book appears in the
 top 50 recommendations produced by the model.
 
 Compares the model performance against a simple popularity-based baseline ranking, 
-avg. rating + log(num. ratings). Note every book has at least one rating. 
+avg. rating*log(num. ratings). Note every book has at least one rating. 
 
 Returns:
-    Model Hit@50: 0.0541 = 5.41% of users had their held-out book in the top 50 recommendations 
+    Model Hit@50: 0.0582 = 5.82% of users had their held-out book in the top 50 recommendations 
     from the logistic regression model.
     
     Popularity Hit@50: 0.0003 = 0.03% of users had their held-out book in the top 50 most 
@@ -29,7 +29,7 @@ Usage:
     python -m backend.recommender.recommender_test
 
 Time:
-    ~50 minutes due to 4.4M books by 10,000 users scoring
+    ~20 minutes due to ~1M books by 10,000 users scoring
 """
 
 
@@ -45,23 +45,10 @@ from backend.recommender.config import RECOMMENDER_DIR
 
 np.random.seed(42)
 
-MODEL_FILE = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
-MODEL_SCALER_FILE = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
-USER_TEST_FILE = os.path.join(PROCESSED_DIR, "test_matrix.npz")
-BOOK_SIM_FILE = os.path.join(PROCESSED_DIR, "book_similarity.npz")
-BOOK_RATINGS_FILE = os.path.join(PROCESSED_DIR, "book_ratings.npz")
-GROUND_TRUTH_FILE = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
-
-USER_LIBRARY_MATRIX_TEST = load_npz(USER_TEST_FILE).tocsr()
-BOOK_SIMILARITY_MATRIX = load_npz(BOOK_SIM_FILE).tocsc()
-ratings_file = np.load(BOOK_RATINGS_FILE)
-BOOK_AVG_RATINGS_VECTOR = ratings_file["ratings_avg"].astype(np.float32)
-BOOK_NUMBER_RATINGS_VECTOR = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
-USER_GROUND_TRUTH_BOOK_TEST = np.load(GROUND_TRUTH_FILE).flatten()
-print("Data loaded successfully.")
 
 def hit50_evaluation_logistic(
     clf,
+    scaler,
     user_library_sparse: csr_matrix,
     ground_truth: np.ndarray,
     book_similarity_sparse,
@@ -144,6 +131,8 @@ def hit50_evaluation_logistic(
         top-K recommendation list. The fraction of users for which this occurs
         is reported as the Hit@K score.
         """
+    if top_k >= len(book_avg_ratings):
+        raise ValueError(f"top_k ({top_k}) must be less than n_books ({len(book_avg_ratings)})")
 
     beta = clf.coef_[0]
     beta_scaled = beta / scaler.scale_
@@ -151,7 +140,7 @@ def hit50_evaluation_logistic(
     n_users = user_library_sparse.shape[0]
     n_books = book_similarity_sparse.shape[1]
 
-    popularity_score = book_avg_ratings + book_num_ratings
+    popularity_score = np.log1p(book_avg_ratings * book_num_ratings)
     log_lib_sizes = np.log1p(np.array(user_library_sparse.sum(axis=1)).ravel())
 
     best_scores_model = np.full((n_users, top_k), -np.inf, dtype=np.float32)
@@ -172,18 +161,15 @@ def hit50_evaluation_logistic(
         sim_block = sim_block.toarray().astype(np.float32)
         user_lib_size = np.maximum(1, np.array(user_library_sparse.sum(axis=1)).ravel())
         sim_block /= user_lib_size[:, None]
-        sim_lib_interaction = sim_block * log_lib_sizes[:, None]
+        sim_lib_interaction = np.log1p(sim_block * log_lib_sizes[:, None])
 
-        avg_block = book_avg_ratings[start:end].astype(np.float32)
-        num_block = book_num_ratings[start:end].astype(np.float32)
         pop_block = popularity_score[start:end].astype(np.float32)
 
         score_block = (
             beta_scaled[0] * sim_block +
-            beta_scaled[1] * avg_block +
-            beta_scaled[2] * num_block +
-            beta_scaled[3] * sim_lib_interaction
-        )
+            beta_scaled[1] * pop_block +
+            beta_scaled[2] * sim_lib_interaction
+            )
 
         mask_in_block = (user_cols >= start) & (user_cols < end)
         rows_in_block = user_rows[mask_in_block]
@@ -217,29 +203,44 @@ def hit50_evaluation_logistic(
 
     return np.mean(hits_model), np.mean(hits_pop)
 
-CLF = joblib.load(MODEL_FILE)
-scaler = joblib.load(MODEL_SCALER_FILE)
-print("Logistic model loaded.")
-
-N_USERS = 10000
-valid_users = np.where(USER_GROUND_TRUTH_BOOK_TEST != -1)[0]
-sample_users = np.random.choice(
-    valid_users, size=min(N_USERS, len(valid_users)), replace=False
-)
-user_library_batch = USER_LIBRARY_MATRIX_TEST[sample_users]
-ground_truth_batch = USER_GROUND_TRUTH_BOOK_TEST[sample_users]
 
 def main():
     """
     Main function to run the Hit@50 evaluation for the logistic regression recommender model.
     """
+    model_file = os.path.join(RECOMMENDER_DIR, "book_recommender_model.pkl")
+    model_scaler_file = os.path.join(RECOMMENDER_DIR, "feature_scaler.pkl")
+    user_test_file = os.path.join(PROCESSED_DIR, "test_matrix.npz")
+    book_sim_file = os.path.join(PROCESSED_DIR, "book_similarity.npz")
+    book_ratings_file = os.path.join(PROCESSED_DIR, "book_ratings.npz")
+    ground_truth_file = os.path.join(PROCESSED_DIR, "test_ground_truth.npy")
+
+    user_library_test_matrix = load_npz(user_test_file).tocsr()
+    book_similarity_matrix = load_npz(book_sim_file).tocsc()
+    ratings_file = np.load(book_ratings_file)
+    book_avg_ratings_vector = ratings_file["ratings_avg"].astype(np.float32)
+    book_num_ratings_vector = np.log1p(ratings_file["log_number_ratings"]).astype(np.float32)
+    user_ground_truth_book_test = np.load(ground_truth_file).flatten()
+    print("Data loaded successfully.")
+
+    clf = joblib.load(model_file)
+    scaler = joblib.load(model_scaler_file)
+    print("Logistic model loaded.")
+
+    n_users = 10000
+    valid_users = np.where(user_ground_truth_book_test != -1)[0]
+    sample_users = np.random.choice(
+        valid_users, size=min(n_users, len(valid_users)), replace=False
+    )
+
     hit50_evaluation_logistic(
-        clf=CLF,
-        user_library_sparse=user_library_batch,
-        ground_truth=ground_truth_batch,
-        book_similarity_sparse=BOOK_SIMILARITY_MATRIX,
-        book_avg_ratings=BOOK_AVG_RATINGS_VECTOR,
-        book_num_ratings=BOOK_NUMBER_RATINGS_VECTOR
+        clf=clf,
+        scaler=scaler,
+        user_library_sparse=user_library_test_matrix[sample_users],
+        ground_truth=user_ground_truth_book_test[sample_users],
+        book_similarity_sparse=book_similarity_matrix,
+        book_avg_ratings=book_avg_ratings_vector,
+        book_num_ratings=book_num_ratings_vector
         )
 
 if __name__ == "__main__":
