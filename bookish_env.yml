@@ -14,5 +14,6 @@ dependencies:
   - pip
   - build
   - pip:
+      - joblib
       - isbnlib
       - sodapy
