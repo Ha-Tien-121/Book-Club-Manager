@@ -298,14 +298,38 @@ def _description_from_detail(detail: dict) -> str:
             pass
         if not text:
             text = str(raw).strip() or ""
+    # Strip common boilerplate headers at the start.
     for prefix in ("Amazon.com Review ", "An Amazon Best Book of "):
         if text.startswith(prefix):
             text = text[len(prefix) :].strip()
-    if ":" in text[:30]:
-        idx = text.index(":", 0, 30) + 1
+    # If the first sentence is a heading like "Review:" or similar, drop it.
+    if ":" in text[:40]:
+        idx = text.index(":", 0, 40) + 1
         rest = text[idx:].strip()
-        if len(rest) > 20:
+        if len(rest) > 40:
             text = rest
+    # Heuristically trim off trailing blurbs / praise sections after the main summary.
+    for marker in ("\n\nReview", "\n\nPraise for", "\nPraise for", "\nReview"):
+        pos = text.find(marker)
+        if pos != -1 and pos > 200:
+            text = text[:pos].rstrip()
+            break
+    # If there are multiple paragraphs, keep the first long paragraph (summary) and drop the rest.
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if paragraphs and len(paragraphs[0]) > 200:
+        text = paragraphs[0]
+    # Normalize Amazon-style double-single-quote quoting.
+    # e.g. Review '' It Ends with Us ...'' — Author '' It Ends with Us tackles ...'' —"
+    # First, turn repeated single quotes into a normal double quote so the text reads naturally.
+    if "''" in text:
+        text = text.replace("''", '"')
+    # If there is a quoted blurb appended at the end (e.g., after a long summary),
+    # split the summary and the first quote into separate paragraphs for readability.
+    first_quote_idx = text.find('"')
+    if first_quote_idx != -1 and first_quote_idx > 200:
+        head = text[:first_quote_idx].rstrip()
+        tail = text[first_quote_idx:].lstrip()
+        text = head + "\n\n" + tail
     if (text or "").strip() == "[]":
         return ""
     return text or ""
@@ -374,7 +398,10 @@ def render_book_detail_page(
             render_pill_tags(book["genres"])
         st.write(f"Rating: **{book['rating']}** ({book['rating_count']:,})")
         raw_desc = (book.get("description") or "").strip()
+        # Treat placeholder/empty values as no description: hide the container entirely.
         if raw_desc == "[]":
+            raw_desc = ""
+        if raw_desc.lower().startswith("no description available"):
             raw_desc = ""
         desc_text = raw_desc if raw_desc else ""
         if desc_text:

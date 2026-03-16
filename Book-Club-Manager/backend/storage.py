@@ -81,12 +81,18 @@ def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: 
     else:
         try:
             from backend import config
+
             bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
+            prefix = getattr(config, "BOOK_SHARDS_S3_PREFIX", None) or os.getenv(
+                "BOOK_SHARDS_S3_PREFIX",
+                "books/shard/book_shards",
+            )
         except Exception:
             bucket = os.getenv("DATA_BUCKET")
+            prefix = os.getenv("BOOK_SHARDS_S3_PREFIX", "books/shard/book_shards")
         if not bucket:
             raise RuntimeError("DATA_BUCKET env not set")
-        path = f"s3://{bucket}/books/parent_asin/{shard}.parquet"
+        path = f"s3://{bucket}/{prefix.rstrip('/')}/{shard}.parquet"
 
     df = pd.read_parquet(path, engine=engine)
     if "parent_asin" not in df.columns:

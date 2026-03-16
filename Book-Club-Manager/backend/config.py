@@ -85,6 +85,8 @@ EVENTS_PARENT_ASIN_GSI = os.getenv("EVENTS_PARENT_ASIN_GSI", "parent_asin_ttl-in
 
 # S3 bucket for book data and images.
 DATA_BUCKET = os.getenv("DATA_BUCKET", "bookish-data-elsie")
+# S3 prefix for sharded book Parquet files keyed by parent_asin.
+BOOK_SHARDS_S3_PREFIX = os.getenv("BOOK_SHARDS_S3_PREFIX", "books/shard/parent_asin")
 # S3 key for SPL top-50 checkouts JSON (list of book dicts).
 TOP50_BOOKS_S3_KEY = os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
 # S3 key for default/cold-start book recs (no genre prefs): top 50 most popular from reviews.
