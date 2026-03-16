@@ -9,7 +9,15 @@ is_post_saved, is_post_liked, get_saved_posts_with_details.
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+# Ensure inner Book-Club-Manager backend package is importable when running from outer repo root.
+_TESTS_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _TESTS_DIR.parent
+_INNER_ROOT = _REPO_ROOT / "Book-Club-Manager"
+if _INNER_ROOT.is_dir() and str(_INNER_ROOT) not in sys.path:
+    sys.path.insert(0, str(_INNER_ROOT))
 
 # Avoid loading real boto3 when backend.storage is imported.
 if "boto3" not in sys.modules:
