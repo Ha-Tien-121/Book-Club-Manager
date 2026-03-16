@@ -1,5 +1,5 @@
 # Project dependencies
-# Last updated: 2026-03-13
+# Last updated: 2026-03-15
 
 streamlit>=1.30.0
 boto3
@@ -9,6 +9,7 @@ numpy
 scipy
 requests
 python-dotenv
+bcrypt
 isbnlib
 sodapy
 
