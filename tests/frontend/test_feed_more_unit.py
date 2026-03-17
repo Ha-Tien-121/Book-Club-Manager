@@ -8,14 +8,17 @@ from typing import Any, Callable
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -31,52 +34,67 @@ class _FakeStreamlitRuntime:
         self.rerun_called = 0
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     # output/layout
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, msg: str, **_kw: Any) -> None:
+        "Helper for caption."
         self.captions.append(str(msg))
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def divider(self) -> None:
+        "Helper for divider."
         return None
 
     def info(self, msg: str, **_kw: Any) -> None:
+        "Helper for info."
         self.infos.append(str(msg))
 
     def success(self, msg: str, **_kw: Any) -> None:
+        "Helper for success."
         self.successes.append(str(msg))
 
     def warning(self, msg: str, **_kw: Any) -> None:
+        "Helper for warning."
         self.warnings.append(str(msg))
 
     def container(self, **_kw: Any):
+        "Helper for container."
         return _FakeCtx()
 
     def columns(self, n: int | list[int], **_kw: Any):
+        "Helper for columns."
         if isinstance(n, list):
             n = len(n)
         return [_FakeCtx() for _ in range(int(n))]
 
     def image(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for image."
         return None
 
     # inputs
     def multiselect(self, *_a: Any, **_kw: Any) -> list[str]:
+        "Helper for multiselect."
         return []
 
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
@@ -91,6 +109,7 @@ class _FakeStreamlitRuntime:
         on_change: Callable[[], None] | None = None,
         **_kw: Any,
     ):
+        "Helper for selectbox."
         chosen = self._selectbox_choice_by_key.get(key, options[index] if options else None)
         self.session_state[key] = chosen
         if on_change is not None:
@@ -99,19 +118,24 @@ class _FakeStreamlitRuntime:
 
     # forms used later in feed.py; keep no-op to avoid crashes if executed.
     def form(self, *_a: Any, **_kw: Any):
+        "Helper for form."
         return _FakeCtx()
 
     def text_input(self, *_a: Any, **_kw: Any) -> str:
+        "Helper for text input."
         return ""
 
     def text_area(self, *_a: Any, **_kw: Any) -> str:
+        "Helper for text area."
         return ""
 
     def form_submit_button(self, *_a: Any, **_kw: Any) -> bool:
+        "Helper for form submit button."
         return False
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -145,6 +169,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_feed_tab_handles_recommender_exception_and_empty_states() -> None:
+    "Test feed tab handles recommender exception and empty states."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -160,6 +185,7 @@ def test_feed_tab_handles_recommender_exception_and_empty_states() -> None:
     cached_spl_trending = lambda: []
 
     def _bad_cached_book_recommendations(_email: str) -> dict:
+        "Helper for  bad cached book recommendations."
         raise KeyError("boom")
 
     feed._render_feed_tab(
@@ -208,6 +234,7 @@ def test_feed_tab_handles_recommender_exception_and_empty_states() -> None:
 
 
 def test_feed_book_detail_library_selectbox_add_and_remove_and_cache_clear() -> None:
+    "Test feed book detail library selectbox add and remove and cache clear."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     feed = importlib.import_module("frontend.pages.feed")

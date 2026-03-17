@@ -72,7 +72,7 @@ def render_genre_onboarding(genres: list[str], current_user: dict, store: dict) 
         current_user["genre_preferences"] = selected
         try:
             refresh_and_save_recommendations(current_user["user_id"])
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, KeyError):
             pass
         st.session_state["show_genre_onboarding"] = False
         st.success("Preferences saved. Taking you to the feed.")

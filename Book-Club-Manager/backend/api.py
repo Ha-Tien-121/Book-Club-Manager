@@ -11,3 +11,5 @@ logic in backend.recommender.service.
 # from backend.recommender.service import mark_book_as_read, get_recommendations
 # app = FastAPI()
 # @app.post("/users/{user_id}/mark-read") ...
+# API endpoints intentionally omitted in this branch.
+API_ENABLED = False

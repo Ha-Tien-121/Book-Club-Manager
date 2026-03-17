@@ -207,6 +207,7 @@ def main(  # pylint: disable=too-many-nested-blocks
     output_top50_in_books=OUTPUT_TOP50_CHECKOUTS_IN_BOOKS,
     client=None,
 ):
+    # The nested flow mirrors API paging + aggregation + normalization stages in order.
     """
     Fetches, cleans, and aggregates SPL book checkout data from the past year,
     summing checkouts by ISBN (if available) or by Title and Author, and writes

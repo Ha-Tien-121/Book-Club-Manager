@@ -15,7 +15,6 @@ from typing import Any
 
 from backend.config import EVENT_RECOMMENDATION_POOL_SIZE
 from backend.storage import get_storage
-from backend.services import user_events_service
 
 
 def get_event_detail(event_id: str) -> dict[str, Any]:
@@ -63,4 +62,3 @@ def get_explore_events(limit: int | None = None) -> list[dict[str, Any]]:
     if limit is None:
         limit = EVENT_RECOMMENDATION_POOL_SIZE
     return store.get_soonest_events(limit)
-

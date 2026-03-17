@@ -31,6 +31,7 @@ import backend.recommender.event_recommender as er  # noqa: E402
 
 
 def test_recency_bonus_handles_none_and_invalid_timestamp() -> None:
+    "Test recency bonus handles none and invalid timestamp."
     now = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
     assert er._recency_bonus(None, now) == 0.0
@@ -39,6 +40,7 @@ def test_recency_bonus_handles_none_and_invalid_timestamp() -> None:
 
 
 def test_recency_bonus_varies_across_time_ranges() -> None:
+    "Test recency bonus varies across time ranges."
     now = datetime(2025, 1, 1, tzinfo=timezone.utc)
     ts_soon = (now + timedelta(days=3)).timestamp()
     ts_mid = (now + timedelta(days=20)).timestamp()
@@ -53,6 +55,7 @@ def test_recency_bonus_varies_across_time_ranges() -> None:
 
 
 def test_normalize_tags_handles_various_inputs() -> None:
+    "Test normalize tags handles various inputs."
     assert er._normalize_tags(None) == []
     assert er._normalize_tags("") == []
     assert er._normalize_tags(" Tag ") == ["Tag"]
@@ -62,6 +65,7 @@ def test_normalize_tags_handles_various_inputs() -> None:
 
 
 def test_score_event_combines_tags_and_recency() -> None:
+    "Test score event combines tags and recency."
     now = datetime(2025, 1, 1, tzinfo=timezone.utc)
     event = {
         "tags": ["Fantasy", "Sci-Fi"],
@@ -95,6 +99,7 @@ def test_score_event_handles_non_numeric_time_fields() -> None:
 
 
 def test_event_recommender_recommend_ranks_and_mixes_explore_events() -> None:
+    "Test event recommender recommend ranks and mixes explore events."
     now = datetime(2025, 1, 1, tzinfo=timezone.utc)
     base_ts = now.timestamp()
     # Three main events with tag overlap and increasing recency.
@@ -111,6 +116,7 @@ def test_event_recommender_recommend_ranks_and_mixes_explore_events() -> None:
     # Monkeypatch datetime.now used inside EventRecommender to make deterministic.
     class FixedRecommender(er.EventRecommender):
         def recommend(self, events, user_tags, top_k=10):  # type: ignore[override]
+            "Helper for recommend."
             er.datetime = er.datetime  # no-op to keep mypy happy
             return super().recommend(events, user_tags, top_k)
 
@@ -174,6 +180,7 @@ def test_event_recommender_recommend_backfills_from_ranked_with_new_link() -> No
 
 
 def test_event_recommender_recommend_handles_empty_and_non_positive_top_k() -> None:
+    "Test event recommender recommend handles empty and non positive top k."
     rec = er.EventRecommender()
 
     assert rec.recommend([], ["Fantasy"], top_k=5) == []

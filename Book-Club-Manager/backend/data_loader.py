@@ -34,9 +34,10 @@ def _books_from_services_to_ui_shape(raw: list[dict], max_count: int = 50) -> li
         if isinstance(cats, str):
             try:
                 cats = ast.literal_eval(cats) if ("[" in cats or "{" in cats) else [cats]
-            except Exception:
+            except (ValueError, SyntaxError):
                 cats = [cats] if cats else []
         genres = [str(c).strip() for c in (cats if isinstance(cats, list) else [])[:3]] or ["General"]
+        description = str(b.get("description") or "No description available.").strip()
         out.append({
             "id": idx,
             "source_id": source_id,
@@ -46,10 +47,43 @@ def _books_from_services_to_ui_shape(raw: list[dict], max_count: int = 50) -> li
             "rating": round(rating, 1),
             "rating_count": rating_count,
             "genres": genres,
-            "description": str(b.get("description") or "No description available.").strip() or "No description available.",
+            "description": description or "No description available.",
             "spl_available": False,
         })
     return out
+
+
+def _load_reviews_fallback(path: Path) -> list[dict]:
+    """Load review books and convert them to {asin: meta} rows."""
+    if not path.exists():
+        return []
+    try:
+        with path.open("r", encoding="utf-8") as file_obj:
+            reviews = json.load(file_obj) or []
+    except (OSError, ValueError, TypeError):
+        return []
+    if isinstance(reviews, dict) and "books" in reviews:
+        reviews = reviews.get("books") or []
+    if not isinstance(reviews, list):
+        return []
+    rows: list[dict] = []
+    for book in reviews:
+        if not isinstance(book, dict):
+            continue
+        asin = str(book.get("parent_asin") or book.get("source_id") or "").strip()
+        if asin:
+            rows.append({asin: book})
+    return rows
+
+
+def _first_genre(book: dict | None) -> str:
+    """Return the first genre from a UI-shaped book dict."""
+    if not isinstance(book, dict):
+        return "General"
+    genres = book.get("genres")
+    if isinstance(genres, list) and genres:
+        return str(genres[0])
+    return "General"
 
 
 def _events_to_clubs_ui_shape(events: list[dict], books_by_source_id: dict) -> list[dict]:
@@ -200,28 +234,37 @@ def build_ui_bootstrap(
     forum_posts_ui = _forum_posts_to_ui_shape(forum_posts)
     if not forum_posts_ui and books:
         b0, b1 = books[0], (books[1] if len(books) > 1 else None)
+        b0_title = str(b0.get("title") or "this book")
+        b0_author = str(b0.get("author") or "Unknown")
+        b0_genre = _first_genre(b0)
+        b1_title = str(b1.get("title") or "Top picks this week") if b1 else ""
+        b1_genre = _first_genre(b1)
         forum_posts_ui = [
             {
                 "id": 1,
-                "title": f"What do you think about {b0['title']}?" if b0 else "Join the discussion",
+                "title": f"What do you think about {b0_title}?",
                 "author": "Community Mod",
-                "genre": b0["genres"][0] if b0 and b0.get("genres") else "General",
+                "genre": b0_genre,
                 "club": clubs[0]["name"] if clubs else None,
                 "replies": 8,
                 "likes": 15,
                 "time_ago": "2 hours ago",
-                "preview": f"Share your thoughts about {b0['title']} by {b0['author']}." if b0 else "Share your thoughts.",
+                "preview": f"Share your thoughts about {b0_title} by {b0_author}.",
             },
             {
                 "id": 2,
-                "title": f"Top picks this week: {b1['title']}" if b1 else "Top picks this week",
+                "title": f"Top picks this week: {b1_title}" if b1 else "Top picks this week",
                 "author": "Bookish Team",
-                "genre": b1["genres"][0] if b1 and b1.get("genres") else "General",
+                "genre": b1_genre,
                 "club": None,
                 "replies": 5,
                 "likes": 12,
                 "time_ago": "1 day ago",
-                "preview": f"This week's recommendation highlight is {b1['title']}." if b1 else "Discover highlights.",
+                "preview": (
+                    f"This week's recommendation highlight is {b1_title}."
+                    if b1
+                    else "Discover highlights."
+                ),
             },
         ]
     genres = sorted({g for b in books for g in b["genres"]})
@@ -240,7 +283,6 @@ def build_ui_bootstrap(
         "user_club_ids": user_club_ids,
     }
 
-
 def load_data() -> dict:
     """Load bootstrap UI data. Local only: reads from processed JSONL/CSV files.
 
@@ -252,27 +294,7 @@ def load_data() -> dict:
     )
     # Fallback: use reviews list (already in repo) when JSONL excerpt is missing.
     if not books_parent:
-        reviews_path = PROCESSED_DIR / "reviews_top25_books.json"
-        if reviews_path.exists():
-            try:
-                with reviews_path.open("r", encoding="utf-8") as f:
-                    reviews = json.load(f) or []
-                if isinstance(reviews, dict) and "books" in reviews:
-                    reviews = reviews.get("books") or []
-                if isinstance(reviews, list):
-                    # Convert list[book_dict] into the JSONL-like [{asin: meta}] rows
-                    # expected by the existing parsing logic below.
-                    tmp: list[dict] = []
-                    for b in reviews:
-                        if not isinstance(b, dict):
-                            continue
-                        asin = str(b.get("parent_asin") or b.get("source_id") or "").strip()
-                        if not asin:
-                            continue
-                        tmp.append({asin: b})
-                    books_parent = tmp
-            except Exception:
-                books_parent = []
+        books_parent = _load_reviews_fallback(PROCESSED_DIR / "reviews_top25_books.json")
     catalog_isbns = _read_isbn_index_file(
         PROCESSED_DIR / "first_100_spl_catalog_by_isbn.json"
     )
@@ -287,7 +309,7 @@ def load_data() -> dict:
         if isinstance(cats, str):
             try:
                 cats = ast.literal_eval(cats) if ("[" in cats or "{" in cats) else [cats]
-            except Exception:
+            except (ValueError, SyntaxError):
                 cats = [cats] if cats else []
         genres = [str(c).strip() for c in (cats if isinstance(cats, list) else [])[:3] if str(c).strip()] or ["General"]
         desc = meta.get("description") or []
@@ -396,30 +418,40 @@ def load_data() -> dict:
         "saved": [b["id"] for b in books[4:8]],
         "finished": [b["id"] for b in books[8:12]],
     }
-    b0, b1 = (books[0] if len(books) > 0 else None), (books[1] if len(books) > 1 else None)
+    b0 = books[0] if books else None
+    b1 = books[1] if len(books) > 1 else None
+    b0_title = str(b0.get("title") or "your current read") if b0 else ""
+    b0_author = str(b0.get("author") or "Unknown") if b0 else ""
+    b0_genre = _first_genre(b0)
+    b1_title = str(b1.get("title") or "Top picks this week") if b1 else ""
+    b1_genre = _first_genre(b1)
     forum_posts = [
         {
-            "title": f"What do you think about {b0['title']}?" if b0 else "Join the discussion",
+            "title": f"What do you think about {b0_title}?" if b0 else "Join the discussion",
             "author": "Community Mod",
-            "genre": b0["genres"][0] if b0 and b0.get("genres") else "General",
+            "genre": b0_genre,
             "club": clubs[0]["name"] if clubs else None,
             "replies": 8,
             "likes": 15,
             "time_ago": "2 hours ago",
             "preview": (
-                f"Share your thoughts about {b0['title']} by {b0['author']}." if b0
+                f"Share your thoughts about {b0_title} by {b0_author}." if b0
                 else "Share your thoughts about your current read."
             ),
         },
         {
-            "title": f"Top picks this week: {b1['title']}" if b1 else "Top picks this week",
+            "title": f"Top picks this week: {b1_title}" if b1 else "Top picks this week",
             "author": "Bookish Team",
-            "genre": b1["genres"][0] if b1 and b1.get("genres") else "General",
+            "genre": b1_genre,
             "club": None,
             "replies": 5,
             "likes": 12,
             "time_ago": "1 day ago",
-            "preview": f"This week's recommendation highlight is {b1['title']}." if b1 else "Discover this week's highlights.",
+            "preview": (
+                f"This week's recommendation highlight is {b1_title}."
+                if b1
+                else "Discover this week's highlights."
+            ),
         },
     ]
     genres = sorted({g for b in books for g in b["genres"]})
@@ -438,4 +470,3 @@ def load_data() -> dict:
         "neighborhoods": neighborhoods,
         "user_club_ids": user_club_ids,
     }
-

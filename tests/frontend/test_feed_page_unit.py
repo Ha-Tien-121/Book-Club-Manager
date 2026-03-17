@@ -8,14 +8,17 @@ from typing import Any
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -28,57 +31,73 @@ class _FakeStreamlitRuntime:
         self.successes: list[str] = []
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     # layout/output
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, msg: str, **_kw: Any) -> None:
+        "Helper for caption."
         self.captions.append(str(msg))
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def divider(self) -> None:
+        "Helper for divider."
         return None
 
     def info(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for info."
         return None
 
     def success(self, msg: str, **_kw: Any) -> None:
+        "Helper for success."
         self.successes.append(str(msg))
 
     def container(self, **_kw: Any):
+        "Helper for container."
         return _FakeCtx()
 
     def columns(self, n: int | list[int], **_kw: Any):
+        "Helper for columns."
         if isinstance(n, list):
             n = len(n)
         return [_FakeCtx() for _ in range(int(n))]
 
     def image(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for image."
         return None
 
     def link_button(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for link button."
         return None
 
     def multiselect(self, *_a: Any, **_kw: Any) -> list[str]:
+        "Helper for multiselect."
         return []
 
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -107,6 +126,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_feed_render_tab_hits_trending_recs_and_save_event_paths() -> None:
+    "Test feed render tab hits trending recs and save event paths."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -131,6 +151,7 @@ def test_feed_render_tab_hits_trending_recs_and_save_event_paths() -> None:
     sync_calls: list[tuple[dict, dict | None]] = []
 
     def _sync_user_clubs_and_save(s: dict, u: dict | None) -> None:
+        "Helper for  sync user clubs and save."
         sync_calls.append((s, u))
 
     cached_spl_trending = lambda: [
@@ -196,6 +217,7 @@ def test_feed_render_tab_hits_trending_recs_and_save_event_paths() -> None:
 
 
 def test_feed_book_detail_open_discussion_sets_state_and_reruns() -> None:
+    "Test feed book detail open discussion sets state and reruns."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     feed = importlib.import_module("frontend.pages.feed")

@@ -16,6 +16,7 @@ from backend.recommender.book_recommender import BookRecommender, GENRE_VOCAB
 @pytest.fixture()
 def fitted_recommender() -> BookRecommender:
     # Instantiate with current constructor; tests inject their own data.
+    "Helper for fitted recommender."
     br = BookRecommender()
 
     parent_asins = [f"A{str(i).zfill(3)}" for i in range(1, 11)]
@@ -79,6 +80,7 @@ def fitted_recommender() -> BookRecommender:
 
 
 def test_cold_start_returns_top_k(fitted_recommender: BookRecommender) -> None:
+    "Test cold start returns top k."
     top_k = 5
     recs = fitted_recommender.recommend("u1", user_genres_df=None, user_books_df=None, top_k=top_k)
     assert len(recs) == top_k
@@ -98,6 +100,7 @@ def test_cold_start_returns_top_k(fitted_recommender: BookRecommender) -> None:
 
 
 def test_cold_start_scores_use_popularity_only(fitted_recommender: BookRecommender) -> None:
+    "Test cold start scores use popularity only."
     recs = fitted_recommender.recommend("u1", user_genres_df=None, user_books_df=None, top_k=3)
     top = recs[0]
     row = fitted_recommender.books_df[fitted_recommender.books_df["parent_asin"] == top["parent_asin"]].iloc[0]
@@ -106,6 +109,7 @@ def test_cold_start_scores_use_popularity_only(fitted_recommender: BookRecommend
 
 
 def test_genre_preferences_change_results(fitted_recommender: BookRecommender) -> None:
+    "Test genre preferences change results."
     cold = fitted_recommender.recommend("u2", user_genres_df=None, user_books_df=None, top_k=6)
     user_genres_df = pd.DataFrame(
         {"user_id": ["u2"], "genre": ["Fantasy"], "rank": [1]}
@@ -115,6 +119,7 @@ def test_genre_preferences_change_results(fitted_recommender: BookRecommender) -
 
 
 def test_read_books_excluded(fitted_recommender: BookRecommender) -> None:
+    "Test read books excluded."
     read = ["A003", "A010"]
     user_books_df = pd.DataFrame({"user_id": ["u3", "u3"], "parent_asin": read})
     recs = fitted_recommender.recommend("u3", user_genres_df=None, user_books_df=user_books_df, top_k=10)
@@ -124,6 +129,7 @@ def test_read_books_excluded(fitted_recommender: BookRecommender) -> None:
 
 
 def test_read_books_influence_profile(fitted_recommender: BookRecommender) -> None:
+    "Test read books influence profile."
     user_books_df = pd.DataFrame({"user_id": ["u4", "u4"], "parent_asin": ["A003", "A005"]})
     recs = fitted_recommender.recommend("u4", user_genres_df=None, user_books_df=user_books_df, top_k=5)
     assert len(recs) == 5
@@ -133,6 +139,7 @@ def test_read_books_influence_profile(fitted_recommender: BookRecommender) -> No
 
 
 def test_top_k_respected(fitted_recommender: BookRecommender) -> None:
+    "Test top k respected."
     recs3 = fitted_recommender.recommend("u5", user_genres_df=None, user_books_df=None, top_k=3)
     recs7 = fitted_recommender.recommend("u5", user_genres_df=None, user_books_df=None, top_k=7)
     assert len(recs3) == 3
@@ -140,6 +147,7 @@ def test_top_k_respected(fitted_recommender: BookRecommender) -> None:
 
 
 def test_output_schema(fitted_recommender: BookRecommender) -> None:
+    "Test output schema."
     recs = fitted_recommender.recommend("u6", user_genres_df=None, user_books_df=None, top_k=8)
     for r in recs:
         assert isinstance(r["book_id"], str)
@@ -155,6 +163,7 @@ def test_output_schema(fitted_recommender: BookRecommender) -> None:
 
 
 def test_scores_descending(fitted_recommender: BookRecommender) -> None:
+    "Test scores descending."
     recs = fitted_recommender.recommend("u7", user_genres_df=None, user_books_df=None, top_k=10)
     scores = [r["score"] for r in recs]
     assert scores == sorted(scores, reverse=True)
@@ -162,6 +171,7 @@ def test_scores_descending(fitted_recommender: BookRecommender) -> None:
 
 def test_genre_rank_weighting(fitted_recommender: BookRecommender) -> None:
     # Include a second genre so normalization doesn't cancel the rank effect.
+    "Test genre rank weighting."
     df_rank1 = pd.DataFrame(
         {
             "user_id": ["u8", "u8"],
@@ -184,6 +194,7 @@ def test_genre_rank_weighting(fitted_recommender: BookRecommender) -> None:
 
 
 def test_cold_start_detection(fitted_recommender: BookRecommender) -> None:
+    "Test cold start detection."
     br = fitted_recommender
     assert br._is_cold_start("u9", None, None) is True
     assert br._is_cold_start("u9", pd.DataFrame(), pd.DataFrame()) is True

@@ -36,6 +36,7 @@ import backend.data_loader as dl  # noqa: E402
 
 
 def test_books_from_services_to_ui_shape_normalizes_fields() -> None:
+    "Test books from services to ui shape normalizes fields."
     raw = [
         {
             "parent_asin": "P1",
@@ -89,6 +90,7 @@ def test_books_from_services_to_ui_shape_parses_categories_string_and_handles_ba
 
 
 def test_events_to_clubs_ui_shape_parses_tags_and_links_book() -> None:
+    "Test events to clubs ui shape parses tags and links book."
     books = [{"id": 1, "source_id": "P1", "title": "Book One"}]
     books_by_source_id: Dict[str, Dict[str, Any]] = {str(b["source_id"]): b for b in books}
     events = [
@@ -166,6 +168,7 @@ def test_events_to_clubs_ui_shape_tag_sources_and_genre_fallbacks() -> None:
 
 
 def test_forum_posts_to_ui_shape_uses_tags_and_truncates_preview() -> None:
+    "Test forum posts to ui shape uses tags and truncates preview."
     long_text = "x" * 150
     posts = [
         {
@@ -193,6 +196,7 @@ def test_forum_posts_to_ui_shape_uses_tags_and_truncates_preview() -> None:
 
 
 def test_forum_posts_to_ui_shape_uses_genre_when_no_tags_and_handles_empty_text() -> None:
+    "Test forum posts to ui shape uses genre when no tags and handles empty text."
     posts = [
         {
             "id": None,
@@ -218,6 +222,7 @@ def test_forum_posts_to_ui_shape_uses_genre_when_no_tags_and_handles_empty_text(
 
 
 def test_read_jsonl_dict_lines_reads_non_empty_lines(tmp_path: Path) -> None:
+    "Test read jsonl dict lines reads non empty lines."
     path = tmp_path / "data.jsonl"
     path.write_text('{"a": 1}\n\n{"b": 2}\n', encoding="utf-8")
 
@@ -227,6 +232,7 @@ def test_read_jsonl_dict_lines_reads_non_empty_lines(tmp_path: Path) -> None:
 
 
 def test_read_jsonl_dict_lines_missing_file_returns_empty(tmp_path: Path) -> None:
+    "Test read jsonl dict lines missing file returns empty."
     path = tmp_path / "missing.jsonl"
 
     rows = dl._read_jsonl_dict_lines(path)
@@ -235,6 +241,7 @@ def test_read_jsonl_dict_lines_missing_file_returns_empty(tmp_path: Path) -> Non
 
 
 def test_read_isbn_index_file_builds_uppercase_set(tmp_path: Path) -> None:
+    "Test read isbn index file builds uppercase set."
     path = tmp_path / "isbn.json"
     data = [{"0": "abc"}, {"0": " Def "}, {"0": ""}]
     path.write_text(json.dumps(data), encoding="utf-8")
@@ -245,6 +252,7 @@ def test_read_isbn_index_file_builds_uppercase_set(tmp_path: Path) -> None:
 
 
 def test_read_isbn_index_file_missing_file_returns_empty_set(tmp_path: Path) -> None:
+    "Test read isbn index file missing file returns empty set."
     path = tmp_path / "missing.json"
 
     result = dl._read_isbn_index_file(path)
@@ -253,6 +261,7 @@ def test_read_isbn_index_file_missing_file_returns_empty_set(tmp_path: Path) -> 
 
 
 def test_parse_tags_handles_valid_and_invalid_strings() -> None:
+    "Test parse tags handles valid and invalid strings."
     assert dl._parse_tags("") == []
     assert dl._parse_tags("['A', ' B ']") == ["a", "b"]
     # Invalid literal should return empty list
@@ -262,6 +271,7 @@ def test_parse_tags_handles_valid_and_invalid_strings() -> None:
 
 
 def test_build_ui_bootstrap_creates_fallbacks_for_clubs_and_forum() -> None:
+    "Test build ui bootstrap creates fallbacks for clubs and forum."
     raw_books = [
         {
             "parent_asin": "P1",

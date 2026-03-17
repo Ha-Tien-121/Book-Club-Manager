@@ -51,6 +51,7 @@ def _make_recommender(n_books=20, beta=(1.0, 1.0, 1.0), library_book_ids=None):
 class TestRecommendOutputShape(unittest.TestCase):
 
     def test_returns_top_k_results(self):
+        "Test returns top k results."
         rec = _make_recommender(n_books=50)
         with patch.object(rec, "fetch_books", return_value=[{"id": i} for i in range(10)]):
             results = rec.recommend("user_1", top_k=10)
@@ -67,6 +68,7 @@ class TestRecommendOutputShape(unittest.TestCase):
 class TestLibraryMasking(unittest.TestCase):
 
     def test_library_books_excluded_from_recommendations(self):
+        "Test library books excluded from recommendations."
         n_books = 20
         owned = ["book_0", "book_1", "book_2"]
         rec = _make_recommender(n_books=n_books, library_book_ids=owned)
@@ -74,6 +76,7 @@ class TestLibraryMasking(unittest.TestCase):
         recommended_indices = []
 
         def capture(book_ids):
+            "Helper for capture."
             recommended_indices.extend(book_ids)
             return []
 
@@ -84,6 +87,7 @@ class TestLibraryMasking(unittest.TestCase):
             self.assertNotIn(b, recommended_indices)
 
     def test_empty_library_returns_results(self):
+        "Test empty library returns results."
         rec = _make_recommender(n_books=20, library_book_ids=[])
         with patch.object(rec, "fetch_books", return_value=[{"id": i} for i in range(5)]):
             results = rec.recommend("user_1", top_k=5)
@@ -114,6 +118,7 @@ class TestScoreOrdering(unittest.TestCase):
         recommended = []
 
         def capture(book_ids):
+            "Helper for capture."
             recommended.extend(book_ids)
             return []
 
@@ -126,6 +131,7 @@ class TestScoreOrdering(unittest.TestCase):
 class TestFetchBooks(unittest.TestCase):
 
     def test_fetch_books_empty_input_returns_empty_list(self):
+        "Test fetch books empty input returns empty list."
         rec = _make_recommender()
         result = rec.fetch_books([])
         self.assertEqual(result, [])

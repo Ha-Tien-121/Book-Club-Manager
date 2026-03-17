@@ -32,6 +32,7 @@ from backend.recommender.book_recommender_fitting import (
 
 
 def _make_temp_dir() -> Path:
+    "Helper for  make temp dir."
     base = Path(__file__).resolve().parent / "_tmp"
     base.mkdir(exist_ok=True)
     temp = base / f"tmp_{uuid.uuid4().hex}"
@@ -72,6 +73,7 @@ class BookRecommenderFittingTestHelpers(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        "Helper for setUpClass."
         cls.user_library = _make_user_library(cls.N_USERS, cls.N_BOOKS, density=0.3)
         cls.similarity_matrix = _make_similarity_matrix(cls.N_BOOKS)
         cls.avg_ratings = (

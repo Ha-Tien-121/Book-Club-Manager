@@ -26,6 +26,7 @@ def format_title(titles):
         str or pandas.Series: formatted title in the same type as input
     """
     def _format_single_title(title):
+        """Format one title string using the shared normalization rules."""
         title = str(title)
         title = title.replace('"', '')
         title = re.sub(r'/.*', '', title)

@@ -8,14 +8,17 @@ from typing import Any
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -33,62 +36,79 @@ class _FakeStreamlitRuntime:
         self.markdowns: list[str] = []
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     # layout/output
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, msg: str, **_kw: Any) -> None:
+        "Helper for caption."
         self.captions.append(str(msg))
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def divider(self) -> None:
+        "Helper for divider."
         return None
 
     def info(self, msg: str, **_kw: Any) -> None:
+        "Helper for info."
         self.info_msgs.append(str(msg))
 
     def success(self, msg: str, **_kw: Any) -> None:
+        "Helper for success."
         self.success_msgs.append(str(msg))
 
     def markdown(self, text: str, **_kw: Any) -> None:
+        "Helper for markdown."
         self.markdowns.append(str(text))
 
     def link_button(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for link button."
         return None
 
     def container(self, **_kw: Any):
+        "Helper for container."
         return _FakeCtx()
 
     def columns(self, n: int | list[int], **_kw: Any):
+        "Helper for columns."
         if isinstance(n, list):
             n = len(n)
         return [_FakeCtx() for _ in range(int(n))]
 
     def tabs(self, labels: list[str]):
+        "Helper for tabs."
         self._tabs_labels = list(labels)
         return [_FakeCtx() for _ in labels]
 
     # inputs
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
 
     def selectbox(self, _label: str, options: list[str], **_kw: Any) -> str:
+        "Helper for selectbox."
         return self._selectbox_value if self._selectbox_value in options else options[0]
 
     def multiselect(self, *_a: Any, **_kw: Any) -> list[str]:
+        "Helper for multiselect."
         return list(self._multiselect_value)
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -118,6 +138,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_explore_events_filters_and_save_event_branch() -> None:
+    "Test explore events filters and save event branch."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     explore = importlib.import_module("frontend.pages.explore_events")
@@ -155,6 +176,7 @@ def test_explore_events_filters_and_save_event_branch() -> None:
     calls: list[tuple[dict, dict | None]] = []
 
     def _sync(store: dict, user: dict | None) -> None:
+        "Helper for  sync."
         calls.append((store, user))
 
     explore._render_explore_events_tab(
@@ -191,6 +213,7 @@ def test_explore_events_filters_and_save_event_branch() -> None:
 
 
 def test_my_events_signed_out_and_remove_event_branch() -> None:
+    "Test my events signed out and remove event branch."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     my = importlib.import_module("frontend.pages.my_events")
@@ -233,6 +256,7 @@ def test_my_events_signed_out_and_remove_event_branch() -> None:
 
 
 def test_library_tab_resolve_fallback_and_signed_out_branch(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test library tab resolve fallback and signed out branch."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     lib = importlib.import_module("frontend.pages.library")
@@ -261,6 +285,7 @@ def test_library_tab_resolve_fallback_and_signed_out_branch(monkeypatch) -> None
 
 
 def test_render_book_card_view_details_sets_state_and_reruns() -> None:
+    "Test render book card view details sets state and reruns."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     ui = importlib.import_module("frontend.ui.components")

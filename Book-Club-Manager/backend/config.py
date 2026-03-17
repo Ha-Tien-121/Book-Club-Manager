@@ -67,9 +67,11 @@ FORUM_POSTS_META_PK = os.getenv("FORUM_POSTS_META_PK", "META").strip() or "META"
 FORUM_POSTS_NEXT_ID_SK = os.getenv("FORUM_POSTS_NEXT_ID_SK", "next_post_id").strip() or "next_post_id"
 USER_FORUMS_TABLE = os.getenv("USER_FORUMS_TABLE", "user_forums")
 USER_RECOMMENDATIONS_TABLE = os.getenv("USER_RECOMMENDATIONS_TABLE", "user_recommendations")
-# user_recommendations table: partition key user_email (string). Attributes: recommended_books (50), recommended_events (10),
+# user_recommendations table: partition key user_email (string).
+# Attributes: recommended_books (50), recommended_events (10),
 # book_updated_at, events_soonest_expiry, adds_since_last_book_run.
-# user_forums table: partition key user_email (string), no sort key. Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
+# user_forums table: partition key user_email (string), no sort key.
+# Attributes: saved_forum_post_ids, liked_post_ids, liked_comment_ids.
 # GSI on forum_posts for querying thread by parent_asin (partition key = parent_asin, sort key = sk).
 # Set to GSI name (e.g. "parent_asin-index") or leave empty to use full load + filter.
 FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "parent_asin-index").strip() or None
@@ -77,7 +79,9 @@ FORUM_POSTS_GSI = os.getenv("FORUM_POSTS_GSI", "parent_asin-index").strip() or N
 FORUM_POSTS_CREATED_AT_GSI = os.getenv("FORUM_POSTS_CREATED_AT_GSI", "created_at-index").strip() or None
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
-# GSI on events for soonest-upcoming: partition key type (e.g. "event"), sort key ttl. Set to GSI name (e.g. "type-ttl-index") or leave empty to use scan.
+# GSI on events for soonest-upcoming: partition key type (e.g. "event"),
+# sort key ttl. Set to GSI name (e.g. "type-ttl-index") or leave empty
+# to use scan.
 EVENTS_GSI = os.getenv("EVENTS_GSI", "ttl-index").strip() or None
 EVENTS_CITY_STATE_GSI = os.getenv("EVENTS_CITY_STATE_GSI", "city_state_ttl-index").strip() or None
 # GSI on events for "events related to a book": partition key parent_asin, sort key ttl.

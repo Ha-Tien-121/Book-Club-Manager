@@ -26,12 +26,14 @@ from unittest.mock import MagicMock
 
 
 def _make_clf(coefs=(1.0, 1.0, 1.0)):
+    "Helper for  make clf."
     clf = MagicMock()
     clf.coef_ = [np.array(coefs, dtype=np.float32)]
     return clf
 
 
 def _make_scaler(scale=(1.0, 1.0, 1.0)):
+    "Helper for  make scaler."
     scaler = MagicMock()
     scaler.scale_ = np.array(scale, dtype=np.float32)
     return scaler
@@ -48,6 +50,7 @@ from backend.recommender.book_recommender_evaluation import hit50_evaluation_log
 
 
 def _sparse_library(n_users, n_books, owned):
+    "Helper for  sparse library."
     rows, cols = zip(*owned) if owned else ([], [])
     data = [1] * len(rows)
     return csr_matrix((data, (rows, cols)), shape=(n_users, n_books), dtype=np.float32)
@@ -61,6 +64,7 @@ def _identity_sim(n_books):
 
 def _run(n_users, n_books, ground_truth, library_pairs=None,
          coefs=(1.0, 1.0, 1.0), top_k=10, block_size=None):
+    "Helper for  run."
     clf = _make_clf(coefs)
     scaler = _make_scaler()
     lib = _sparse_library(n_users, n_books, library_pairs or [])
@@ -118,6 +122,7 @@ class TestHitRateExtremes(unittest.TestCase):
 class TestPopularityBaseline(unittest.TestCase):
 
     def test_popularity_hit_rate_in_range(self):
+        "Test popularity hit rate in range."
         _, pop_hr = _run(5, 50, list(range(5)), top_k=10)
         self.assertGreaterEqual(pop_hr, 0.0)
         self.assertLessEqual(pop_hr, 1.0)
@@ -145,12 +150,14 @@ class TestLibraryMasking(unittest.TestCase):
 class TestReturnTypes(unittest.TestCase):
 
     def test_returns_two_floats(self):
+        "Test returns two floats."
         result = _run(3, 20, [0, 1, 2], top_k=5)
         self.assertEqual(len(result), 2)
         for val in result:
             self.assertIsInstance(float(val), float)
 
     def test_hit_rates_between_zero_and_one(self):
+        "Test hit rates between zero and one."
         model_hr, pop_hr = _run(4, 25, [0, 1, 2, 3], top_k=5)
         for hr in (model_hr, pop_hr):
             self.assertGreaterEqual(hr, 0.0)
@@ -160,11 +167,13 @@ class TestReturnTypes(unittest.TestCase):
 class TestEdgeCases(unittest.TestCase):
 
     def test_single_user(self):
+        "Test single user."
         model_hr, pop_hr = _run(1, 20, [5], top_k=5)
         self.assertGreaterEqual(model_hr, 0.0)
         self.assertLessEqual(model_hr, 1.0)
 
     def test_top_k_equals_one(self):
+        "Test top k equals one."
         model_hr, _ = _run(5, 20, [0] * 5, top_k=1)
         self.assertIn(model_hr, [0.0, 1.0])
 

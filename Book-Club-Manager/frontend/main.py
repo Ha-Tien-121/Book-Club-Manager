@@ -7,7 +7,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from backend import config
-from backend.data_loader import books_to_ui_shape, build_ui_bootstrap, load_data
+from backend.data_loader import books_to_ui_shape, build_ui_bootstrap
 from backend.services import books_service, events_service
 from backend.services.recommender_service import (
     get_recommended_books_for_user,
@@ -56,7 +56,7 @@ def _cached_aws_bootstrap():
             if aid and aid not in seen:
                 seen.add(aid)
                 raw_books.append(b)
-    except Exception:
+    except (RuntimeError, ValueError, TypeError, KeyError):
         pass
     events = events_service.get_explore_events(36) or []
     storage = get_storage()
@@ -114,10 +114,11 @@ def init_session(books: list[dict]) -> None:
 
 def handle_query_navigation(
     books_by_id: dict[int, dict],
-    extended_books_by_source_id: dict[str, dict],
     forum_post_ids: set[int],
+    extended_books_by_source_id: dict[str, dict] | None = None,
 ) -> None:
     """Handle deep-link query params for book detail and forum detail navigation."""
+    _ = extended_books_by_source_id
     open_val = st.query_params.get("open")
     source_id_param = (st.query_params.get("source_id") or "").strip()
     # Allow deep-link to any source_id; detail page can fetch metadata on demand.
@@ -127,7 +128,6 @@ def handle_query_navigation(
         st.session_state["show_book_detail_page"] = True
         st.query_params.clear()
         st.rerun()
-        return
     book_param = st.query_params.get("book_id")
     if open_val != "detail" or not book_param:
         post_param = st.query_params.get("post_id")
@@ -173,7 +173,7 @@ def main() -> None:
                 if aid and aid not in seen:
                     seen.add(aid)
                     raw_books.append(b)
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, KeyError):
             pass
         events = events_service.get_explore_events(36) or []
         forum_db = storage.load_forum_db()
@@ -255,7 +255,6 @@ def main() -> None:
             books_by_id=books_by_id,
             extended_books_by_source_id=extended_books_by_source_id,
             current_user=current_user,
-            store=store,
             forum_store=forum_store,
             forum_posts_data=forum_posts_data,
             clear_aws_bootstrap_cache=_cached_aws_bootstrap.clear,
@@ -264,7 +263,7 @@ def main() -> None:
         return
 
     tabs = st.tabs(["Feed", "Explore Events", "My Events", "Library", "Forum"])
-    handle_query_navigation(books_by_id, extended_books_by_source_id, forum_post_ids)
+    handle_query_navigation(books_by_id, forum_post_ids)
     if st.session_state.get("jump_to_forum_detail"):
         components.html(
             (

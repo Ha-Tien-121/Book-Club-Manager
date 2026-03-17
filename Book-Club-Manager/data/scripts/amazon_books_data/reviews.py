@@ -172,6 +172,7 @@ def main(input_file=INPUT_FILE, book_id_to_idx = BOOK_ID_TO_IDX,
          output_file_book_similarity=OUTPUT_FILE_BOOK_SIMILARITY,
          output_file_train_ground_truth=OUTPUT_FILE_TRAIN_GROUND_TRUTH,
          output_file_test_ground_truth=OUTPUT_FILE_TEST_GROUND_TRUTH):  # pylint: disable=too-many-arguments, too-many-positional-arguments
+    # File-path overrides are explicit to support reproducible batch/script runs.
     """
     Process Amazon book reviews into train/test matrices and compute book similarity.
     Outputs are saved as NPZ/NPY files.

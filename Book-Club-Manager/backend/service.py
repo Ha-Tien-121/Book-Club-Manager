@@ -1,3 +1,9 @@
+"""Legacy recommendation service helpers.
+
+This module provides lightweight helper functions that wrap the book
+recommender and normalize user-signal stores into DataFrame inputs.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -50,6 +56,7 @@ def get_recommendations(
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """Return top_k book recommendations (same as event: caller passes user signal = book IDs)."""
+    _ = user_genres_store
     user_book_ids = user_books_read_store.get(user_id, []) if user_id else []
     return BookRecommender().recommend(user_book_ids, top_k=top_k)
 

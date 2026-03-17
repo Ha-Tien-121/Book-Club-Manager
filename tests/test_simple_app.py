@@ -34,15 +34,18 @@ class SimpleAppTest(unittest.TestCase):
         self.at = AppTest.from_file(str(app_path)).run()
 
     def test_tile(self):
+        "Test tile."
         self.assertEqual(self.at.title[0].value, 'Cool chart!')
 
     def test_chart_axis(self):
+        "Test chart axis."
         chart = self.at.get('arrow_vega_lite_chart')[0]
         spec = loads(chart.spec)['encoding']
         self.assertEqual(spec['x']['title'], 'some label for x here')
         self.assertEqual(spec['y']['title'], 'some label for y here')
 
     def test_renaming_axes(self):
+        "Test renaming axes."
         self.at.text_input[0].input("What I want").run()
         self.at.text_input[1].input("What I have").run()
         chart = self.at.get('arrow_vega_lite_chart')[0]
@@ -51,19 +54,24 @@ class SimpleAppTest(unittest.TestCase):
         self.assertEqual(spec['y']['title'], 'What I have')
 
     def test_radio_options(self):
+        "Test radio options."
         self.assertEqual(self.at.radio[0].options, ['forest', 'mountain', 'ocean', 'dessert'])
 
     def test_default_radio_option(self):
+        "Test default radio option."
         self.assertEqual(self.at.radio[0].value, 'forest')
 
     def test_default_text_after_radio(self):
+        "Test default text after radio."
         self.assertEqual(self.at.text[0].value, 'This is an image of forest.')
 
     def test_radio_interaction_dessert(self):
+        "Test radio interaction dessert."
         self.at.radio[0].set_value('dessert').run()
         self.assertEqual(self.at.text[0].value, 'This is an image of dessert.')
 
     def test_default_image_url(self):
+        "Test default image url."
         cur_image_url = self.at.get('imgs')[0].proto.imgs[0].url
         self.assertEqual(
             cur_image_url,

@@ -9,11 +9,13 @@ from scipy import sparse
 
 
 def _mod():
+    "Helper for  mod."
     m = importlib.import_module("backend.recommender.book_recommender")
     return importlib.reload(m)
 
 
 def test_safe_json_loads_and_prepare_categories_keywords() -> None:
+    "Test safe json loads and prepare categories keywords."
     br = _mod()
 
     assert br._safe_json_loads(None) is None
@@ -33,6 +35,7 @@ def test_safe_json_loads_and_prepare_categories_keywords() -> None:
 
 
 def test_is_cold_start_with_and_without_user_id_column() -> None:
+    "Test is cold start with and without user id column."
     br = _mod()
 
     # No uid column: any non-empty df counts as signal
@@ -47,6 +50,7 @@ def test_is_cold_start_with_and_without_user_id_column() -> None:
 
 
 def _make_precomputed_rec(br) -> Any:
+    "Helper for  make precomputed rec."
     rec = br.ContentBasedBookRecommender()
     # Precomputed mode: books_df None, provide sparse matrix + id mapping + norms.
     n = 3
@@ -65,6 +69,7 @@ def _make_precomputed_rec(br) -> Any:
 
 
 def test_recommend_cold_start_uses_rating_norms() -> None:
+    "Test recommend cold start uses rating norms."
     br = _mod()
     rec = _make_precomputed_rec(br)
 
@@ -79,6 +84,7 @@ def test_recommend_cold_start_uses_rating_norms() -> None:
 
 
 def test_recommend_non_cold_start_excludes_owned_and_fetches_metadata() -> None:
+    "Test recommend non cold start excludes owned and fetches metadata."
     br = _mod()
     rec = _make_precomputed_rec(br)
 
@@ -101,10 +107,12 @@ def test_recommend_non_cold_start_excludes_owned_and_fetches_metadata() -> None:
 
 
 def test_fallback_recommender_excludes_owned() -> None:
+    "Test fallback recommender excludes owned."
     br = _mod()
 
     class _Store:
         def get_top50_review_books(self):  # type: ignore[no-untyped-def]
+            "Helper for get top50 review books."
             return [{"parent_asin": "A1"}, {"parent_asin": "A2"}]
 
     # Patch get_storage used inside fallback recommender

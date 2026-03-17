@@ -90,13 +90,26 @@ def _render_feed_tab(
     recommender_available: bool,
     cached_spl_trending: Callable[[], list[dict]],
     cached_book_recommendations: Callable[[str], dict],
-    resolve_recommended_books: Callable[..., list[dict]],
-    get_recommended_events_for_user: Callable[[str], list[dict]],
-    format_when: Callable[[dict], str],
-    sync_user_clubs_and_save: Callable[[dict, dict | None], None],
-    genre_dropdown_options: list[str],
+    resolve_recommended_books_fn: Callable[..., list[dict]] | None = None,
+    get_recommended_events_for_user: Callable[[str], list[dict]] | None = None,
+    format_when: Callable[[dict], str] | None = None,
+    sync_user_clubs_and_save: Callable[[dict, dict | None], None] | None = None,
+    genre_dropdown_options: list[str] | None = None,
+    **legacy_kwargs,
 ) -> None:
     """Render Feed tab sections (trending, recommended, and suggested events)."""
+    legacy_resolve_recommended_books = legacy_kwargs.pop(
+        "resolve_recommended_books", None
+    )
+    _ = legacy_kwargs
+    if resolve_recommended_books_fn is None:
+        resolve_recommended_books_fn = (
+            legacy_resolve_recommended_books or (lambda **_kw: [])
+        )
+    get_recommended_events_for_user = get_recommended_events_for_user or (lambda _email: [])
+    format_when = format_when or (lambda _event: "")
+    sync_user_clubs_and_save = sync_user_clubs_and_save or (lambda _store, _user: None)
+    genre_dropdown_options = genre_dropdown_options or []
     with tab:
         st.title("Discover your next read")
         selected_genres = st.multiselect(
@@ -163,7 +176,7 @@ def _render_feed_tab(
         if resolved_cache_key in st.session_state:
             recommended_books = st.session_state[resolved_cache_key]
         else:
-            recommended_books = resolve_recommended_books(
+            recommended_books = resolve_recommended_books_fn(
                 recommendations=recommendation_rows,
                 books_by_source_id=books_by_source_id,
                 selected_genres=selected_genres,
@@ -208,7 +221,7 @@ def _render_feed_tab(
                     ]
                     if ordered:
                         top_events = ordered[:5]
-            except Exception:
+            except (RuntimeError, ValueError, TypeError, KeyError):
                 pass
         if not top_events:
             st.caption("No suggested events.")
@@ -262,66 +275,40 @@ def resolve_recommended_books(
     resolved: list[dict] = []
     selected = set(selected_genres)
 
-    def _normalize_genres(raw) -> list[str]:
-        """Normalize genres/categories values from detail store to list[str]."""
-        if raw is None:
-            return []
-        # Avoid truthiness on numpy arrays / pandas series
-        try:
-            import numpy as np  # type: ignore
-
-            if isinstance(raw, np.ndarray):
-                raw = raw.tolist()
-        except Exception:
-            pass
-        if isinstance(raw, list):
-            return [str(x).strip() for x in raw if x is not None and str(x).strip()]
-        if isinstance(raw, str):
-            s = raw.strip()
-            if not s:
-                return []
-            if s.startswith("[") and s.endswith("]"):
-                try:
-                    parsed = json.loads(s)
-                    if isinstance(parsed, list):
-                        return [
-                            str(x).strip()
-                            for x in parsed
-                            if x is not None and str(x).strip()
-                        ]
-                except Exception:
-                    pass
-            return [s]
-        if isinstance(raw, dict):
-            return []
-        try:
-            return [str(x).strip() for x in raw if x is not None and str(x).strip()]
-        except Exception:
-            s = str(raw).strip()
-            return [s] if s else []
-    for item in recommendations:
-        # If backend stored UI-shaped recommendations, render directly (fast path).
-        if (
-            isinstance(item, dict)
-            and item.get("cover")
+    def _is_ui_shaped_book(item: dict) -> bool:
+        """Return True when a recommender row is already in UI card shape."""
+        return bool(
+            item.get("cover")
             and item.get("title")
             and item.get("author")
             and (item.get("source_id") or item.get("id") is not None)
-        ):
-            book = item
-            if selected and not any(g in selected for g in book.get("genres", []) or []):
-                continue
-            resolved.append(book)
-            if len(resolved) >= top_k:
-                return resolved
-            continue
+        )
 
-        source_id = str(
+    def _matches_selected(book: dict) -> bool:
+        """Return True when a book passes the currently selected genre filter."""
+        if not selected:
+            return True
+        return any(g in selected for g in (book.get("genres", []) or []))
+
+    def _source_id(item: dict) -> str:
+        """Extract normalized source identifier from a recommendation row."""
+        return str(
             item.get("book_id")
             or item.get("parent_asin")
             or item.get("source_id")
             or ""
         ).strip()
+
+    for item in recommendations:
+        # If backend stored UI-shaped recommendations, render directly (fast path).
+        if isinstance(item, dict) and _is_ui_shaped_book(item):
+            if _matches_selected(item):
+                resolved.append(item)
+            if len(resolved) >= top_k:
+                break
+            continue
+
+        source_id = _source_id(item)
         if not source_id:
             continue
         book = books_by_source_id.get(source_id)
@@ -329,13 +316,13 @@ def resolve_recommended_books(
             # No extra lookups: if we can't map it to an existing loaded book,
             # just skip it (fast + avoids blank placeholder cards).
             continue
-        if selected and not any(g in selected for g in book.get("genres", [])):
+        if not _matches_selected(book):
             continue
         resolved.append(book)
         if len(resolved) >= top_k:
-            return resolved
+            break
     for book in fallback_books:
-        if selected and not any(g in selected for g in book.get("genres", [])):
+        if not _matches_selected(book):
             continue
         if book in resolved:
             continue
@@ -426,13 +413,16 @@ def render_book_detail_page(
     books_by_id: dict[int, dict],
     extended_books_by_source_id: dict[str, dict],
     current_user: dict | None,
-    store: dict,
-    forum_store: dict,
-    forum_posts_data: list[dict],
+    store: dict | None = None,
+    forum_store: dict | None = None,
+    forum_posts_data: list[dict] | None = None,
     clear_aws_bootstrap_cache: Callable[[], None] | None = None,
     clear_book_recs_cache: Callable[[], None] | None = None,
 ) -> None:
     """Render Book Detail page with library and related forum discussions."""
+    _ = store
+    forum_store = forum_store or {"posts": [], "next_post_id": 1}
+    forum_posts_data = forum_posts_data or []
     if st.button("← Back to Feed"):
         st.session_state["show_book_detail_page"] = False
         st.rerun()
@@ -448,12 +438,12 @@ def render_book_detail_page(
             detail = None
             try:
                 detail = storage_get_book_details(sid)
-            except Exception:
+            except (RuntimeError, ValueError, TypeError, KeyError, OSError):
                 detail = None
             if not detail:
                 try:
                     detail = books_service.get_book_detail(sid)
-                except Exception:
+                except (RuntimeError, ValueError, TypeError, KeyError, OSError):
                     detail = None
             if detail:
                 genres = detail.get("genres") or detail.get("categories") or []
@@ -463,9 +453,21 @@ def render_book_detail_page(
                     "title": detail.get("title") or sid,
                     "author": detail.get("author_name") or detail.get("author") or "",
                     "genres": genres if isinstance(genres, list) else [],
-                    "cover": detail.get("images") or detail.get("image_url") or "https://placehold.co/220x330?text=Book",
-                    "rating": float(detail.get("average_rating") or 0) if detail.get("average_rating") is not None else 0,
-                    "rating_count": int(detail.get("rating_number") or 0) if detail.get("rating_number") is not None else 0,
+                    "cover": (
+                        detail.get("images")
+                        or detail.get("image_url")
+                        or "https://placehold.co/220x330?text=Book"
+                    ),
+                    "rating": (
+                        float(detail.get("average_rating") or 0)
+                        if detail.get("average_rating") is not None
+                        else 0
+                    ),
+                    "rating_count": (
+                        int(detail.get("rating_number") or 0)
+                        if detail.get("rating_number") is not None
+                        else 0
+                    ),
                     "description": _description_from_detail(detail),
                 }
     if book is None:
@@ -486,12 +488,12 @@ def render_book_detail_page(
         detail = None
         try:
             detail = storage_get_book_details(source_id)
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError):
             pass
         if not detail:
             try:
                 detail = books_service.get_book_detail(source_id)
-            except Exception:
+            except (RuntimeError, ValueError, TypeError, KeyError, OSError):
                 pass
         if detail:
             book = dict(book)
@@ -568,17 +570,32 @@ def render_book_detail_page(
             select_key = f"book_lib_status_{library_book_id}"
 
             def _apply_library_status():
+                """Persist library status changes selected on the detail page.
+
+                Reads the current selectbox value from session state, writes the
+                corresponding shelf mutation through `library_service`, and updates
+                UI cache/session flags for a stable rerender.
+                """
                 new_status = st.session_state.get(select_key)
                 if new_status is None or current_user is None:
                     return
-                user_id = (current_user.get("user_id") or current_user.get("email") or st.session_state.get("user_email", "") or "").strip().lower()
+                user_id = (
+                    current_user.get("user_id")
+                    or current_user.get("email")
+                    or st.session_state.get("user_email", "")
+                    or ""
+                ).strip().lower()
                 if not user_id:
                     return
                 try:
                     if new_status == "Not in library":
                         library_service.remove_book_from_library(user_id, library_book_id)
                     else:
-                        key_map = {"Saved": "saved", "In Progress": "in_progress", "Finished": "finished"}
+                        key_map = {
+                            "Saved": "saved",
+                            "In Progress": "in_progress",
+                            "Finished": "finished",
+                        }
                         shelf = key_map.get(new_status, "saved")
                         genres = (book.get("genres") or []) if isinstance(book.get("genres"), list) else []
                         library_service.add_book_to_library(
@@ -592,9 +609,15 @@ def render_book_detail_page(
                         for k in list(st.session_state.keys()):
                             if isinstance(k, str) and k.startswith(prefix):
                                 st.session_state.pop(k, None)
-                    st.session_state["book_lib_last_msg"] = "Library updated." if current_status else "Added to your library."
-                except Exception:
-                    st.session_state["book_lib_last_msg"] = "Failed to update library."
+                    st.session_state["book_lib_last_msg"] = (
+                        "Library updated."
+                        if current_status
+                        else "Added to your library."
+                    )
+                except (RuntimeError, ValueError, TypeError, KeyError):
+                    st.session_state["book_lib_last_msg"] = (
+                        "Failed to update library."
+                    )
                 # Keep the user on the detail page after library updates.
                 st.session_state["show_book_detail_page"] = True
                 # Streamlit reruns the script automatically after this callback; do not call st.rerun() here.

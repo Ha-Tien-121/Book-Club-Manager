@@ -14,6 +14,7 @@ Usage (from repo root):
 from __future__ import annotations
 
 import json
+import importlib
 import sqlite3
 import sys
 from pathlib import Path
@@ -56,12 +57,12 @@ def main() -> None:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-    from backend.config import PROCESSED_DIR  # pylint: disable=import-outside-toplevel
-    from backend.recommender.book_recommender import (  # pylint: disable=import-outside-toplevel
-        GENRE_VOCAB,
-    )
+    config_module = importlib.import_module("backend.config")
+    recommender_module = importlib.import_module("backend.recommender.book_recommender")
+    processed_dir = config_module.PROCESSED_DIR
+    genre_vocab = recommender_module.GENRE_VOCAB
 
-    books_db = PROCESSED_DIR / "books.db"
+    books_db = processed_dir / "books.db"
     if not books_db.exists():
         print(f"Missing {books_db}. Create it or use the JSON fallback.")
         sys.exit(1)
@@ -75,7 +76,7 @@ def main() -> None:
 
     # First pass: stream chunks, collect genre_text + ratings, build TF-IDF incrementally
     vectorizer = TfidfVectorizer(
-        vocabulary=GENRE_VOCAB,
+        vocabulary=genre_vocab,
         tokenizer=lambda s: s.split("|") if s else [],
         token_pattern=None,
         lowercase=False,
@@ -108,7 +109,7 @@ def main() -> None:
             idx = len(all_genre_texts)
             book_id_to_idx[asin] = idx
             cats = row["categories"]
-            genre_text = _prepare_categories(cats, GENRE_VOCAB)
+            genre_text = _prepare_categories(cats, genre_vocab)
             all_genre_texts.append(genre_text or "")
             try:
                 r = float(row["average_rating"] or 0)
@@ -147,15 +148,15 @@ def main() -> None:
     rating_number_norm = scaler_n.fit_transform(rating_num_arr.reshape(-1, 1)).reshape(-1)
 
     # Save
-    sparse.save_npz(PROCESSED_DIR / "book_tfidf.npz", book_tfidf)
-    with open(PROCESSED_DIR / "book_id_to_idx.json", "w", encoding="utf-8") as f:
+    sparse.save_npz(processed_dir / "book_tfidf.npz", book_tfidf)
+    with open(processed_dir / "book_id_to_idx.json", "w", encoding="utf-8") as f:
         json.dump(book_id_to_idx, f, separators=(",", ":"))
     np.savez(
-        PROCESSED_DIR / "book_rating_norms.npz",
+        processed_dir / "book_rating_norms.npz",
         average_rating_norm=average_rating_norm,
         rating_number_norm=rating_number_norm,
     )
-    print(f"Wrote {PROCESSED_DIR / 'book_tfidf.npz'}, book_id_to_idx.json, book_rating_norms.npz")
+    print(f"Wrote {processed_dir / 'book_tfidf.npz'}, book_id_to_idx.json, book_rating_norms.npz")
 
 
 if __name__ == "__main__":
