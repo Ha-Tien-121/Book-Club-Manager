@@ -20,22 +20,28 @@ _INNER_ROOT = _REPO_ROOT / "Book-Club-Manager"
 if _INNER_ROOT.is_dir() and str(_INNER_ROOT) not in sys.path:
     sys.path.insert(0, str(_INNER_ROOT))
 
-# Avoid loading real boto3 when backend.storage is imported.
-if "boto3" not in sys.modules:
+# Avoid loading real boto3 when backend.storage is imported, but do not
+# override any existing test-wide boto3 stub (e.g., from test_storage).
+if "boto3" in sys.modules:
+    _boto3 = sys.modules["boto3"]
+    _conditions = sys.modules.get("boto3.dynamodb.conditions") or types.ModuleType(
+        "boto3.dynamodb.conditions"
+    )
+    # Ensure Attr/Key exist for any code that references them.
+    if not hasattr(_conditions, "Attr"):
+        _conditions.Attr = MagicMock()
+    if not hasattr(_conditions, "Key"):
+        _conditions.Key = MagicMock()
+    sys.modules["boto3.dynamodb.conditions"] = _conditions
+else:
     _boto3 = MagicMock()
     _conditions = types.ModuleType("boto3.dynamodb.conditions")
     _conditions.Attr = MagicMock()
     _conditions.Key = MagicMock()
-    _boto3.dynamodb.conditions = _conditions
+    _boto3.dynamodb = types.SimpleNamespace(conditions=_conditions)
     sys.modules["boto3"] = _boto3
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
-
-# get_saved_events_with_details imports events_service; avoid loading real one (needs EVENT_RECOMMENDATION_POOL_SIZE).
-if "backend.services.events_service" not in sys.modules:
-    _ev_mod = types.ModuleType("backend.services.events_service")
-    _ev_mod.get_event_detail = MagicMock(return_value={})
-    sys.modules["backend.services.events_service"] = _ev_mod
 
 from backend.services import user_events_service  # noqa: E402
 
@@ -171,11 +177,13 @@ class TestGetSavedEventsWithDetails(unittest.TestCase):
         store = MagicMock()
         store.get_user_events.return_value = {"events": ["ev1", "ev2"]}
         mock_get_storage.return_value = store
-        ev_mod = sys.modules["backend.services.events_service"]
-        ev_mod.get_event_detail.side_effect = lambda eid: (
-            {"event_id": eid, "title": f"Event {eid}"}
-        )
-        result = user_events_service.get_saved_events_with_details("u@x.com")
+        with patch(
+            "backend.services.events_service.get_event_detail"
+        ) as mock_get_event_detail:
+            mock_get_event_detail.side_effect = lambda eid: (
+                {"event_id": eid, "title": f"Event {eid}"}
+            )
+            result = user_events_service.get_saved_events_with_details("u@x.com")
 
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["event_id"], "ev1")
@@ -185,11 +193,13 @@ class TestGetSavedEventsWithDetails(unittest.TestCase):
         store = MagicMock()
         store.get_user_events.return_value = {"events": ["ev1", "ev2"]}
         mock_get_storage.return_value = store
-        ev_mod = sys.modules["backend.services.events_service"]
-        ev_mod.get_event_detail.side_effect = lambda eid: (
-            {"event_id": eid} if eid == "ev1" else {}
-        )
-        result = user_events_service.get_saved_events_with_details("u@x.com")
+        with patch(
+            "backend.services.events_service.get_event_detail"
+        ) as mock_get_event_detail:
+            mock_get_event_detail.side_effect = lambda eid: (
+                {"event_id": eid} if eid == "ev1" else {}
+            )
+            result = user_events_service.get_saved_events_with_details("u@x.com")
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["event_id"], "ev1")

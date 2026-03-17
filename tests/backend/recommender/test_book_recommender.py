@@ -6,16 +6,26 @@ import pandas as pd
 import pytest
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.recommender.book_recommender import BookRecommender, GENRE_VOCAB
+def _ensure_inner_project_on_path() -> None:
+    """Ensure inner Book-Club-Manager root is on sys.path when running from outer root."""
+    # tests/backend/recommender/... → parents[2] is tests/, parent is repo root.
+    tests_dir = Path(__file__).resolve().parents[2]
+    repo_root = tests_dir.parent
+    inner_root = repo_root / "Book-Club-Manager"
+    if inner_root.is_dir() and str(inner_root) not in sys.path:
+        sys.path.insert(0, str(inner_root))
+
+
+_ensure_inner_project_on_path()
+
+from backend.recommender.book_recommender import BookRecommender, GENRE_VOCAB  # noqa: E402
 
 
 @pytest.fixture()
 def fitted_recommender() -> BookRecommender:
-    br = BookRecommender(data_dir=None)
+    # Instantiate with current constructor; tests inject their own data.
+    br = BookRecommender()
 
     parent_asins = [f"A{str(i).zfill(3)}" for i in range(1, 11)]
     titles = [f"Book {i}" for i in range(1, 11)]

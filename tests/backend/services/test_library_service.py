@@ -31,12 +31,6 @@ if "boto3" not in sys.modules:
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
 
-# library_service imports on_book_added_to_shelf from backend.services.recommender_service.
-if "backend.services.recommender_service" not in sys.modules:
-    _rec_mod = types.ModuleType("backend.services.recommender_service")
-    _rec_mod.on_book_added_to_shelf = MagicMock()
-    sys.modules["backend.services.recommender_service"] = _rec_mod
-
 from backend.services import library_service  # noqa: E402
 
 
@@ -46,16 +40,15 @@ def _make_rec(library=None, genre_preferences=None):
     return rec
 
 
+@patch("backend.services.library_service.on_book_added_to_shelf")
 @patch("backend.services.library_service.get_storage")
 class TestAddBookToLibrary(unittest.TestCase):
     """Tests for add_book_to_library."""
 
     def test_adds_book_to_shelf_and_saves(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock
     ) -> None:
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
+        mock_on_added.reset_mock()
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         store.get_book_metadata.return_value = None
@@ -67,20 +60,20 @@ class TestAddBookToLibrary(unittest.TestCase):
         self.assertEqual(result["library"]["in_progress"], [])
         self.assertEqual(result["library"]["finished"], [])
         store.save_user_books.assert_called_once()
-        _rec.on_book_added_to_shelf.assert_called_once_with("u@x.com")
+        mock_on_added.assert_called_once_with("u@x.com")
 
-    def test_invalid_shelf_raises(self, mock_get_storage: MagicMock) -> None:
+    def test_invalid_shelf_raises(
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
+    ) -> None:
         mock_get_storage.return_value = MagicMock()
         with self.assertRaises(ValueError) as ctx:
             library_service.add_book_to_library("u@x.com", "B1", "invalid")
         self.assertIn("invalid shelf", str(ctx.exception))
 
     def test_noop_when_book_already_only_on_shelf(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock
     ) -> None:
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
+        mock_on_added.reset_mock()
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": [], "saved": ["B1"], "finished": []}
@@ -90,12 +83,12 @@ class TestAddBookToLibrary(unittest.TestCase):
         result = library_service.add_book_to_library("u@x.com", "B1", "saved")
 
         store.save_user_books.assert_not_called()
-        _rec.on_book_added_to_shelf.assert_not_called()
+        mock_on_added.assert_not_called()
         # No-op: book was already only on this shelf; code mutates lib then returns without persisting
         self.assertIn("library", result)
 
     def test_merges_book_categories_into_preferences(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
@@ -109,12 +102,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_genres_from_book_merged_without_fetching_metadata(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """When genres_from_book is provided, merge those and do not call get_book_metadata (covers 118-124)."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -130,12 +120,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_merges_genres_with_existing_preferences_dedupes(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """Record already has genre_preferences; new genres merged without duplicate (covers 40-42)."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             genre_preferences=["Fantasy", "Mystery"]
@@ -151,12 +138,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         self.assertEqual(result["genre_preferences"].count("Fantasy"), 1)
 
     def test_get_book_metadata_exception_does_not_break_add(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """Covers 54-55: Exception in get_book_metadata returns early, add still succeeds."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         store.get_book_metadata.side_effect = Exception("db error")
@@ -168,12 +152,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_categories_non_list_merged_as_single(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """Covers 60: categories is not a list (e.g. single string) is normalized."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         store.get_book_metadata.return_value = {"categories": "Fantasy"}
@@ -184,12 +165,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         self.assertIn("Fantasy", result["genre_preferences"])
 
     def test_empty_categories_does_not_merge(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """Covers 63: categories that strip to empty do not get merged."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         store.get_book_metadata.return_value = {"categories": ["", "  ", ""]}
@@ -201,12 +179,9 @@ class TestAddBookToLibrary(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_add_book_moves_from_other_shelf(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
         """Book on in_progress is removed and added to finished (covers 114-115 no-op branch when False)."""
-        import backend.services.recommender_service as _rec
-        _rec.on_book_added_to_shelf.reset_mock()
-
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
