@@ -83,13 +83,11 @@ Time:
 
 import argparse
 import json
-import os
 import sqlite3
-import tempfile
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, NamedTuple
+from typing import Dict, List, Optional
 
 import pyarrow as pa
 import pyarrow.parquet as pq

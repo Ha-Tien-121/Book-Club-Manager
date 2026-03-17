@@ -203,7 +203,10 @@ def _to_jsonable(obj):
         return {k: _to_jsonable(v) for k, v in obj.items()}
     return obj
 
-def main(output_top50_in_books=OUTPUT_TOP50_CHECKOUTS_IN_BOOKS, client=None):
+def main(  # pylint: disable=too-many-nested-blocks
+    output_top50_in_books=OUTPUT_TOP50_CHECKOUTS_IN_BOOKS,
+    client=None,
+):
     """
     Fetches, cleans, and aggregates SPL book checkout data from the past year,
     summing checkouts by ISBN (if available) or by Title and Author, and writes
@@ -222,7 +225,7 @@ def main(output_top50_in_books=OUTPUT_TOP50_CHECKOUTS_IN_BOOKS, client=None):
         where_clause = (
             f"((CheckoutYear = {current_year - 1} "
             f"AND CheckoutMonth >= {current_month}) "
-            f"OR (CheckoutYear = {current_year})) " 
+            f"OR (CheckoutYear = {current_year})) "
             f"AND MaterialType IN {material_types}"
             )
         checkouts = client.get(

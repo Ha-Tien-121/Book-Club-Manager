@@ -103,7 +103,12 @@ def _load_books_by_title_author_key(db_path: str) -> dict[str, dict]:
         with sqlite3.connect(path) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.execute(
-                "SELECT parent_asin, title_author_key, categories FROM books WHERE title_author_key IS NOT NULL AND TRIM(title_author_key) != ''"
+                """
+                SELECT parent_asin, title_author_key, categories
+                FROM books
+                WHERE title_author_key IS NOT NULL
+                  AND TRIM(title_author_key) != ''
+                """
             )
             for row in cur:
                 key = (row["title_author_key"] or "").strip()

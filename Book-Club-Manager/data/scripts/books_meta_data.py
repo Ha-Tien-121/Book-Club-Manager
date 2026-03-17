@@ -78,7 +78,7 @@ def main(categories, input_file=INPUT_FILE, output_db=OUTPUT_DB,
                 )""")
     conn.commit()
     batch = []
-    BATCH_SIZE = 1000
+    batch_size = 1000
     with open(input_file, 'r', encoding='utf-8') as fp:
         for line in fp:
             book = json.loads(line)
@@ -123,7 +123,7 @@ def main(categories, input_file=INPUT_FILE, output_db=OUTPUT_DB,
                 json.dumps(book_genres),
                 title_author_key
                 ))
-            if len(batch) >= BATCH_SIZE:
+            if len(batch) >= batch_size:
                 cur.executemany("""
                                 INSERT OR IGNORE INTO books
                                 (parent_asin, title, author_name, average_rating, rating_number, description, images, categories, title_author_key)

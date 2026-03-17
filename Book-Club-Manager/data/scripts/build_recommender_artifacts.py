@@ -17,27 +17,50 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 
-# Repo root so we can import backend
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from backend.config import PROCESSED_DIR
-from backend.recommender.book_recommender import (
-    GENRE_VOCAB,
-    ContentBasedBookRecommender,
-)
-
 CHUNK_SIZE = 50_000
 
 
+def _prepare_categories(raw: Any, genre_vocab: list[str]) -> str:
+    """Normalize raw categories into a pipe-delimited string from known vocab."""
+    parsed = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw) if raw.strip() else []
+        except (TypeError, ValueError):
+            parsed = raw
+
+    if isinstance(parsed, list):
+        values = [str(x) for x in parsed if x is not None]
+    elif isinstance(parsed, str):
+        values = [parsed]
+    else:
+        values = []
+
+    lowered = " ".join(values).strip().lower()
+    if not lowered:
+        return ""
+
+    return "|".join([genre for genre in genre_vocab if genre.lower() in lowered])
+
+
 def main() -> None:
+    """Build and save TF-IDF/rating artifacts from books.db."""
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    from backend.config import PROCESSED_DIR  # pylint: disable=import-outside-toplevel
+    from backend.recommender.book_recommender import (  # pylint: disable=import-outside-toplevel
+        GENRE_VOCAB,
+    )
+
     books_db = PROCESSED_DIR / "books.db"
     if not books_db.exists():
         print(f"Missing {books_db}. Create it or use the JSON fallback.")
@@ -85,7 +108,7 @@ def main() -> None:
             idx = len(all_genre_texts)
             book_id_to_idx[asin] = idx
             cats = row["categories"]
-            genre_text = ContentBasedBookRecommender._prepare_categories(cats)
+            genre_text = _prepare_categories(cats, GENRE_VOCAB)
             all_genre_texts.append(genre_text or "")
             try:
                 r = float(row["average_rating"] or 0)

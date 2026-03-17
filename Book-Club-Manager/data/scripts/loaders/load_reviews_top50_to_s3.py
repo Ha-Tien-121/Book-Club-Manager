@@ -30,6 +30,7 @@ def upload_reviews_top50_to_s3(
     bucket: str | None = None,
     key: str = S3_KEY,
 ) -> None:
+    """Upload the local reviews top-50 JSON artifact to S3."""
     local_path = local_path or os.getenv("REVIEWS_TOP50_LOCAL_PATH") or DEFAULT_LOCAL_PATH
     bucket = bucket or BUCKET
     if not os.path.exists(local_path):
