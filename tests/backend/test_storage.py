@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pytest
+from unittest.mock import MagicMock
 
 
 def _ensure_inner_project_on_path() -> None:
@@ -38,7 +39,10 @@ def _ensure_inner_project_on_path() -> None:
 def _stub_boto3_and_pandas() -> None:
     """Install lightweight stubs so backend.storage can import cleanly."""
     # --- boto3 stub ---
-    if "boto3" not in sys.modules:
+    existing = sys.modules.get("boto3")
+    # Replace missing or MagicMock boto3 with a real stub so tests that
+    # install a simplistic MagicMock don't interfere with these expectations.
+    if existing is None or isinstance(existing, MagicMock) or not hasattr(existing, "resource"):
         boto3_mod = types.ModuleType("boto3")
 
         class _Key:

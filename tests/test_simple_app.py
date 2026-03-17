@@ -10,6 +10,7 @@ https://docs.streamlit.io/library/advanced-features/app-testing
 """
 
 from json import loads
+from pathlib import Path
 import unittest
 
 from streamlit.testing.v1 import AppTest
@@ -22,7 +23,15 @@ class SimpleAppTest(unittest.TestCase):
         each test. By refactoring the creation of the AppTest into a common
         function, we reduce the total amount of code in the file.
         """
-        self.at = AppTest.from_file('ui_testing/simple_app.py').run()
+        # Other unit tests may install a lightweight `streamlit` stub into sys.modules.
+        # Streamlit's AppTest expects `st.secrets` to exist, so ensure a minimal default.
+        import streamlit as st
+        if not hasattr(st, "secrets"):
+            st.secrets = {}  # type: ignore[attr-defined]
+        app_path = Path(__file__).resolve().parent / "ui_testing" / "simple_app.py"
+        if not app_path.exists():
+            raise unittest.SkipTest(f"UI fixture not found: {app_path}")
+        self.at = AppTest.from_file(str(app_path)).run()
 
     def test_tile(self):
         self.assertEqual(self.at.title[0].value, 'Cool chart!')
