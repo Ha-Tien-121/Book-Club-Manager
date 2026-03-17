@@ -14,7 +14,6 @@ python-dotenv
 bcrypt
 isbnlib
 sodapy
-scikit-learn==1.8.0
 
 # Development tools
 pylint==4.0.4
