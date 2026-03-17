@@ -38,7 +38,7 @@ from backend.config import (
     ML_ARTIFACTS_BUCKET,
     PROCESSED_DIR,
 )
-from backend.storage import get_storage
+import backend.storage as backend_storage
 
 GENRE_VOCAB: List[str] = [
     "Literature & Fiction",
@@ -176,6 +176,26 @@ class ContentBasedBookRecommender:
             "rating_number": None,
         }
 
+    @property
+    def _rating_norm(self) -> Optional[np.ndarray]:
+        """Backward-compatible alias for average_rating normalized scores."""
+        return self._rating_norms.get("average_rating")
+
+    @_rating_norm.setter
+    def _rating_norm(self, value: Optional[np.ndarray]) -> None:
+        """Backward-compatible setter for average_rating normalized scores."""
+        self._rating_norms["average_rating"] = value
+
+    @property
+    def _rating_number_norm(self) -> Optional[np.ndarray]:
+        """Backward-compatible alias for rating_number normalized scores."""
+        return self._rating_norms.get("rating_number")
+
+    @_rating_number_norm.setter
+    def _rating_number_norm(self, value: Optional[np.ndarray]) -> None:
+        """Backward-compatible setter for rating_number normalized scores."""
+        self._rating_norms["rating_number"] = value
+
     def fit(self) -> None:
         """Load from precomputed artifacts (local, or S3 when AWS) or from JSON and build in memory."""
         tfidf_path = self.data_dir / "book_tfidf.npz"
@@ -271,7 +291,7 @@ class ContentBasedBookRecommender:
     def _fetch_metadata_from_storage(self, asin_list: List[str]) -> List[Dict[str, Any]]:
         """Fetch metadata via storage backend when local sqlite is unavailable."""
         try:
-            store = get_storage()
+            store = backend_storage.get_storage()
             if not hasattr(store, "get_books_metadata_batch"):
                 return []
             batch = store.get_books_metadata_batch(asin_list) or {}
@@ -776,7 +796,7 @@ class _FallbackBookRecommender:
         Exceptions:
             None. Storage errors are handled by fallback list retrieval.
         """
-        store = get_storage()
+        store = backend_storage.get_storage()
         books = store.get_top50_review_books() or []
         owned = {str(b) for b in (user_book_ids or [])}
         books = [
@@ -821,7 +841,7 @@ _RECOMMENDER_CACHE: dict[str, Any] = {"instance": None, "using_fallback": True}
 def _get_recommender() -> tuple[Any, bool]:
     """Return (recommender instance, is_fallback)."""
     if _RECOMMENDER_CACHE["instance"] is not None:
-        return _RECOMMENDER_CACHE["instance"], False
+        return _RECOMMENDER_CACHE["instance"], bool(_RECOMMENDER_CACHE["using_fallback"])
     try:
         rec = ContentBasedBookRecommender()
         rec.fit()
@@ -836,20 +856,33 @@ def _get_recommender() -> tuple[Any, bool]:
         return _FallbackBookRecommender(), True
 
 
-class BookRecommender:
-    """Compatibility proxy around the active recommender implementation."""
+class BookRecommender(ContentBasedBookRecommender):
+    """Compatibility recommender supporting both legacy and content-based call styles."""
 
     def __init__(self) -> None:
-        """Create a proxy that delegates to content-based or fallback recommender."""
-        self._delegate, _ = _get_recommender()
+        """Initialize a content-based instance plus a lazy legacy delegate."""
+        super().__init__()
+        self._legacy_delegate: Any | None = None
 
-    def recommend(
-        self,
-        user_book_ids: List[str],
-        top_k: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """Delegate simple recommend calls to the active recommender."""
-        return self._delegate.recommend(user_book_ids, top_k=top_k)
+    def _delegate(self) -> Any:
+        """Return lazily loaded delegate used by legacy recommend(list[str]) calls."""
+        if self._legacy_delegate is None:
+            self._legacy_delegate, _ = _get_recommender()
+        return self._legacy_delegate
+
+    def recommend(self, *args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+        """Recommend books using either legacy or content-based signature.
+
+        Supported signatures:
+        - recommend(user_book_ids: list[str], top_k: int=50)  [legacy]
+        - recommend(user_id: str, user_genres_df=None, user_books_df=None, top_k=40)
+        """
+        first_arg = args[0] if args else None
+        is_legacy = isinstance(first_arg, list) and "user_id" not in kwargs
+        if is_legacy:
+            top_k = int(kwargs.get("top_k", args[1] if len(args) > 1 else 50))
+            return self._delegate().recommend(first_arg, top_k=top_k)
+        return super().recommend(*args, **kwargs)
 
     def recommend_for_user(
         self,
@@ -859,7 +892,7 @@ class BookRecommender:
         top_k: int = 40,
     ) -> List[Dict[str, Any]]:
         """Delegate account-based recommendations to the active recommender."""
-        return self._delegate.recommend_for_user(
+        return self._delegate().recommend_for_user(
             user_email=user_email,
             user_account=user_account,
             user_genres=user_genres,

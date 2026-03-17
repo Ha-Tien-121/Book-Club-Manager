@@ -72,7 +72,7 @@ def create_post(
                 meta = store.get_book_metadata(pa)
                 if meta and meta.get("title"):
                     bt = str(meta["title"]).strip()
-            except (RuntimeError, ValueError, TypeError, KeyError):
+            except (RuntimeError, ValueError, TypeError, KeyError, OSError):
                 pass
         if bt:
             key_bt = bt.lower()

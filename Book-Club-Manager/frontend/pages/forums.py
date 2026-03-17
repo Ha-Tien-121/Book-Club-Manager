@@ -94,14 +94,28 @@ def _render_forum_tab(
     store: dict,
     forum_store: dict,
     forum_posts_data: list[dict],
-    can_view_forum_post_fn: Callable[[dict, dict | None], bool],
-    build_post_tags_fn: Callable[[dict], list[str]],
-    format_post_time: Callable[[dict], str],
-    format_comment_time: Callable[[dict], str],
-    forum_preview_text: Callable[[str], str],
-    clear_aws_bootstrap_cache: Callable[[], None],
+    can_view_forum_post_fn: Callable[[dict, dict | None], bool] | None = None,
+    build_post_tags_fn: Callable[[dict], list[str]] | None = None,
+    format_post_time: Callable[[dict], str] | None = None,
+    format_comment_time: Callable[[dict], str] | None = None,
+    forum_preview_text: Callable[[str], str] | None = None,
+    clear_aws_bootstrap_cache: Callable[[], None] | None = None,
+    **legacy_kwargs,
 ) -> None:
     """Render Forum tab and route detail/list states."""
+    legacy_can_view_forum_post = legacy_kwargs.pop("can_view_forum_post", None)
+    legacy_build_post_tags = legacy_kwargs.pop("build_post_tags", None)
+    _ = legacy_kwargs
+    if can_view_forum_post_fn is None:
+        can_view_forum_post_fn = legacy_can_view_forum_post or (
+            lambda _post, _user: True
+        )
+    if build_post_tags_fn is None:
+        build_post_tags_fn = legacy_build_post_tags or (lambda _post: [])
+    format_post_time = format_post_time or (lambda _post: "—")
+    format_comment_time = format_comment_time or (lambda _comment: "—")
+    forum_preview_text = forum_preview_text or (lambda text: text)
+    clear_aws_bootstrap_cache = clear_aws_bootstrap_cache or (lambda: None)
     with tab:
         st.title("Forum")
         if st.session_state.pop("forum_form_clear_next", False):
@@ -270,12 +284,20 @@ def _render_forum_create_and_list(
     current_user: dict | None,
     forum_store: dict,
     forum_posts_data: list[dict],
-    build_post_tags_fn: Callable[[dict], list[str]],
-    format_post_time: Callable[[dict], str],
-    forum_preview_text: Callable[[str], str],
-    clear_aws_bootstrap_cache: Callable[[], None],
+    build_post_tags_fn: Callable[[dict], list[str]] | None = None,
+    format_post_time: Callable[[dict], str] | None = None,
+    forum_preview_text: Callable[[str], str] | None = None,
+    clear_aws_bootstrap_cache: Callable[[], None] | None = None,
+    **legacy_kwargs,
 ) -> None:
     """Render forum create form and post list views."""
+    legacy_build_post_tags = legacy_kwargs.pop("build_post_tags", None)
+    _ = legacy_kwargs
+    if build_post_tags_fn is None:
+        build_post_tags_fn = legacy_build_post_tags or (lambda _post: [])
+    format_post_time = format_post_time or (lambda _post: "—")
+    forum_preview_text = forum_preview_text or (lambda text: text)
+    clear_aws_bootstrap_cache = clear_aws_bootstrap_cache or (lambda: None)
     if st.session_state.get("signed_in") and current_user is not None:
         with st.expander("Create a discussion", expanded=False):
             with st.form("new_forum_post"):

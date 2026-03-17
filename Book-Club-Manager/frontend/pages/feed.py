@@ -90,13 +90,26 @@ def _render_feed_tab(
     recommender_available: bool,
     cached_spl_trending: Callable[[], list[dict]],
     cached_book_recommendations: Callable[[str], dict],
-    resolve_recommended_books_fn: Callable[..., list[dict]],
-    get_recommended_events_for_user: Callable[[str], list[dict]],
-    format_when: Callable[[dict], str],
-    sync_user_clubs_and_save: Callable[[dict, dict | None], None],
-    genre_dropdown_options: list[str],
+    resolve_recommended_books_fn: Callable[..., list[dict]] | None = None,
+    get_recommended_events_for_user: Callable[[str], list[dict]] | None = None,
+    format_when: Callable[[dict], str] | None = None,
+    sync_user_clubs_and_save: Callable[[dict, dict | None], None] | None = None,
+    genre_dropdown_options: list[str] | None = None,
+    **legacy_kwargs,
 ) -> None:
     """Render Feed tab sections (trending, recommended, and suggested events)."""
+    legacy_resolve_recommended_books = legacy_kwargs.pop(
+        "resolve_recommended_books", None
+    )
+    _ = legacy_kwargs
+    if resolve_recommended_books_fn is None:
+        resolve_recommended_books_fn = (
+            legacy_resolve_recommended_books or (lambda **_kw: [])
+        )
+    get_recommended_events_for_user = get_recommended_events_for_user or (lambda _email: [])
+    format_when = format_when or (lambda _event: "")
+    sync_user_clubs_and_save = sync_user_clubs_and_save or (lambda _store, _user: None)
+    genre_dropdown_options = genre_dropdown_options or []
     with tab:
         st.title("Discover your next read")
         selected_genres = st.multiselect(
@@ -400,12 +413,16 @@ def render_book_detail_page(
     books_by_id: dict[int, dict],
     extended_books_by_source_id: dict[str, dict],
     current_user: dict | None,
-    forum_store: dict,
-    forum_posts_data: list[dict],
+    store: dict | None = None,
+    forum_store: dict | None = None,
+    forum_posts_data: list[dict] | None = None,
     clear_aws_bootstrap_cache: Callable[[], None] | None = None,
     clear_book_recs_cache: Callable[[], None] | None = None,
 ) -> None:
     """Render Book Detail page with library and related forum discussions."""
+    _ = store
+    forum_store = forum_store or {"posts": [], "next_post_id": 1}
+    forum_posts_data = forum_posts_data or []
     if st.button("← Back to Feed"):
         st.session_state["show_book_detail_page"] = False
         st.rerun()

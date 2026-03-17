@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.services.books_service import get_book_detail
+from backend.services import books_service
 from backend.storage import get_storage
 from backend.services.recommender_service import on_book_added_to_shelf
 
@@ -54,7 +54,7 @@ def _merge_book_genres_into_preferences(rec: dict[str, Any], parent_asin: str, s
     """Fetch book categories, merge into genre_preferences, and increment genre_counts."""
     try:
         meta = store.get_book_metadata(parent_asin)
-    except (RuntimeError, ValueError, TypeError, KeyError):
+    except (RuntimeError, ValueError, TypeError, KeyError, OSError):
         return
     if not meta:
         return
@@ -142,7 +142,7 @@ def _drop_genres_only_from_removed_book(
     """
     try:
         meta = store.get_book_metadata(removed_book_key)
-    except (RuntimeError, ValueError, TypeError, KeyError):
+    except (RuntimeError, ValueError, TypeError, KeyError, OSError):
         return
     if not meta:
         return
@@ -287,7 +287,7 @@ def get_library_with_details(user_id: str) -> dict[str, list[dict[str, Any]]]:
         for bid in lib.get(shelf, []):
             bid_s = str(bid)
             if bid_s not in detail_cache:
-                detail_cache[bid_s] = get_book_detail(bid_s) or {}
+                detail_cache[bid_s] = books_service.get_book_detail(bid_s) or {}
             book = detail_cache[bid_s]
             if book:
                 out[shelf].append(book)

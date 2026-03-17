@@ -148,7 +148,7 @@ class TestAddBookToLibrary(unittest.TestCase):
         """Covers 54-55: Exception in get_book_metadata returns early, add still succeeds."""
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
-        store.get_book_metadata.side_effect = Exception("db error")
+        store.get_book_metadata.side_effect = OSError("db error")
         mock_get_storage.return_value = store
 
         result = library_service.add_book_to_library("u@x.com", "B1", "saved")
@@ -286,7 +286,7 @@ class TestRemoveBookFromLibrary(unittest.TestCase):
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
         )
-        store.get_book_metadata.side_effect = Exception("error")
+        store.get_book_metadata.side_effect = OSError("error")
         mock_get_storage.return_value = store
 
         result = library_service.remove_book_from_library("u@x.com", "B1")

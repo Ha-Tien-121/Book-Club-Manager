@@ -146,6 +146,7 @@ def _ttl_seconds_from_start_iso(start_iso: object) -> int | None:
 
 
 def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-branches
+    # This ETL parser handles many raw input shapes and date/time patterns in one pass.
     """
     Minimal cleaning:
     - strip whitespace
@@ -323,7 +324,6 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
     for when_str in df.get("when", []):
         when_str = str(when_str or "")
         tokens = [t.strip() for t in when_str.split(",") if t.strip()]
-        day_of_week_token = tokens[0] if tokens else ""  # pylint: disable=unused-variable
         date_token = tokens[1] if len(tokens) > 1 else ""
         time_token = ",".join(tokens[2:]) if len(tokens) > 2 else (
             tokens[1] if len(tokens) > 1 and re.search(r"\d", tokens[1]) else ""
@@ -722,6 +722,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
     parent_asin_list = []
     tags_merged = []
     for _, row in df.iterrows():  # pylint: disable=too-many-nested-blocks
+        # Nested checks intentionally preserve strict fallback order without refactoring behavior.
         key = row.get("title_author_key")
         tags = list(row.get("tags") or [])
         parent_asin = None
@@ -740,7 +741,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
                         for cat in book.get("categories") or []:
                             if cat and cat not in tags:
                                 tags.append(cat)
-                except Exception:  # pylint: disable=broad-exception-caught
+                except (RuntimeError, ValueError, TypeError, KeyError, OSError):
                     pass
         parent_asin_list.append(parent_asin)
         tags_merged.append(sorted(set(tags)))

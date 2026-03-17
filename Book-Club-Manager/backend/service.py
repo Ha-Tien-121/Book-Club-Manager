@@ -51,11 +51,12 @@ def build_user_books_df(
 
 def get_recommendations(
     user_id: str,
-    _user_genres_store: Dict[str, List[Dict[str, Any]]],
+    user_genres_store: Dict[str, List[Dict[str, Any]]],
     user_books_read_store: Dict[str, List[str]],
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """Return top_k book recommendations (same as event: caller passes user signal = book IDs)."""
+    _ = user_genres_store
     user_book_ids = user_books_read_store.get(user_id, []) if user_id else []
     return BookRecommender().recommend(user_book_ids, top_k=top_k)
 
@@ -91,7 +92,7 @@ def mark_book_as_read(
 
     return get_recommendations(
         user_id=user_id,
-        _user_genres_store=user_genres_store,
+        user_genres_store=user_genres_store,
         user_books_read_store=user_books_read_store,
         top_k=top_k,
     )

@@ -115,8 +115,10 @@ def init_session(books: list[dict]) -> None:
 def handle_query_navigation(
     books_by_id: dict[int, dict],
     forum_post_ids: set[int],
+    extended_books_by_source_id: dict[str, dict] | None = None,
 ) -> None:
     """Handle deep-link query params for book detail and forum detail navigation."""
+    _ = extended_books_by_source_id
     open_val = st.query_params.get("open")
     source_id_param = (st.query_params.get("source_id") or "").strip()
     # Allow deep-link to any source_id; detail page can fetch metadata on demand.

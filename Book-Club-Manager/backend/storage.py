@@ -6,6 +6,8 @@
 # too-many-nested-blocks for this module to avoid late-stage
 # refactor risk. This preserves runtime stability while keeping other lint checks
 # and tests enforced in CI.
+# broad-exception-caught is also intentional here because storage adapters
+# must degrade gracefully across local files, sqlite, DynamoDB, and S3.
 # pylint: disable=too-many-lines,too-many-public-methods,too-many-nested-blocks,broad-exception-caught
 
 import json
@@ -353,7 +355,9 @@ class LocalStorage:
 
     def get_top50_review_books(self):
         """Return list of book dicts from reviews_top50_books.json (local path)."""
-        path = getattr(_config, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None)
+        path = globals().get("REVIEWS_TOP50_BOOKS_LOCAL_PATH") or getattr(
+            _config, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None
+        )
         # Fall back to the smaller reviews_top25_books.json if top-50 isn't present locally.
         if not path or not path.exists():
             path = getattr(_config, "PROCESSED_DIR", None) / "reviews_top25_books.json"

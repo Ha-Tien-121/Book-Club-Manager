@@ -52,6 +52,7 @@ INPUT_FILE = os.path.join(RAW_DIR, 'meta_Books.jsonl')
 OUTPUT_DB = os.path.join(PROCESSED_DIR, 'books.db')
 OUTPUT_JSON_BOOKS_IDX = os.path.join(PROCESSED_DIR, "book_id_to_idx.json")
 # pylint: disable=too-many-locals
+# This single-pass ingestion keeps intermediate variables explicit for readability.
 def main(categories, input_file=INPUT_FILE, output_db=OUTPUT_DB,
          output_json_books_idx = OUTPUT_JSON_BOOKS_IDX):
     """Run the Amazon books metadata cleaning pipeline and create output files."""
