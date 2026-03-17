@@ -56,7 +56,7 @@ jobs:
             # Wait for Streamlit health endpoint before checking nginx.
             READY=0
             for i in {1..30}; do
-              if curl -fsS "http://127.0.0.1:8501/_stcore/health" > /dev/null; then
+              if curl -fsS "http://127.0.0.1:8501/_stcore/health" > /dev/null 2>&1; then
                 READY=1
                 break
               fi
@@ -72,7 +72,7 @@ jobs:
             # Smoke check from localhost through nginx with short retry.
             READY=0
             for i in {1..10}; do
-              if curl -fsS "http://127.0.0.1/" > /dev/null; then
+              if curl -fsS "http://127.0.0.1/" > /dev/null 2>&1; then
                 READY=1
                 break
               fi
@@ -87,13 +87,4 @@ jobs:
 
             # Additional check: runtime storage mode should be cloud on EC2.
             cd "$INNER_APP_DIR"
-            "$VENV_PY" - <<'PY'
-            from backend import config
-            from backend.storage import get_storage
-
-            print("APP_ENV:", config.APP_ENV)
-            print("IS_AWS:", config.IS_AWS)
-            print("Storage:", type(get_storage()).__name__)
-            if config.APP_ENV != "aws" or not config.IS_AWS or type(get_storage()).__name__ != "CloudStorage":
-                raise SystemExit("Runtime not in expected AWS CloudStorage mode")
-            PY
+            "$VENV_PY" -c "from backend import config; from backend.storage import get_storage; print('APP_ENV:', config.APP_ENV); print('IS_AWS:', config.IS_AWS); print('Storage:', type(get_storage()).__name__); assert config.APP_ENV == 'aws' and config.IS_AWS and type(get_storage()).__name__ == 'CloudStorage', 'Runtime not in expected AWS CloudStorage mode'"
