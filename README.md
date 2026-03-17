@@ -23,87 +23,36 @@ Bookish is a Streamlit app that centralizes book club experiences in one place:
 
 ---
 
-## Project Output
+## What this project delivers
 
-The a **web platform** that allows users to:
+Bookish is a web platform that allows users to:
 
 - receive personalized book recommendations based on reading history
-- find popular books books in the Seattle Public Library
-- discover book clubs and reading events in the Seattle area tailored to preferences
-- organize and manage book club activities
+- find popular books in the Seattle Public Library system
+- discover Seattle-area book clubs and reading events
+- organize and manage personal library and book-club activity
 
-The project will also produce cleaned and transformed datasets, indexed for efficient lookup 
-and easy use in the recommendation algorithm.
-
----
-
-## Data Sources
-
-This project uses the following data sources:
-
-1. **Amazon Reviews Dataset** (2023 by McAuley Lab)
-2. **Seattle Public Library API**
-   - Checkouts by Title
-4. **Seattle-area Book Club Event Data**
-
-   *Scraped from Google events with SeprAPI
-
-These datasets are processed using scripts in the `data/scripts` directory to generate cleaned datasets used by the application.
+The project also includes data pipelines that clean, transform, and load artifacts
+used by the app and recommendation workflows.
 
 ---
 
-### Usage
+## Data sources
 
-1. **Amazon Reviews Dataset** (2023 by McAuley Lab)
+This project integrates multiple data sources:
 
-Amazon book metadata provides information displayed in the user interface, including title, author, description, genres, average ratings, and cover images. Metadata features such as average rating, genre, and popularity are also used in the recommender to help rank recommended books. 
+1. **Amazon Books/Reviews Dataset** (McAuley Lab, 2023)
+2. **Seattle Public Library (SPL) data** (checkouts and catalog-derived popularity)
+3. **Seattle-area book events** (collected via SerpAPI/Google Events)
 
-Amazon review data is used to construct sample user reading histories by converting reviews into a user-book interaction matrices. These interactions  represent users’ book preferences and are split in to training and test sets. The training (input) data is used to compute a cosine similarity matrix between books, a feature in our reccomendation algorithm.
+How each source is used:
 
-2. **Checkouts by Title**
-
-The SPL checkouts dataset provides a measure of local popularity that can be used to recomend books from SPL catalogue if a user toggles on SPL book reccomendations.
-
-3. **Seattle-area Book Club Event Data**
-
-The book events dataset provides information displayed in the user interface including name of bookclub, link to bookclub, thumbnail image, description, location, 
-time, and books and genres the club is reading (most book clubs will not have all info). Bookclub features such as location, time, and genre are also used in bookclub 
-recomender to rank recommended bookclubs
-
----
-
-### Setup to Run Data Processing Scripts
-
-#### Amazon Reviews Dataset
-
-Dataset download page: https://amazon-reviews-2023.github.io/
-
-Directions:
-Under "Grouped by Category" download books `review` and `meta`. 
-
-From Gzip file extract the following files and place in `data/raw`
-- `Books.jsonl`
-- `meta_Books.jsonl`
-
-#### SPL API
-
-Seattle Open Data portal: https://data.seattle.gov/
-
-Directions:
-1. create an account for Tyler's Data & Insights
-2. go to "Developer Settings"
-3. create new API Key and new App Token
-4. make .env in spl_data containing SPL_TOKEN = "your_app_token"
-
-#### SerpAPI
-SerpAPI Dashboard: https://serpapi.com/dashboard
-
-Directions:
-1. create SerpAPI account 
-2. in account you should see "Your Private API Key"
-3. make .env in scripts containing api_key = "your_private_api_key"
-
----
+- **Amazon Books/Reviews** -> Primary catalog + recommendation backbone. We use fields such as `parent_asin`, title, author, categories/genres, ratings, image URL, and description to build `books.db`, Parquet shards, and recommender artifacts consumed by the feed/library views.  
+  Limitation: Coverage and recommendation quality depend on metadata completeness and review density.
+- **SPL data** -> Seattle-local demand signal. Checkout counts are joined against books to produce `spl_top50_checkouts_in_books.json`, which powers trending/local discovery and helps rank recommendations toward local relevance.  
+  Limitation: Reflects SPL circulation behavior and may not represent broader reader preferences.
+- **Book events (SerpAPI/Google Events)** -> Event discovery and personalization source. Event title, venue, date/time, description, and links are normalized and tagged for explore-events pages and event recommendation candidates.  
+  Limitation: Freshness/completeness depends on third-party event listings and scraping/API availability.
 
 ## Project structure (what’s where)
 
@@ -144,14 +93,6 @@ See:
 - `examples/walkthrough_rayleigh_casual_reader.md`
 - `examples/walkthrough_ben_professional_learner.md`
 
-## Data sources
-
-This project integrates multiple data sources:
-
-- **Amazon Books Dataset**: book metadata and recommendation signals (ratings, categories, images, etc.)
-- **Seattle Public Library (SPL) data**: local trending/checkout popularity signals
-- **Event data**: book clubs/events discovery (title, description, location, date/time, link)
-
 ## Deployment
 
 Deployed Streamlit app: `http://100.23.182.233/`
@@ -187,6 +128,109 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+## Credentials and raw data acquisition
+
+Required before running data pipelines.
+
+### API keys / tokens
+
+- **SPL token (`SPL_TOKEN`)**
+  - Get it from [Seattle Open Data](https://data.seattle.gov/) (Tyler Data & Insights -> Developer Settings -> App Token).
+  - Export as `SPL_TOKEN` (shell or `.env`).
+
+- **SerpAPI key (`api_key`)**
+  - Get it from [SerpAPI Dashboard](https://serpapi.com/dashboard).
+  - Export as `api_key` (shell or `.env`).
+
+### Raw data files
+
+From [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/), download books
+`review` and `meta`, then place:
+
+- `Book-Club-Manager/data/raw/meta_Books.jsonl`
+- `Book-Club-Manager/data/raw/Books.jsonl`
+
+If not fetching events live, also place:
+
+- `Book-Club-Manager/data/raw/book_events_raw.json`
+
+## Data pipeline runbooks
+
+This project has two runtime modes (`local` and `aws`) but both depend on the same
+data preparation steps first.
+
+### Before either mode: prepare data artifacts
+
+From the repository root:
+
+```bash
+cd Book-Club-Manager
+```
+
+Run the processing scripts:
+
+```bash
+# Build cleaned books.db + book_id_to_idx.json
+python -m data.scripts.amazon_books_data.books_meta_data
+
+# Build sharded parquet files from books.db
+python data/scripts/shard_books_by_prefix.py --source data/processed/books.db --out-dir data/shards/parent_asin
+
+# Build recommender artifacts
+python data/scripts/build_recommender_artifacts.py
+
+# Event pipeline (fetch raw, then clean)
+python data/scripts/events/get_book_events.py
+python data/scripts/events/clean_book_events.py
+```
+
+### Local mode runbook
+
+After data preparation:
+
+```bash
+cd ..
+streamlit run streamlit_app.py
+```
+
+Local mode behavior:
+- Uses local processed artifacts/files where available.
+- Does not require DynamoDB/S3 for normal local development.
+
+### AWS mode runbook (includes loaders)
+
+AWS mode requires all preparation steps above **plus** uploading/loading artifacts
+to S3/DynamoDB.
+
+Before running loaders, make sure:
+
+- AWS credentials are available (EC2 IAM role or `aws configure` profile).
+- `DATA_BUCKET` is set.
+- DynamoDB table env vars are set if you are not using defaults.
+- API keys are set for data generation steps that need them (`SPL_TOKEN`, `api_key`).
+
+From `Book-Club-Manager/`:
+
+```bash
+# DynamoDB loaders
+python -m data.scripts.loaders.load_books_to_dynamodb --all
+python data/scripts/loaders/load_events_to_dynamodb.py
+
+# Build SPL top-50 JSON (depends on SPL token + books table)
+python -m data.scripts.spl_data.spl_checkout_data
+
+# S3 loaders
+python data/scripts/loaders/load_book_shards_to_s3.py
+python -m data.scripts.loaders.load_spl_top50_to_s3
+python data/scripts/loaders/load_reviews_top50_to_s3.py
+```
+
+Set deployment environment variables so runtime uses cloud storage:
+- `APP_ENV=aws`
+- `AWS_REGION=us-west-2`
+- `DATA_BUCKET=<your bucket>`
+- table env vars when non-default (`BOOKS_TABLE`, `EVENTS_TABLE`, etc.)
+
 ## Running the app locally (LocalStorage mode)
 
 From the repo root:
@@ -203,7 +247,8 @@ What “local mode” means:
 ## Running the app on AWS (CloudStorage mode)
 
 The repository supports an AWS-backed runtime mode used for deployment (DynamoDB/S3).
-The exact environment variables and AWS resources depend on your deployment configuration, but the expected deployed behavior is:
+See `Data pipeline runbooks` above for required data preparation and loader steps.
+Expected runtime behavior:
 
 - `APP_ENV=aws`
 - `config.IS_AWS == True`
