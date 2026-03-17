@@ -1,0 +1,90 @@
+name: deploy_ec2
+
+on:
+  workflow_run:
+    workflows: ["build_test"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on EC2 over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            APP_ROOT="/home/ec2-user/Book-Club-Manager"
+            INNER_APP_DIR="/home/ec2-user/Book-Club-Manager/Book-Club-Manager"
+            VENV_PY="/home/ec2-user/venv/bin/python"
+
+            cd "$APP_ROOT"
+            git fetch --all --prune
+            git checkout main
+            git pull --ff-only origin main
+
+            if [ ! -x "$VENV_PY" ]; then
+              echo "Missing python venv at $VENV_PY"
+              exit 1
+            fi
+
+            "$VENV_PY" -m pip install --upgrade pip
+            "$VENV_PY" -m pip install -r requirements.txt
+
+            # Optional: if your editable package install is required in runtime.
+            "$VENV_PY" -m pip install -e "$APP_ROOT"
+
+            sudo systemctl daemon-reload
+            sudo systemctl restart bookclub-v2
+            sudo systemctl is-active --quiet bookclub-v2
+
+            # Wait for Streamlit health endpoint before checking nginx.
+            READY=0
+            for i in {1..30}; do
+              if curl -fsS "http://127.0.0.1:8501/_stcore/health" > /dev/null 2>&1; then
+                READY=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$READY" -ne 1 ]; then
+              echo "Streamlit did not become healthy in time"
+              sudo systemctl status bookclub-v2 --no-pager -l || true
+              sudo journalctl -u bookclub-v2 -n 120 --no-pager || true
+              exit 1
+            fi
+
+            # Smoke check from localhost through nginx with short retry.
+            READY=0
+            for i in {1..10}; do
+              if curl -fsS "http://127.0.0.1/" > /dev/null 2>&1; then
+                READY=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$READY" -ne 1 ]; then
+              echo "Nginx localhost smoke check failed"
+              sudo systemctl status bookclub-v2 --no-pager -l || true
+              sudo journalctl -u bookclub-v2 -n 120 --no-pager || true
+              exit 1
+            fi
+
+            # Additional check: runtime storage mode should be cloud on EC2.
+            cd "$INNER_APP_DIR"
+            "$VENV_PY" -c "from backend import config; from backend.storage import get_storage; print('APP_ENV:', config.APP_ENV); print('IS_AWS:', config.IS_AWS); print('Storage:', type(get_storage()).__name__); assert config.APP_ENV == 'aws' and config.IS_AWS and type(get_storage()).__name__ == 'CloudStorage', 'Runtime not in expected AWS CloudStorage mode'"
