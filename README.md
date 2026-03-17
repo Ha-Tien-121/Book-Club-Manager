@@ -1,5 +1,5 @@
 [![CI](https://github.com/Ha-Tien-121/Book-Club-Manager/actions/workflows/build_test.yml/badge.svg)](https://github.com/Ha-Tien-121/Book-Club-Manager/actions/workflows/build_test.yml)
-[![Coverage Status](https://coveralls.io/repos/github/Ha-Tien-121/Book-Club-Manager/badge.svg?branch=main)](https://coveralls.io/github/Ha-Tien-121/Book-Club-Manager?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/Ha-Tien-121/Book-Club-Manager/badge.svg?branch=main&kill_cache=1)](https://coveralls.io/github/Ha-Tien-121/Book-Club-Manager?branch=main)
 
 # Bookish: A Book Club Manager
 
