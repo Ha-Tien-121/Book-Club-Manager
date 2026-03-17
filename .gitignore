@@ -229,3 +229,5 @@ Book-Club-Manager/data/raw/
 # Streamlit local config (inner project)
 Book-Club-Manager/.streamlit/
 .pylint.d/
+
+coverage.lcov
