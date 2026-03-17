@@ -12,7 +12,7 @@ The Streamlit app (and any future API) should talk to **services**, not directly
 
 ## Storage layer
 
-### `storage.py` (In Progress)
+### `storage.py`
 
 Single module for reading/writing data in external systems (DynamoDB, S3, parquet, etc.).
 
@@ -94,11 +94,11 @@ Operations for book‑related events and clubs.
 
 Single entry point for **user library mutations**. Every change to a user’s library should go through here so we can track actions and hook into recommendations.
 
-- `save_book_to_library(user_id, parent_asin)` (skeleton)  
+- `save_book_to_library(user_id, parent_asin)`  
   Writes to the library table, then calls `storage.increment_library_actions_since_recs`.
-- `set_book_status(user_id, parent_asin, status)` (skeleton)  
+- `set_book_status(user_id, parent_asin, status)`  
   Marks a book as saved / reading / read, then bumps the action counter.
-- `remove_book_from_library(user_id, parent_asin)` (skeleton)  
+- `remove_book_from_library(user_id, parent_asin)`  
   Removes a book from the library, then bumps the action counter.
 - `acknowledge_recommendations_ran(user_id)`  
   Resets the library action counter via `storage.reset_library_actions_since_recs`.
@@ -106,25 +106,25 @@ Single entry point for **user library mutations**. Every change to a user’s li
 The typical pattern is:
 
 1. UI calls a `library_service` mutation.
-2. The mutation writes to storage (TODOs now).
+2. The mutation writes to storage.
 3. The mutation bumps the action counter and returns metadata about whether the recommender should be refreshed.
 
 ### `forum_service.py`
 
 Operations for book discussion threads and posts.
 
-- `get_thread_for_book(parent_asin)` (skeleton)  
+- `get_thread_for_book(parent_asin)`  
   Loads the thread for a given book (wraps a storage helper).
-- `list_threads_for_user(user_id, limit=20)` (skeleton)  
+- `list_threads_for_user(user_id, limit=20)`  
   Recent threads the user has participated in.
-- `add_post_to_thread(parent_asin, user_id, content)` (skeleton)  
+- `add_post_to_thread(parent_asin, user_id, content)`  
   Adds a new top‑level post in a book’s thread.
-- `reply_to_post(thread_id, post_id, user_id, content)` (skeleton)  
+- `reply_to_post(thread_id, post_id, user_id, content)`  
   Adds a reply to an existing post.
-- `toggle_hide_post(thread_id, post_id, hidden)` (skeleton)  
+- `toggle_hide_post(thread_id, post_id, hidden)`  
   Soft‑hide/unhide posts for moderation.
 
-### `auth_service.py` (planned) 
+### `auth_service.py`
 
 Currently empty; intended home for:
 
@@ -134,11 +134,11 @@ Currently empty; intended home for:
 
 ---
 
-## Recommenders (In Progress)
+## Recommenders
 
 ### `recommender/book_recommender.py`
 
-Skeleton book recommender, currently:
+Book recommender behavior:
 
 - Embeds a sample of 50 books from `books_sample_100.json`.
 - `recommend_for_user(user_email)`  
@@ -148,7 +148,7 @@ Later this can be replaced with a real model that uses user library, ratings, ta
 
 ### `recommender/event_recommender.py`
 
-Skeleton event recommender, currently:
+Event recommender behavior:
 
 - Embeds 10 events from `bookclubs_seattle_clean.json`.
 - `recommend_for_user(user_email)`  
