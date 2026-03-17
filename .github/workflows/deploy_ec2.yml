@@ -85,6 +85,18 @@ jobs:
               exit 1
             fi
 
-            # Additional check: runtime storage mode should be cloud on EC2.
+            # Additional check: verify service runtime is configured for AWS mode.
+            SERVICE_ENV="$(sudo systemctl show bookclub-v2 -p Environment --value || true)"
+            echo "bookclub-v2 Environment: $SERVICE_ENV"
+            case " $SERVICE_ENV " in
+              *" APP_ENV=aws "*) ;;
+              *)
+                echo "bookclub-v2 missing APP_ENV=aws in systemd environment"
+                sudo systemctl cat bookclub-v2 || true
+                exit 1
+                ;;
+            esac
+
+            # Validate storage wiring under AWS env (without relying on SSH shell env).
             cd "$INNER_APP_DIR"
-            "$VENV_PY" -c "from backend import config; from backend.storage import get_storage; print('APP_ENV:', config.APP_ENV); print('IS_AWS:', config.IS_AWS); print('Storage:', type(get_storage()).__name__); assert config.APP_ENV == 'aws' and config.IS_AWS and type(get_storage()).__name__ == 'CloudStorage', 'Runtime not in expected AWS CloudStorage mode'"
+            APP_ENV=aws AWS_REGION=us-west-2 "$VENV_PY" -c "from backend import config; from backend.storage import get_storage; print('APP_ENV:', config.APP_ENV); print('IS_AWS:', config.IS_AWS); print('Storage:', type(get_storage()).__name__); assert config.APP_ENV == 'aws' and config.IS_AWS and type(get_storage()).__name__ == 'CloudStorage', 'Runtime not in expected AWS CloudStorage mode'"

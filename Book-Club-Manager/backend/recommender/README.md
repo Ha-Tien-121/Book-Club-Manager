@@ -4,7 +4,7 @@ This folder contains the recommendation logic used by the Bookish backend.
 
 The system provides:
 - Book club event recommendations (implemented)
-- Book recommendations (in progress)
+- Book recommendations
 
 The recommender receives user preferences from the backend API and returns
 a ranked list of results based on relevance.
@@ -16,7 +16,7 @@ a ranked list of results based on relevance.
 ---
 
 
-## Events Recommender (In Progress)
+## Events Recommender
 
 The events recommender suggests book club events using data from sources
 such as SerpAPI and library datasets.

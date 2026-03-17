@@ -12,12 +12,47 @@ Bookish is a Streamlit app that centralizes book club experiences in one place:
 - Participate in book discussions (forum)
 - Receive personalized book recommendations
 
+---
+
 ## Contributors
 
 - Ha Tien Nguyen
 - Sarah Mathison
 - Maanya Cola Bharath
 - Elsie Wang
+
+---
+
+## What this project delivers
+
+Bookish is a web platform that allows users to:
+
+- receive personalized book recommendations based on reading history
+- find popular books in the Seattle Public Library system
+- discover Seattle-area book clubs and reading events
+- organize and manage personal library and book-club activity
+
+The project also includes data pipelines that clean, transform, and load artifacts
+used by the app and recommendation workflows.
+
+---
+
+## Data sources
+
+This project integrates multiple data sources:
+
+1. **Amazon Books/Reviews Dataset** (McAuley Lab, 2023)
+2. **Seattle Public Library (SPL) data** (checkouts and catalog-derived popularity)
+3. **Seattle-area book events** (collected via SerpAPI/Google Events)
+
+How each source is used:
+
+- **Amazon Books/Reviews** -> Primary catalog + recommendation backbone. We use fields such as `parent_asin`, title, author, categories/genres, ratings, image URL, and description to build `books.db`, Parquet shards, and recommender artifacts consumed by the feed/library views.  
+  Limitation: Coverage and recommendation quality depend on metadata completeness and review density.
+- **SPL data** -> Seattle-local demand signal. Checkout counts are joined against books to produce `spl_top50_checkouts_in_books.json`, which powers trending/local discovery and helps rank recommendations toward local relevance.  
+  Limitation: Reflects SPL circulation behavior and may not represent broader reader preferences.
+- **Book events (SerpAPI/Google Events)** -> Event discovery and personalization source. Event title, venue, date/time, description, and links are normalized and tagged for explore-events pages and event recommendation candidates.  
+  Limitation: Freshness/completeness depends on third-party event listings and scraping/API availability.
 
 ## Project structure (what’s where)
 
@@ -58,14 +93,6 @@ See:
 - `examples/walkthrough_rayleigh_casual_reader.md`
 - `examples/walkthrough_ben_professional_learner.md`
 
-## Data sources
-
-This project integrates multiple data sources:
-
-- **Amazon Books Dataset**: book metadata and recommendation signals (ratings, categories, images, etc.)
-- **Seattle Public Library (SPL) data**: local trending/checkout popularity signals
-- **Event data**: book clubs/events discovery (title, description, location, date/time, link)
-
 ## Deployment
 
 Deployed Streamlit app: `http://100.23.182.233/`
@@ -101,6 +128,109 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+## Credentials and raw data acquisition
+
+Required before running data pipelines.
+
+### API keys / tokens
+
+- **SPL token (`SPL_TOKEN`)**
+  - Get it from [Seattle Open Data](https://data.seattle.gov/) (Tyler Data & Insights -> Developer Settings -> App Token).
+  - Export as `SPL_TOKEN` (shell or `.env`).
+
+- **SerpAPI key (`api_key`)**
+  - Get it from [SerpAPI Dashboard](https://serpapi.com/dashboard).
+  - Export as `api_key` (shell or `.env`).
+
+### Raw data files
+
+From [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/), download books
+`review` and `meta`, then place:
+
+- `Book-Club-Manager/data/raw/meta_Books.jsonl`
+- `Book-Club-Manager/data/raw/Books.jsonl`
+
+If not fetching events live, also place:
+
+- `Book-Club-Manager/data/raw/book_events_raw.json`
+
+## Data pipeline runbooks
+
+This project has two runtime modes (`local` and `aws`) but both depend on the same
+data preparation steps first.
+
+### Before either mode: prepare data artifacts
+
+From the repository root:
+
+```bash
+cd Book-Club-Manager
+```
+
+Run the processing scripts:
+
+```bash
+# Build cleaned books.db + book_id_to_idx.json
+python -m data.scripts.amazon_books_data.books_meta_data
+
+# Build sharded parquet files from books.db
+python data/scripts/shard_books_by_prefix.py --source data/processed/books.db --out-dir data/shards/parent_asin
+
+# Build recommender artifacts
+python data/scripts/build_recommender_artifacts.py
+
+# Event pipeline (fetch raw, then clean)
+python data/scripts/events/get_book_events.py
+python data/scripts/events/clean_book_events.py
+```
+
+### Local mode runbook
+
+After data preparation:
+
+```bash
+cd ..
+streamlit run streamlit_app.py
+```
+
+Local mode behavior:
+- Uses local processed artifacts/files where available.
+- Does not require DynamoDB/S3 for normal local development.
+
+### AWS mode runbook (includes loaders)
+
+AWS mode requires all preparation steps above **plus** uploading/loading artifacts
+to S3/DynamoDB.
+
+Before running loaders, make sure:
+
+- AWS credentials are available (EC2 IAM role or `aws configure` profile).
+- `DATA_BUCKET` is set.
+- DynamoDB table env vars are set if you are not using defaults.
+- API keys are set for data generation steps that need them (`SPL_TOKEN`, `api_key`).
+
+From `Book-Club-Manager/`:
+
+```bash
+# DynamoDB loaders
+python -m data.scripts.loaders.load_books_to_dynamodb --all
+python data/scripts/loaders/load_events_to_dynamodb.py
+
+# Build SPL top-50 JSON (depends on SPL token + books table)
+python -m data.scripts.spl_data.spl_checkout_data
+
+# S3 loaders
+python data/scripts/loaders/load_book_shards_to_s3.py
+python -m data.scripts.loaders.load_spl_top50_to_s3
+python data/scripts/loaders/load_reviews_top50_to_s3.py
+```
+
+Set deployment environment variables so runtime uses cloud storage:
+- `APP_ENV=aws`
+- `AWS_REGION=us-west-2`
+- `DATA_BUCKET=<your bucket>`
+- table env vars when non-default (`BOOKS_TABLE`, `EVENTS_TABLE`, etc.)
+
 ## Running the app locally (LocalStorage mode)
 
 From the repo root:
@@ -117,7 +247,8 @@ What “local mode” means:
 ## Running the app on AWS (CloudStorage mode)
 
 The repository supports an AWS-backed runtime mode used for deployment (DynamoDB/S3).
-The exact environment variables and AWS resources depend on your deployment configuration, but the expected deployed behavior is:
+See `Data pipeline runbooks` above for required data preparation and loader steps.
+Expected runtime behavior:
 
 - `APP_ENV=aws`
 - `config.IS_AWS == True`
