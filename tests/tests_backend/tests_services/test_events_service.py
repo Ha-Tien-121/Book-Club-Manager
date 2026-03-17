@@ -40,7 +40,7 @@ import backend.config as _backend_config  # noqa: E402
 if not hasattr(_backend_config, "EVENT_RECOMMENDATION_POOL_SIZE"):
     _backend_config.EVENT_RECOMMENDATION_POOL_SIZE = 200
 
-from backend.services import events_service  # noqa: E402
+from tests_backend.tests_services import events_service  # noqa: E402
 
 
 @patch("backend.services.events_service.get_storage")

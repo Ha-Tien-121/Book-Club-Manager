@@ -316,7 +316,7 @@ def test_local_storage_top50_reviews_and_spl_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     storage = _import_storage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     monkeypatch.setattr(cfg, "PROCESSED_DIR", tmp_path, raising=False)
 
@@ -351,7 +351,7 @@ def test_local_storage_get_soonest_events_and_helpers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     storage = _import_storage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     monkeypatch.setattr(cfg, "PROCESSED_DIR", tmp_path, raising=False)
     events_path = tmp_path / "book_events_clean.json"
@@ -388,7 +388,7 @@ def test_local_storage_user_recommendations_round_trip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     storage = _import_storage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     rec_path = tmp_path / "user_recs.json"
     monkeypatch.setattr(cfg, "USER_RECOMMENDATIONS_PATH", rec_path, raising=False)
@@ -413,7 +413,7 @@ def test_cloud_storage_get_top50_review_books_and_spl_top50(
 ) -> None:
     storage = _import_storage()
     cs = storage.CloudStorage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     monkeypatch.setattr(cfg, "DATA_BUCKET", "bucket", raising=False)
     monkeypatch.setattr(cfg, "REVIEWS_TOP50_BOOKS_S3_KEY", "reviews.json", raising=False)
@@ -451,7 +451,7 @@ def test_cloud_storage_get_user_books_normalizes_shelves_and_handles_missing(
 ) -> None:
     storage = _import_storage()
     cs = storage.CloudStorage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     # CloudStorage._table reads USER_BOOKS_TABLE from config; default fallback is "user_books"
     monkeypatch.setattr(cfg, "USER_BOOKS_TABLE", "user_books", raising=False)
@@ -492,7 +492,7 @@ def test_cloud_storage_get_and_save_user_recommendations(
 ) -> None:
     storage = _import_storage()
     cs = storage.CloudStorage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     monkeypatch.setattr(cfg, "USER_RECOMMENDATIONS_TABLE", "user_recommendations", raising=False)
 
@@ -528,7 +528,7 @@ def test_cloud_storage_get_events_by_city_and_for_book(
 ) -> None:
     storage = _import_storage()
     cs = storage.CloudStorage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     # No GSI configured -> empty list
     monkeypatch.setattr(cfg, "EVENTS_CITY_STATE_GSI", "", raising=False)
@@ -560,7 +560,7 @@ def test_cloud_storage_get_events_by_city_and_for_book(
 def test_cloud_storage_forum_thread_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     storage = _import_storage()
     cs = storage.CloudStorage()
-    from backend import config as cfg
+    from tests_backend import config as cfg
 
     # No GSI -> empty list / None
     monkeypatch.setattr(cfg, "FORUM_POSTS_GSI", "", raising=False)

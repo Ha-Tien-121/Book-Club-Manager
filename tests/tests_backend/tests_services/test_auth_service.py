@@ -38,7 +38,7 @@ if "backend.services.recommender_service" not in sys.modules:
     sys.modules["backend.services.recommender_service"] = _rec_mod
 
 # Import after mocks so auth_service gets mocked deps; we patch get_storage where it is used.
-from backend.services import auth_service  # noqa: E402
+from tests_backend.tests_services import auth_service  # noqa: E402
 
 
 @patch("backend.services.auth_service.get_storage")

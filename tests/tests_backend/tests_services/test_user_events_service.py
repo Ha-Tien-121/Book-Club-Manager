@@ -37,7 +37,7 @@ if "backend.services.events_service" not in sys.modules:
     _ev_mod.get_event_detail = MagicMock(return_value={})
     sys.modules["backend.services.events_service"] = _ev_mod
 
-from backend.services import user_events_service  # noqa: E402
+from tests_backend.tests_services import user_events_service  # noqa: E402
 
 
 @patch("backend.services.user_events_service.get_storage")

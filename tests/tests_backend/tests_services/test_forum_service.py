@@ -30,7 +30,7 @@ if "boto3" not in sys.modules:
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
 
-from backend.services import forum_service  # noqa: E402
+from tests_backend.tests_services import forum_service  # noqa: E402
 
 
 @patch("backend.services.forum_service.get_storage")

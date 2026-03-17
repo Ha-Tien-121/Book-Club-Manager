@@ -37,7 +37,7 @@ if "backend.services.recommender_service" not in sys.modules:
     _rec_mod.on_book_added_to_shelf = MagicMock()
     sys.modules["backend.services.recommender_service"] = _rec_mod
 
-from backend.services import library_service  # noqa: E402
+from tests_backend.tests_services import library_service  # noqa: E402
 
 
 def _make_rec(library=None, genre_preferences=None):
