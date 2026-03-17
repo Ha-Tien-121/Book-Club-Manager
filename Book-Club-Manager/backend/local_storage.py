@@ -68,6 +68,17 @@ class LocalStorage(_BaseLocalStorage):
         """Convert a SQLite books row into a JSON-ready dict."""
 
         def _loads_or_empty(val):
+            """Parse serialized SQLite JSON/text list values into list[str].
+
+            Args:
+                val: SQLite field value that may be JSON text, iterable, or scalar.
+
+            Returns:
+                list[str]: Parsed values, or an empty list when parsing fails/empty.
+
+            Exceptions:
+                None. JSON parsing failures are handled internally.
+            """
             if not val:
                 return []
             if isinstance(val, (list, tuple)):

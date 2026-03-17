@@ -35,6 +35,7 @@ from backend.services import library_service  # noqa: E402
 
 
 def _make_rec(library=None, genre_preferences=None):
+    "Helper for  make rec."
     lib = library or {"in_progress": [], "saved": [], "finished": []}
     rec = {"library": lib, "genre_preferences": genre_preferences or []}
     return rec
@@ -48,6 +49,7 @@ class TestAddBookToLibrary(unittest.TestCase):
     def test_adds_book_to_shelf_and_saves(
         self, mock_get_storage: MagicMock, mock_on_added: MagicMock
     ) -> None:
+        "Test adds book to shelf and saves."
         mock_on_added.reset_mock()
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
@@ -65,6 +67,7 @@ class TestAddBookToLibrary(unittest.TestCase):
     def test_invalid_shelf_raises(
         self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test invalid shelf raises."
         mock_get_storage.return_value = MagicMock()
         with self.assertRaises(ValueError) as ctx:
             library_service.add_book_to_library("u@x.com", "B1", "invalid")
@@ -73,6 +76,7 @@ class TestAddBookToLibrary(unittest.TestCase):
     def test_noop_when_book_already_only_on_shelf(
         self, mock_get_storage: MagicMock, mock_on_added: MagicMock
     ) -> None:
+        "Test noop when book already only on shelf."
         mock_on_added.reset_mock()
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
@@ -90,6 +94,7 @@ class TestAddBookToLibrary(unittest.TestCase):
     def test_merges_book_categories_into_preferences(
         self, mock_get_storage: MagicMock, mock_on_added: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test merges book categories into preferences."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         store.get_book_metadata.return_value = {"categories": ["Fantasy", "Adventure"]}
@@ -203,6 +208,7 @@ class TestRemoveBookFromLibrary(unittest.TestCase):
     def test_removes_book_from_all_shelves(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test removes book from all shelves."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -344,6 +350,7 @@ class TestGetUserLibrary(unittest.TestCase):
     """Tests for get_user_library."""
 
     def test_returns_library_shelves(self, mock_get_storage: MagicMock) -> None:
+        "Test returns library shelves."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["A"], "saved": ["B"], "finished": ["C"]}
@@ -359,6 +366,7 @@ class TestGetUserLibrary(unittest.TestCase):
     def test_returns_default_shelves_when_rec_empty(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test returns default shelves when rec empty."
         store = MagicMock()
         store.get_user_books.return_value = {}
         mock_get_storage.return_value = store
@@ -375,6 +383,7 @@ class TestGetShelfForBook(unittest.TestCase):
     """Tests for get_shelf_for_book."""
 
     def test_returns_shelf_when_found(self, mock_get_storage: MagicMock) -> None:
+        "Test returns shelf when found."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": [], "saved": ["B1"], "finished": []}
@@ -389,6 +398,7 @@ class TestGetShelfForBook(unittest.TestCase):
     def test_returns_none_when_not_in_library(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test returns none when not in library."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -398,12 +408,14 @@ class TestGetShelfForBook(unittest.TestCase):
     def test_returns_none_for_empty_user_id(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test returns none for empty user id."
         mock_get_storage.return_value = MagicMock()
         self.assertIsNone(library_service.get_shelf_for_book("", "B1"))
 
     def test_returns_none_for_empty_book_id(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test returns none for empty book id."
         mock_get_storage.return_value = MagicMock()
         self.assertIsNone(library_service.get_shelf_for_book("u@x.com", ""))
 
@@ -413,6 +425,7 @@ class TestIsBookInLibrary(unittest.TestCase):
     """Tests for is_book_in_library."""
 
     def test_returns_true_when_on_shelf(self, mock_get_storage: MagicMock) -> None:
+        "Test returns true when on shelf."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -424,6 +437,7 @@ class TestIsBookInLibrary(unittest.TestCase):
     def test_returns_false_when_not_in_library(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test returns false when not in library."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -439,6 +453,7 @@ class TestGetLibraryWithDetails(unittest.TestCase):
     def test_returns_shelves_with_book_details(
         self, mock_get_storage: MagicMock, mock_get_book_detail: MagicMock
     ) -> None:
+        "Test returns shelves with book details."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -455,6 +470,7 @@ class TestGetLibraryWithDetails(unittest.TestCase):
     def test_skips_books_with_no_detail(
         self, mock_get_storage: MagicMock, mock_get_book_detail: MagicMock
     ) -> None:
+        "Test skips books with no detail."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -470,6 +486,7 @@ class TestGetLibraryWithDetails(unittest.TestCase):
     def test_returns_empty_shelves_when_library_empty(
         self, mock_get_storage: MagicMock, mock_get_book_detail: MagicMock
     ) -> None:
+        "Test returns empty shelves when library empty."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -486,6 +503,7 @@ class TestGetUserPreferences(unittest.TestCase):
     """Tests for get_user_preferences."""
 
     def test_returns_genre_list(self, mock_get_storage: MagicMock) -> None:
+        "Test returns genre list."
         store = MagicMock()
         store.get_user_books.return_value = {
             "library": _make_rec()["library"],
@@ -504,6 +522,7 @@ class TestUpdateUserPreferences(unittest.TestCase):
     def test_overwrites_preferences_and_clears_genre_counts(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test overwrites preferences and clears genre counts."
         store = MagicMock()
         store.get_user_books.return_value = {
             "library": _make_rec()["library"],
@@ -523,6 +542,7 @@ class TestUpdateUserPreferences(unittest.TestCase):
     def test_empty_genres_clears_preferences(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test empty genres clears preferences."
         store = MagicMock()
         store.get_user_books.return_value = {
             "library": _make_rec()["library"],
@@ -538,6 +558,7 @@ class TestUpdateUserPreferences(unittest.TestCase):
     def test_none_genres_clears_preferences(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test none genres clears preferences."
         store = MagicMock()
         store.get_user_books.return_value = {
             "library": _make_rec()["library"],
@@ -556,6 +577,7 @@ class TestUpdateBookStatus(unittest.TestCase):
     """Tests for update_book_status."""
 
     def test_moves_book_to_shelf(self, mock_get_storage: MagicMock) -> None:
+        "Test moves book to shelf."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -569,6 +591,7 @@ class TestUpdateBookStatus(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_invalid_shelf_raises(self, mock_get_storage: MagicMock) -> None:
+        "Test invalid shelf raises."
         mock_get_storage.return_value = MagicMock()
         with self.assertRaises(ValueError) as ctx:
             library_service.update_book_status("u@x.com", "B1", "bad")
@@ -582,6 +605,7 @@ class TestRemoveBookFromShelf(unittest.TestCase):
     def test_removes_book_from_given_shelf(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test removes book from given shelf."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec(
             library={"in_progress": ["B1"], "saved": [], "finished": []}
@@ -597,6 +621,7 @@ class TestRemoveBookFromShelf(unittest.TestCase):
         store.save_user_books.assert_called_once()
 
     def test_invalid_shelf_raises(self, mock_get_storage: MagicMock) -> None:
+        "Test invalid shelf raises."
         mock_get_storage.return_value = MagicMock()
         with self.assertRaises(ValueError) as ctx:
             library_service.remove_book_from_shelf("u@x.com", "bad", "B1")
@@ -605,6 +630,7 @@ class TestRemoveBookFromShelf(unittest.TestCase):
     def test_empty_user_or_parent_asin_returns_record_without_save(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test empty user or parent asin returns record without save."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -616,6 +642,7 @@ class TestRemoveBookFromShelf(unittest.TestCase):
     def test_empty_parent_asin_returns_record_without_save(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test empty parent asin returns record without save."
         store = MagicMock()
         store.get_user_books.return_value = _make_rec()
         mock_get_storage.return_value = store
@@ -628,6 +655,7 @@ class TestRemoveBookFromShelf(unittest.TestCase):
     def test_removing_from_shelf_drops_genre_when_count_zero(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test removing from shelf drops genre when count zero."
         store = MagicMock()
         store.get_user_books.return_value = {
             "library": {"in_progress": ["B1"], "saved": [], "finished": []},

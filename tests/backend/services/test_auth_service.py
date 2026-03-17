@@ -44,6 +44,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_success_returns_sanitized_record(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock
     ) -> None:
+        "Test create user success returns sanitized record."
         store = MagicMock()
         store.get_user_account.return_value = {}
         store.get_user_books.return_value = {}
@@ -63,6 +64,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_normalizes_email_lowercase(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test create user normalizes email lowercase."
         store = MagicMock()
         store.get_user_account.return_value = {}
         store.get_user_books.return_value = {}
@@ -75,6 +77,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_empty_email_raises(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test create user empty email raises."
         mock_get_storage.return_value = MagicMock()
 
         with self.assertRaises(ValueError) as ctx:
@@ -84,6 +87,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_empty_password_raises(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test create user empty password raises."
         store = MagicMock()
         store.get_user_account.return_value = {}
         mock_get_storage.return_value = store
@@ -95,6 +99,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_email_taken_raises(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test create user email taken raises."
         store = MagicMock()
         store.get_user_account.return_value = {"user_id": "existing@example.com"}
         mock_get_storage.return_value = store
@@ -107,6 +112,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_skips_save_user_books_when_library_exists(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock
     ) -> None:
+        "Test create user skips save user books when library exists."
         store = MagicMock()
         store.get_user_account.return_value = {}
         store.get_user_books.return_value = {
@@ -123,6 +129,7 @@ class TestCreateUser(unittest.TestCase):
     def test_create_user_handles_get_user_books_non_dict(
         self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
+        "Test create user handles get user books non dict."
         store = MagicMock()
         store.get_user_account.return_value = {}
         store.get_user_books.return_value = None
@@ -140,6 +147,7 @@ class TestLoginUser(unittest.TestCase):
     def test_login_user_success_returns_sanitized_record(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login user success returns sanitized record."
         store = MagicMock()
         store.get_user_account.return_value = {
             "user_id": "alice@example.com",
@@ -157,6 +165,7 @@ class TestLoginUser(unittest.TestCase):
     def test_login_user_invalid_password_raises(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login user invalid password raises."
         store = MagicMock()
         store.get_user_account.return_value = {
             "user_id": "a@b.com",
@@ -172,6 +181,7 @@ class TestLoginUser(unittest.TestCase):
     def test_login_user_missing_user_raises(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login user missing user raises."
         store = MagicMock()
         store.get_user_account.return_value = {}
         mock_get_storage.return_value = store
@@ -183,6 +193,7 @@ class TestLoginUser(unittest.TestCase):
     def test_login_user_normalizes_email(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login user normalizes email."
         store = MagicMock()
         store.get_user_account.return_value = {
             "user_id": "alice@example.com",
@@ -202,6 +213,7 @@ class TestGetUser(unittest.TestCase):
     def test_get_user_found_returns_account(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test get user found returns account."
         store = MagicMock()
         store.get_user_account.return_value = {
             "user_id": "alice@example.com",
@@ -216,6 +228,7 @@ class TestGetUser(unittest.TestCase):
     def test_get_user_not_found_returns_empty_dict(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test get user not found returns empty dict."
         store = MagicMock()
         store.get_user_account.return_value = {}
         mock_get_storage.return_value = store
@@ -226,6 +239,7 @@ class TestGetUser(unittest.TestCase):
     def test_get_user_normalizes_user_id(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test get user normalizes user id."
         store = MagicMock()
         store.get_user_account.return_value = {}
         mock_get_storage.return_value = store
@@ -241,6 +255,7 @@ class TestCheckPasswordViaBcrypt(unittest.TestCase):
     def test_login_with_correct_password_succeeds(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login with correct password succeeds."
         store = MagicMock()
         password = "correct_password"
         store.get_user_account.return_value = {
@@ -258,6 +273,7 @@ class TestCheckPasswordViaBcrypt(unittest.TestCase):
     def test_login_with_wrong_password_raises(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test login with wrong password raises."
         store = MagicMock()
         store.get_user_account.return_value = {
             "user_id": "u@x.com",
@@ -272,12 +288,14 @@ class TestCheckPasswordViaBcrypt(unittest.TestCase):
     def test_check_password_none_hash_returns_false(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test check password none hash returns false."
         self.assertFalse(auth_service._check_password("anything", None))
 
     @patch("backend.services.auth_service.get_storage")
     def test_check_password_malformed_hash_returns_false(
         self, mock_get_storage: MagicMock
     ) -> None:
+        "Test check password malformed hash returns false."
         with patch("backend.services.auth_service.bcrypt") as m_bcrypt:
             m_bcrypt.checkpw.side_effect = ValueError("bad hash")
             self.assertFalse(auth_service._check_password("pass", "not-a-valid-hash"))
@@ -287,6 +305,7 @@ class TestHashPassword(unittest.TestCase):
     """Test _hash_password"""
 
     def test_hash_password_returns_non_empty_string(self) -> None:
+        "Test hash password returns non empty string."
         from backend.services.auth_service import _hash_password
 
         out = _hash_password("secret")
@@ -295,6 +314,7 @@ class TestHashPassword(unittest.TestCase):
         self.assertTrue(out.startswith("$2b$") or out.startswith("$2a$"))
 
     def test_hash_password_different_inputs_differ(self) -> None:
+        "Test hash password different inputs differ."
         a = auth_service._hash_password("a")
         b = auth_service._hash_password("b")
         self.assertNotEqual(a, b)

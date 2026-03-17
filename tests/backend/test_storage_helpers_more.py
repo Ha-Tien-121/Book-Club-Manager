@@ -6,11 +6,13 @@ from decimal import Decimal
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_from_dynamo_and_to_dynamo_recursive_conversions() -> None:
+    "Test from dynamo and to dynamo recursive conversions."
     storage = _import_storage()
 
     obj = {
@@ -29,6 +31,7 @@ def test_from_dynamo_and_to_dynamo_recursive_conversions() -> None:
 
 
 def test_forum_post_to_item_normalizes_keys_and_id() -> None:
+    "Test forum post to item normalizes keys and id."
     storage = _import_storage()
     item = storage._forum_post_to_item({"id": "7", "title": "T"}, pk="pk", sk="sk", pk_value="POST")
     assert item["id"] == 7
@@ -43,6 +46,7 @@ def test_forum_post_to_item_normalizes_keys_and_id() -> None:
 
 
 def test_cloud_storage_save_forum_db_writes_posts_and_logs_on_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test cloud storage save forum db writes posts and logs on error."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -54,6 +58,7 @@ def test_cloud_storage_save_forum_db_writes_posts_and_logs_on_error(monkeypatch)
     put_items: list[dict] = []
 
     def _put_item(*, Item: dict, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  put item."
         put_items.append(Item)
         return {}
 
@@ -66,6 +71,7 @@ def test_cloud_storage_save_forum_db_writes_posts_and_logs_on_error(monkeypatch)
 
     # Force exception path: put_item raises
     def _boom(*_a, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  boom."
         raise RuntimeError("boom")
 
     table.put_item = _boom  # type: ignore[assignment]
@@ -73,6 +79,7 @@ def test_cloud_storage_save_forum_db_writes_posts_and_logs_on_error(monkeypatch)
     warnings: list[str] = []
 
     def _warn(msg: str, *args: object, **_kw2: object) -> None:
+        "Helper for  warn."
         warnings.append(msg % args if args else msg)
 
     monkeypatch.setattr(storage.logging, "warning", _warn)
@@ -81,6 +88,7 @@ def test_cloud_storage_save_forum_db_writes_posts_and_logs_on_error(monkeypatch)
 
 
 def test_cloud_storage_get_books_metadata_batch_handles_bad_response(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test cloud storage get books metadata batch handles bad response."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -91,9 +99,11 @@ def test_cloud_storage_get_books_metadata_batch_handles_bad_response(monkeypatch
 
     class _Client:
         def __init__(self) -> None:
+            "Support __init__ for test doubles."
             self.calls = 0
 
         def batch_get_item(self, **_kw):  # type: ignore[no-untyped-def]
+            "Helper for batch get item."
             self.calls += 1
             if self.calls == 1:
                 return {"Responses": {"books": [{"parent_asin": "P1"}]}}

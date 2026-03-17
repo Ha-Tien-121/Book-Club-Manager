@@ -1,3 +1,9 @@
+"""Legacy recommendation service helpers.
+
+This module provides lightweight helper functions that wrap the book
+recommender and normalize user-signal stores into DataFrame inputs.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List

@@ -8,9 +8,11 @@ from typing import Any
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
@@ -18,6 +20,7 @@ class _FakeStreamlitRuntime:
     """Very small Streamlit stub for unit-testing page functions."""
 
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -30,13 +33,17 @@ class _FakeStreamlitRuntime:
 
     # ---- primitives ----
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     def set_page_config(self, **_kw: Any) -> None:
+        "Helper for set page config."
         return None
 
     def cache_data(self, **_kw: Any):
+        "Helper for cache data."
         def _decorator(fn):
+            "Helper for  decorator."
             fn.clear = lambda: None  # type: ignore[attr-defined]
             return fn
 
@@ -44,50 +51,65 @@ class _FakeStreamlitRuntime:
 
     # ---- layout / text ----
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for caption."
         return None
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def success(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for success."
         return None
 
     def error(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for error."
         return None
 
     # ---- inputs ----
     def button(self, label: str, **_kw: Any) -> bool:
+        "Helper for button."
         return bool(self._button_returns.get(label, False))
 
     def text_input(self, label: str, **_kw: Any) -> str:
+        "Helper for text input."
         return str(self._text_inputs.get(label, ""))
 
     def checkbox(self, label: str, **_kw: Any) -> bool:
+        "Helper for checkbox."
         return bool(self._checkbox_returns.get(label, False))
 
     def multiselect(self, *_a: Any, **_kw: Any) -> list[str]:
+        "Helper for multiselect."
         return []
 
     def columns(self, n: int, **_kw: Any):
+        "Helper for columns."
         return [_FakeCtx() for _ in range(int(n))]
 
     def form(self, _key: str):
+        "Helper for form."
         return _FakeCtx()
 
     def form_submit_button(self, label: str, **_kw: Any) -> bool:
+        "Helper for form submit button."
         return bool(self._form_submit_returns.get(label, False))
 
     def tabs(self, labels: list[str]):
+        "Helper for tabs."
         return [_FakeCtx() for _ in labels]
 
 
 def _install_fake_streamlit() -> _FakeStreamlit:
+    "Helper for  install fake streamlit."
     rt = _FakeStreamlitRuntime()
 
     st_mod = types.ModuleType("streamlit")
@@ -128,6 +150,7 @@ def _install_fake_streamlit() -> _FakeStreamlit:
 
 
 def test_init_session_sets_expected_defaults() -> None:
+    "Test init session sets expected defaults."
     fake_st = _install_fake_streamlit()
     mod = importlib.import_module("frontend.main")
     importlib.reload(mod)
@@ -139,6 +162,7 @@ def test_init_session_sets_expected_defaults() -> None:
 
 
 def test_handle_query_navigation_sets_detail_by_source_id_and_reruns() -> None:
+    "Test handle query navigation sets detail by source id and reruns."
     fake_st = _install_fake_streamlit()
     mod = importlib.import_module("frontend.main")
     importlib.reload(mod)
@@ -154,6 +178,7 @@ def test_handle_query_navigation_sets_detail_by_source_id_and_reruns() -> None:
 
 
 def test_auth_panel_signed_out_create_account_sets_flag_and_reruns() -> None:
+    "Test auth panel signed out create account sets flag and reruns."
     fake_st = _install_fake_streamlit()
     auth_mod = importlib.import_module("frontend.pages.auth")
     importlib.reload(auth_mod)
@@ -168,6 +193,7 @@ def test_auth_panel_signed_out_create_account_sets_flag_and_reruns() -> None:
 
 
 def test_render_pill_tags_no_tags_is_noop() -> None:
+    "Test render pill tags no tags is noop."
     _install_fake_streamlit()
     comp_mod = importlib.import_module("frontend.ui.components")
     importlib.reload(comp_mod)

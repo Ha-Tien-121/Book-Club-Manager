@@ -100,6 +100,7 @@ class RecommenderWeights:
 
 
 def _safe_json_loads(value: Any) -> Any:
+    """Best-effort JSON parse that preserves original values on failure."""
     if value is None:
         return None
     if isinstance(value, (list, dict)):
@@ -121,10 +122,12 @@ def _safe_json_loads(value: Any) -> Any:
 
 
 def _normalize_whitespace(s: str) -> str:
+    """Collapse internal whitespace and trim edges."""
     return " ".join(s.split())
 
 
 def _infer_column(df: pd.DataFrame, candidates: Sequence[str]) -> Optional[str]:
+    """Return the first matching dataframe column from candidate names."""
     lower_to_actual = {c.lower(): c for c in df.columns}
     for cand in candidates:
         if cand.lower() in lower_to_actual:
@@ -140,6 +143,7 @@ class ContentBasedBookRecommender:
         data_dir: Optional[Path] = None,
         weights: Optional[RecommenderWeights] = None,
     ) -> None:
+        """Initialize recommender paths, weights, and in-memory artifact holders."""
         self.data_dir = Path(data_dir) if data_dir is not None else PROCESSED_DIR
         self.weights = weights or RecommenderWeights()
 
@@ -294,6 +298,7 @@ class ContentBasedBookRecommender:
         self._rating_number_norm = None
 
         def _load_json(path: Path) -> list:
+            """Load a JSON list file; return empty list when missing/unusable."""
             if not path.exists():
                 return []
             with path.open("r", encoding="utf-8") as f:
@@ -301,6 +306,7 @@ class ContentBasedBookRecommender:
             return data if isinstance(data, list) else []
 
         def _normalize_cats(cats: Any) -> list:
+            """Normalize category payloads to a list of non-empty strings."""
             if cats is None:
                 return []
             parsed = _safe_json_loads(cats)
@@ -372,6 +378,7 @@ class ContentBasedBookRecommender:
 
     @staticmethod
     def _prepare_categories(raw: Any) -> str:
+        """Map raw categories text/list to a pipe-delimited controlled genre set."""
         parsed = _safe_json_loads(raw)
         values: List[str] = []
         if isinstance(parsed, list):
@@ -403,6 +410,7 @@ class ContentBasedBookRecommender:
         user_genres_df: Optional[pd.DataFrame],
         user_books_df: Optional[pd.DataFrame],
     ) -> bool:
+        """Return True when user has no usable genre prefs and no reading history."""
         has_genres = False
         if user_genres_df is not None and not user_genres_df.empty:
             uid_col = _infer_column(user_genres_df, ["user_id", "user", "uid"])
@@ -429,6 +437,7 @@ class ContentBasedBookRecommender:
     def _get_read_parent_asins(
         self, user_id: Any, user_books_df: Optional[pd.DataFrame]
     ) -> Set[str]:
+        """Extract read/saved parent ASINs for a specific user from an input frame."""
         if user_books_df is None or user_books_df.empty:
             return set()
 
@@ -445,6 +454,7 @@ class ContentBasedBookRecommender:
         return set(books_df[asin_col].dropna().astype(str).tolist())
 
     def _get_book_indices_for_asins(self, parent_asins: Iterable[str]) -> List[int]:
+        """Translate parent ASINs into fitted TF-IDF row indices."""
         if self.book_id_to_idx is None:
             raise RuntimeError("Call fit() before using the recommender.")
         indices: List[int] = []
@@ -460,6 +470,19 @@ class ContentBasedBookRecommender:
         user_genres_df: pd.DataFrame,
         user_books_df: pd.DataFrame,
     ) -> np.ndarray:
+        """Build a normalized user preference vector for recommendation scoring.
+
+        Args:
+            user_id: User identifier used to filter input frames.
+            user_genres_df: DataFrame of genre preferences/ranks.
+            user_books_df: DataFrame of user read/saved book ASINs.
+
+        Returns:
+            np.ndarray: Dense profile vector aligned with the TF-IDF feature space.
+
+        Exceptions:
+            RuntimeError: If recommender artifacts have not been fitted/loaded.
+        """
         if self.tfidf_vectorizer is None or self.book_tfidf is None:
             raise RuntimeError("Call fit() before building user profiles.")
 
@@ -544,6 +567,20 @@ class ContentBasedBookRecommender:
         user_books_df: Optional[pd.DataFrame] = None,
         top_k: int = 40,
     ) -> List[Dict[str, Any]]:
+        """Generate top-K recommendations for a user.
+
+        Args:
+            user_id: User identifier.
+            user_genres_df: Optional genre-preference rows for the user.
+            user_books_df: Optional user reading-history rows.
+            top_k: Number of recommendations to return.
+
+        Returns:
+            list[dict[str, Any]]: Ranked recommendation payloads.
+
+        Exceptions:
+            RuntimeError: If recommender artifacts are not loaded.
+        """
         if self.book_tfidf is None:
             raise RuntimeError("Call fit() before calling recommend().")
 
@@ -663,6 +700,20 @@ class ContentBasedBookRecommender:
         user_genres: Optional[List[Dict[str, Any]]],
         top_k: int = 40,
     ) -> List[Dict[str, Any]]:
+        """Convenience wrapper to recommend directly from user account payloads.
+
+        Args:
+            user_email: User identifier/email.
+            user_account: User account dict containing library shelves.
+            user_genres: Optional ordered genre preferences.
+            top_k: Number of recommendations to return.
+
+        Returns:
+            list[dict[str, Any]]: Ranked recommendation payloads.
+
+        Exceptions:
+            RuntimeError: Propagated if underlying recommend() is not initialized.
+        """
         library = user_account.get("library") or {}
         finished = library.get("finished") or []
         saved = library.get("saved") or []
@@ -706,6 +757,18 @@ class _FallbackBookRecommender:
         user_book_ids: List[str],
         top_k: int = 50,
     ) -> List[Dict[str, Any]]:
+        """Return popular fallback recommendations excluding already-owned books.
+
+        Args:
+            user_book_ids: Parent ASINs already in the user's library.
+            top_k: Number of books to return.
+
+        Returns:
+            list[dict[str, Any]]: Popular fallback books.
+
+        Exceptions:
+            None. Storage errors are handled by fallback list retrieval.
+        """
         from backend.storage import get_storage
 
         store = get_storage()
@@ -724,6 +787,20 @@ class _FallbackBookRecommender:
         user_genres: Optional[List[Dict[str, Any]]],
         top_k: int = 40,
     ) -> List[Dict[str, Any]]:
+        """Fallback wrapper using user library shelves as exclusion history.
+
+        Args:
+            user_email: User identifier/email (unused but kept for parity).
+            user_account: User account dict containing library shelves.
+            user_genres: Genre preferences (unused in fallback mode).
+            top_k: Number of books to return.
+
+        Returns:
+            list[dict[str, Any]]: Popular fallback books.
+
+        Exceptions:
+            None.
+        """
         library = user_account.get("library") or {}
         finished = library.get("finished") or []
         saved = library.get("saved") or []

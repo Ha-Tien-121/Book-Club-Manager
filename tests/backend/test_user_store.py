@@ -34,6 +34,7 @@ import backend.user_store as user_store  # noqa: E402
 
 
 def test_load_json_store_missing_file_returns_default(tmp_path: Path) -> None:
+    "Test load json store missing file returns default."
     default = {"x": 1}
     # Patch PROCESSED_DIR to our tmp dir so mkdir points there.
     with patch.object(user_store, "PROCESSED_DIR", tmp_path):
@@ -43,6 +44,7 @@ def test_load_json_store_missing_file_returns_default(tmp_path: Path) -> None:
 
 
 def test_load_json_store_invalid_json_returns_default(tmp_path: Path) -> None:
+    "Test load json store invalid json returns default."
     target = tmp_path / "store.json"
     target.write_text("{not: valid json}", encoding="utf-8")
     default = {"ok": True}
@@ -54,6 +56,7 @@ def test_load_json_store_invalid_json_returns_default(tmp_path: Path) -> None:
 
 
 def test_save_json_store_writes_pretty_json(tmp_path: Path) -> None:
+    "Test save json store writes pretty json."
     target = tmp_path / "store.json"
     data = {"a": 1}
 
@@ -65,6 +68,7 @@ def test_save_json_store_writes_pretty_json(tmp_path: Path) -> None:
 
 
 def test_ensure_user_account_schema_sets_defaults() -> None:
+    "Test ensure user account schema sets defaults."
     rec: Dict[str, Any] = {"email": "u@example.com"}
     out = user_store.ensure_user_account_schema(rec)
     assert out["user_id"] == "u@example.com"
@@ -73,6 +77,7 @@ def test_ensure_user_account_schema_sets_defaults() -> None:
 
 
 def test_ensure_user_books_schema_sets_library_and_genres() -> None:
+    "Test ensure user books schema sets library and genres."
     rec: Dict[str, Any] = {}
     out = user_store.ensure_user_books_schema(rec)
     assert "library" in out
@@ -81,12 +86,14 @@ def test_ensure_user_books_schema_sets_library_and_genres() -> None:
 
 
 def test_ensure_user_clubs_schema_sets_club_ids() -> None:
+    "Test ensure user clubs schema sets club ids."
     rec: Dict[str, Any] = {}
     out = user_store.ensure_user_clubs_schema(rec)
     assert out["club_ids"] == []
 
 
 def test_ensure_user_forum_schema_sets_forum_fields() -> None:
+    "Test ensure user forum schema sets forum fields."
     rec: Dict[str, Any] = {}
     out = user_store.ensure_user_forum_schema(rec)
     assert out["forum_posts"] == []
@@ -94,6 +101,7 @@ def test_ensure_user_forum_schema_sets_forum_fields() -> None:
 
 
 def test_migrate_legacy_user_accounts_returns_none_when_no_users() -> None:
+    "Test migrate legacy user accounts returns none when no users."
     data: Dict[str, Any] = {}
     assert user_store._migrate_legacy_user_accounts(data) is None
 
@@ -107,6 +115,7 @@ def test_migrate_legacy_user_accounts_returns_none_when_no_legacy_fields() -> No
 
 def test_migrate_legacy_user_accounts_splits_into_four_stores(tmp_path: Path) -> None:
     # Legacy structure with library/club_ids/forum_posts.
+    "Test migrate legacy user accounts splits into four stores."
     legacy = {
         "users": {
             "u@example.com": {
@@ -149,6 +158,7 @@ def test_migrate_legacy_user_accounts_splits_into_four_stores(tmp_path: Path) ->
 
 def test_load_user_store_uses_migrated_when_available(tmp_path: Path) -> None:
     # Start with legacy accounts in USER_ACCOUNTS_PATH.
+    "Test load user store uses migrated when available."
     legacy = {
         "users": {
             "u@example.com": {
@@ -200,6 +210,7 @@ def test_load_user_store_without_migration_normalizes_accounts_users(tmp_path: P
 
 
 def test_save_user_helpers_delegate_to_save_json_store(tmp_path: Path) -> None:
+    "Test save user helpers delegate to save json store."
     store = {
         "accounts": {"users": {}},
         "books": {},
@@ -226,6 +237,7 @@ def test_save_user_helpers_delegate_to_save_json_store(tmp_path: Path) -> None:
 
 
 def test_get_current_user_merges_multiple_stores_and_sets_defaults() -> None:
+    "Test get current user merges multiple stores and sets defaults."
     store = {
         "accounts": {
             "users": {
@@ -254,11 +266,13 @@ def test_get_current_user_merges_multiple_stores_and_sets_defaults() -> None:
 
 
 def test_get_current_user_returns_none_for_missing() -> None:
+    "Test get current user returns none for missing."
     store = {"accounts": {"users": {}}, "books": {}, "clubs": {}, "forum": {}}
     assert user_store.get_current_user(store, "missing@example.com") is None
 
 
 def test_create_user_populates_stores_and_calls_saves(tmp_path: Path) -> None:
+    "Test create user populates stores and calls saves."
     store: Dict[str, Any] = {
         "accounts": {"users": {}},
         "books": {},

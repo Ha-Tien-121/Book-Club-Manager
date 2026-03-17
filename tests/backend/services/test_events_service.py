@@ -48,6 +48,7 @@ class TestGetEventDetail(unittest.TestCase):
     """Tests for get_event_detail."""
 
     def test_returns_event_when_found(self, mock_get_storage: MagicMock) -> None:
+        "Test returns event when found."
         store = MagicMock()
         store.get_event_details.return_value = {
             "event_id": "ev1",
@@ -62,6 +63,7 @@ class TestGetEventDetail(unittest.TestCase):
         store.get_event_details.assert_called_once_with("ev1")
 
     def test_returns_empty_dict_when_not_found(self, mock_get_storage: MagicMock) -> None:
+        "Test returns empty dict when not found."
         store = MagicMock()
         store.get_event_details.return_value = None
         mock_get_storage.return_value = store
@@ -70,6 +72,7 @@ class TestGetEventDetail(unittest.TestCase):
         self.assertEqual(result, {})
 
     def test_strips_event_id(self, mock_get_storage: MagicMock) -> None:
+        "Test strips event id."
         store = MagicMock()
         store.get_event_details.return_value = {"event_id": "ev2"}
         mock_get_storage.return_value = store
@@ -83,6 +86,7 @@ class TestGetEventsByCity(unittest.TestCase):
     """Tests for get_events_by_city."""
 
     def test_returns_events_list(self, mock_get_storage: MagicMock) -> None:
+        "Test returns events list."
         store = MagicMock()
         store.get_events_by_city.return_value = [
             {"event_id": "e1", "city_state": "Seattle, WA"},
@@ -96,6 +100,7 @@ class TestGetEventsByCity(unittest.TestCase):
         store.get_events_by_city.assert_called_once_with("Seattle, WA")
 
     def test_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test returns empty list."
         store = MagicMock()
         store.get_events_by_city.return_value = []
         mock_get_storage.return_value = store
@@ -109,6 +114,7 @@ class TestGetExploreEvents(unittest.TestCase):
     """Tests for get_explore_events."""
 
     def test_returns_events_up_to_limit(self, mock_get_storage: MagicMock) -> None:
+        "Test returns events up to limit."
         store = MagicMock()
         store.get_soonest_events.return_value = [
             {"event_id": "a1"},
@@ -121,6 +127,7 @@ class TestGetExploreEvents(unittest.TestCase):
         store.get_soonest_events.assert_called_once_with(10)
 
     def test_uses_pool_size_when_limit_none(self, mock_get_storage: MagicMock) -> None:
+        "Test uses pool size when limit none."
         store = MagicMock()
         store.get_soonest_events.return_value = []
         mock_get_storage.return_value = store
@@ -130,6 +137,7 @@ class TestGetExploreEvents(unittest.TestCase):
         store.get_soonest_events.assert_called_once_with(EVENT_RECOMMENDATION_POOL_SIZE)
 
     def test_default_no_args_uses_pool_size(self, mock_get_storage: MagicMock) -> None:
+        "Test default no args uses pool size."
         store = MagicMock()
         store.get_soonest_events.return_value = []
         mock_get_storage.return_value = store

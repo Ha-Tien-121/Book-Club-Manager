@@ -152,6 +152,7 @@ def test_load_forum_store_normalizes_comment_fields(tmp_path: Path) -> None:
 
 
 def test_save_forum_store_writes_json(tmp_path: Path) -> None:
+    "Test save forum store writes json."
     forum_path = tmp_path / "forum.json"
     forum_store.FORUM_DB_PATH = forum_path  # type: ignore[attr-defined]
     forum_store.PROCESSED_DIR = tmp_path  # type: ignore[attr-defined]

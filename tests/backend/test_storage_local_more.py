@@ -6,11 +6,13 @@ from pathlib import Path
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_local_storage_user_recommendations_round_trip(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test local storage user recommendations round trip."
     storage = _import_storage()
     ls = storage.LocalStorage()
 
@@ -33,6 +35,7 @@ def test_local_storage_user_recommendations_round_trip(tmp_path, monkeypatch) ->
 
 
 def test_local_storage_top50_review_books_fallback_and_book_metadata(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test local storage top50 review books fallback and book metadata."
     storage = _import_storage()
     ls = storage.LocalStorage()
 
@@ -55,6 +58,7 @@ def test_local_storage_top50_review_books_fallback_and_book_metadata(tmp_path, m
 
 
 def test_local_storage_soonest_events_sorting_and_filters(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test local storage soonest events sorting and filters."
     storage = _import_storage()
     ls = storage.LocalStorage()
 
@@ -88,6 +92,7 @@ def test_local_storage_soonest_events_sorting_and_filters(tmp_path, monkeypatch)
 
 
 def test_local_storage_spl_top50_checkout_books_list_and_dict(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test local storage spl top50 checkout books list and dict."
     storage = _import_storage()
     ls = storage.LocalStorage()
 

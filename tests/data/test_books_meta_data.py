@@ -24,6 +24,7 @@ from data.scripts.amazon_books_data.books_meta_data import main
 
 
 def _make_temp_dir():
+    "Helper for  make temp dir."
     base = Path(__file__).resolve().parent / "_tmp"
     base.mkdir(exist_ok=True)
     temp_path = base / f"tmp_{uuid.uuid4().hex}"

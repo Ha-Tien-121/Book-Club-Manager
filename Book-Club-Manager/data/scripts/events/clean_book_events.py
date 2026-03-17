@@ -183,6 +183,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
     current_year = datetime.now().year
 
     def _parse_date_match(match_obj) -> datetime | None:
+        """Parse regex month/day/year groups into a datetime value."""
         if not match_obj:
             return None
         month = match_obj.group("month")
@@ -196,6 +197,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
         return None
 
     def _parse_date_token(token: str) -> datetime | None:
+        """Parse a free-form date token using known formats and regex fallback."""
         token = token.strip()
         if not token:
             return None
@@ -368,6 +370,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
         end_iso.append(end_dt_val.isoformat() if end_dt_val else "")
 
         def _fmt_12h(tval):
+            """Format a parsed time into compact 12-hour text."""
             if not tval:
                 return ""
             return tval.strftime("%I:%M %p").lstrip("0")
@@ -377,12 +380,15 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
 
     # Extract book title/author from title then description
     def _strip_emphasis(val: str) -> str:
+        """Remove markdown-like emphasis markers from text."""
         return re.sub(r"[*_`]+", "", val or "")
 
     def _clean_token(val: str) -> str:
+        """Trim token punctuation and surrounding whitespace."""
         return val.strip(" \t\r\n\"'`*_-–—.,;:").strip()
 
     def _is_valid(val: str, require_capital: bool = True) -> bool:
+        """Validate extracted title/author text using heuristic quality checks."""
         if not val:
             return False
         if "book club" in val.lower():
@@ -489,6 +495,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
         text = re.sub(r"\s+", " ", text)
 
         def _by_split(src: str) -> tuple[str, str]:
+            """Extract title/author from `... by ...` patterns."""
             matches = list(re.finditer(r"\sby\s", src, flags=re.IGNORECASE))
             if not matches:
                 return "", ""
@@ -511,6 +518,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
             return "", ""
 
         def _possessive(src: str) -> tuple[str, str]:
+            """Extract title/author from possessive patterns like `Author's Title`."""
             mpos = re.search(
                 r"([A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,3})['’]s\s+([^,:;\n]{2,160})",
                 src,
@@ -530,6 +538,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
             return "", ""
 
         def _quoted_by(src: str) -> tuple[str, str]:
+            """Extract title/author from quoted-title plus `by Author` patterns."""
             m = re.search(
                 r"[\"“”']\s*([^\"“”']{2,160}?)\s*[\"“”']\s+by\s+([A-Z][^\n]{1,80})",
                 src,
@@ -548,6 +557,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
             return "", ""
 
         def _loose_possessive(src: str) -> tuple[str, str]:
+            """Fallback extraction using the last permissive possessive match."""
             mpos_all = list(
                 re.finditer(
                     r"([A-Z][\w'.-]+(?:\s+[A-Z][\w'.-]+){0,4})['’]s\s+([^.!?;\n]{2,200})",
@@ -601,6 +611,7 @@ def clean_events(df: pd.DataFrame) -> pd.DataFrame:  # pylint: disable=too-many-
         text_lower = f"{title_text} {desc_text}".lower()
 
         def _term_hit(term: str, corpus: str) -> bool:
+            """Return True when a term appears as a whole word in corpus."""
             return bool(re.search(rf"\b{re.escape(term.lower())}\b", corpus))
 
         row_tags = []

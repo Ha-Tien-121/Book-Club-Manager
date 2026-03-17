@@ -58,6 +58,7 @@ def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
     # saving recommendations (and would make every recommender run feel stuck).
 
     def _genres_from_raw(raw) -> list[str]:
+        """Normalize genre/category values into a clean list of strings."""
         if raw is None:
             return []
         if isinstance(raw, list):

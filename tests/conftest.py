@@ -34,13 +34,16 @@ def _ensure_boto3_importable() -> None:
 
     class _Key:
         def __init__(self, name: str):
+            "Support __init__ for test doubles."
             self.name = name
 
         def eq(self, value: object) -> tuple[str, str, object]:
+            "Helper for eq."
             return ("eq", self.name, value)
 
     class _FakeTable:
         def __init__(self) -> None:
+            "Support __init__ for test doubles."
             self.get_item_calls: list[dict[str, object]] = []
             self.update_item_calls: list[dict[str, object]] = []
             self._next_get_item: dict[str, object] = {}
@@ -50,35 +53,43 @@ def _ensure_boto3_importable() -> None:
             self._name: str = "fake_table"
 
         def get_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for get item."
             self.get_item_calls.append(kwargs)
             if self.raise_on_get:
                 raise self.raise_on_get
             return dict(self._next_get_item)
 
         def update_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for update item."
             self.update_item_calls.append(kwargs)
             if self.raise_on_update:
                 raise self.raise_on_update
             return dict(self._next_update_item)
 
         def put_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for put item."
             return {}
 
         def scan(self, **kwargs: object) -> dict[str, object]:
+            "Helper for scan."
             return {"Items": []}
 
         def query(self, **kwargs: object) -> dict[str, object]:
+            "Helper for query."
             return {"Items": []}
 
         @property
         def name(self) -> str:
+            "Helper for name."
             return self._name
 
     class _FakeDynamo:
         def __init__(self) -> None:
+            "Support __init__ for test doubles."
             self.tables: dict[str, _FakeTable] = {}
 
         def Table(self, name: str) -> _FakeTable:
+            "Helper for Table."
             if name not in self.tables:
                 t = _FakeTable()
                 t._name = name
@@ -88,10 +99,12 @@ def _ensure_boto3_importable() -> None:
     _dynamo_singleton = _FakeDynamo()
 
     def resource(service_name: str, **_kw: object) -> object:
+        "Helper for resource."
         assert service_name == "dynamodb"
         return _dynamo_singleton
 
     def client(service_name: str, **_kw: object) -> object:
+        "Helper for client."
         return types.SimpleNamespace(batch_get_item=lambda **_kw2: {})
 
     boto3_mod.resource = resource  # type: ignore[attr-defined]
@@ -107,6 +120,7 @@ def _ensure_boto3_importable() -> None:
 
     class TypeDeserializer:
         def deserialize(self, value):  # type: ignore[no-untyped-def]
+            "Helper for deserialize."
             if not isinstance(value, dict) or len(value) != 1:
                 return value
             (t, v), = value.items()

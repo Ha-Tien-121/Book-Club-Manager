@@ -6,11 +6,13 @@ from decimal import Decimal
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_cloud_storage_load_user_store_assembles_accounts_books_clubs_forum() -> None:
+    "Test cloud storage load user store assembles accounts books clubs forum."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -42,6 +44,7 @@ def test_cloud_storage_load_user_store_assembles_accounts_books_clubs_forum() ->
 
 
 def test_cloud_storage_forum_post_get_update_and_thread_gsi() -> None:
+    "Test cloud storage forum post get update and thread gsi."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -61,6 +64,7 @@ def test_cloud_storage_forum_post_get_update_and_thread_gsi() -> None:
     captured: list[dict] = []
 
     def _put_item(*, Item: dict, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  put item."
         captured.append(Item)
         return {}
 
@@ -73,6 +77,7 @@ def test_cloud_storage_forum_post_get_update_and_thread_gsi() -> None:
     os.environ["FORUM_POSTS_GSI"] = "parent_asin_index"
 
     def _query(**_kw):  # type: ignore[no-untyped-def]
+        "Helper for  query."
         return {"Items": [{"pk": "POST", "sk": "1", "parent_asin": "P1"}]}
 
     table.query = _query  # type: ignore[assignment]
@@ -83,6 +88,7 @@ def test_cloud_storage_forum_post_get_update_and_thread_gsi() -> None:
 
 
 def test_cloud_storage_save_forum_db_writes_posts_and_counter_row() -> None:
+    "Test cloud storage save forum db writes posts and counter row."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -94,6 +100,7 @@ def test_cloud_storage_save_forum_db_writes_posts_and_counter_row() -> None:
     put_items: list[dict] = []
 
     def _put_item(*, Item: dict, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  put item."
         put_items.append(Item)
         return {}
 

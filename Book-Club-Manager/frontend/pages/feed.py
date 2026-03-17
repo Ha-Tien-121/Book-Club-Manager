@@ -568,6 +568,12 @@ def render_book_detail_page(
             select_key = f"book_lib_status_{library_book_id}"
 
             def _apply_library_status():
+                """Persist library status changes selected on the detail page.
+
+                Reads the current selectbox value from session state, writes the
+                corresponding shelf mutation through `library_service`, and updates
+                UI cache/session flags for a stable rerender.
+                """
                 new_status = st.session_state.get(select_key)
                 if new_status is None or current_user is None:
                     return

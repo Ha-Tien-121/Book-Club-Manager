@@ -7,19 +7,23 @@ import types
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 class _Body:
     def __init__(self, payload: str) -> None:
+        "Support __init__ for test doubles."
         self._payload = payload
 
     def read(self) -> bytes:  # matches boto3 StreamingBody API used in code
+        "Helper for read."
         return self._payload.encode("utf-8")
 
 
 def test_cloud_storage_top50_and_spl_s3_branches(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test cloud storage top50 and spl s3 branches."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -37,9 +41,11 @@ def test_cloud_storage_top50_and_spl_s3_branches(monkeypatch) -> None:  # type: 
 
     class _S3:
         def __init__(self, payload: str) -> None:
+            "Support __init__ for test doubles."
             self._payload = payload
 
         def get_object(self, **_kw):  # type: ignore[no-untyped-def]
+            "Helper for get object."
             return {"Body": _Body(self._payload)}
 
     boto3.client = lambda service_name, **_kw: _S3(json.dumps([{"parent_asin": "P1"}])) if service_name == "s3" else orig_client(service_name, **_kw)  # type: ignore[assignment]
@@ -65,6 +71,7 @@ def test_cloud_storage_top50_and_spl_s3_branches(monkeypatch) -> None:  # type: 
 
 
 def test_cloud_storage_events_gsi_queries_and_early_returns(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test cloud storage events gsi queries and early returns."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -87,6 +94,7 @@ def test_cloud_storage_events_gsi_queries_and_early_returns(monkeypatch) -> None
 
     def _query(**kwargs):  # type: ignore[no-untyped-def]
         # Ensure IndexName is passed through
+        "Helper for  query."
         assert "IndexName" in kwargs
         return {"Items": [{"event_id": "e1"}, {"event_id": "e2"}]}
 
@@ -97,6 +105,7 @@ def test_cloud_storage_events_gsi_queries_and_early_returns(monkeypatch) -> None
 
 
 def test_cloud_storage_save_user_books_store_mode_and_save_user_events_cleaning() -> None:
+    "Test cloud storage save user books store mode and save user events cleaning."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -110,10 +119,12 @@ def test_cloud_storage_save_user_books_store_mode_and_save_user_events_cleaning(
     put_events: list[dict] = []
 
     def _put_books(*, Item: dict, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  put books."
         put_books.append(Item)
         return {}
 
     def _put_events(*, Item: dict, **_kw):  # type: ignore[no-untyped-def]
+        "Helper for  put events."
         put_events.append(Item)
         return {}
 

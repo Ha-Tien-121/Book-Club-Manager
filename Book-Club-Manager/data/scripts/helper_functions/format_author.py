@@ -24,6 +24,7 @@ def format_author(authors):
     """
 
     def _format_single_author(author):
+        """Format one author string from mixed/raw forms to display form."""
         author = str(author)
         author = re.sub(r'\(.*?\)', '', str(author))
         parts = [" ".join(p.split()) for p in author.split(",")]

@@ -48,13 +48,16 @@ def _stub_boto3_for_recommender() -> None:
 
     class _Key:
         def __init__(self, name: str):
+            "Support __init__ for test doubles."
             self.name = name
 
         def eq(self, value: object) -> tuple[str, str, object]:
+            "Helper for eq."
             return ("eq", self.name, value)
 
     class _FakeTable:
         def __init__(self) -> None:
+            "Support __init__ for test doubles."
             self.get_item_calls: list[dict[str, object]] = []
             self.update_item_calls: list[dict[str, object]] = []
             self._next_get_item: dict[str, object] = {}
@@ -64,35 +67,43 @@ def _stub_boto3_for_recommender() -> None:
             self._name: str = "fake_table"
 
         def get_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for get item."
             self.get_item_calls.append(kwargs)
             if self.raise_on_get:
                 raise self.raise_on_get
             return dict(self._next_get_item)
 
         def update_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for update item."
             self.update_item_calls.append(kwargs)
             if self.raise_on_update:
                 raise self.raise_on_update
             return dict(self._next_update_item)
 
         def put_item(self, **kwargs: object) -> dict[str, object]:
+            "Helper for put item."
             return {}
 
         def scan(self, **kwargs: object) -> dict[str, object]:
+            "Helper for scan."
             return {"Items": []}
 
         def query(self, **kwargs: object) -> dict[str, object]:
+            "Helper for query."
             return {"Items": []}
 
         @property
         def name(self) -> str:
+            "Helper for name."
             return self._name
 
     class _FakeDynamo:
         def __init__(self) -> None:
+            "Support __init__ for test doubles."
             self.tables: dict[str, _FakeTable] = {}
 
         def Table(self, name: str) -> _FakeTable:
+            "Helper for Table."
             if name not in self.tables:
                 t = _FakeTable()
                 t._name = name
@@ -102,10 +113,12 @@ def _stub_boto3_for_recommender() -> None:
     _dynamo_singleton = _FakeDynamo()
 
     def resource(service_name: str, **_: object) -> object:
+        "Helper for resource."
         assert service_name == "dynamodb"
         return _dynamo_singleton
 
     def client(service_name: str, **_: object) -> object:
+        "Helper for client."
         return types.SimpleNamespace(batch_get_item=lambda **_kw: {})
 
     boto3_mod.resource = resource  # type: ignore[attr-defined]
@@ -130,6 +143,7 @@ rs = importlib.reload(rs)  # type: ignore[assignment]
 
 @patch("backend.services.recommender_service.get_storage")
 def test_build_user_recommender_inputs_extracts_books_and_genres(mock_get_storage: MagicMock) -> None:
+    "Test build user recommender inputs extracts books and genres."
     store = MagicMock()
     store.get_user_books.return_value = {
         "library": {
@@ -158,6 +172,7 @@ def test_get_book_recommendations_calls_recommender_with_user_id(
 ) -> None:
     # get_book_recommendations should normalize the user_id and forward it to
     # _run_book_recommender with the requested top_k.
+    "Test get book recommendations calls recommender with user id."
     mock_run.return_value = ([{"id": "r1"}], "content", "")
 
     out = rs.get_book_recommendations("User@Email.com", top_k=5)
@@ -171,6 +186,7 @@ def test_get_book_recommendations_calls_recommender_with_user_id(
 def test_get_event_recommendations_uses_genre_prefs_and_event_pool(
     mock_get_storage: MagicMock, mock_event_rec_cls: MagicMock
 ) -> None:
+    "Test get event recommendations uses genre prefs and event pool."
     store = MagicMock()
     store.get_user_books.return_value = {
         "library": {},
@@ -220,6 +236,7 @@ def test_get_event_recommendations_early_return_cases() -> None:
 
 
 def test_events_soonest_expiry_parses_ttl_and_expiry() -> None:
+    "Test events soonest expiry parses ttl and expiry."
     events = [
         {"ttl": "200"},
         {"expiry": 150},
@@ -232,6 +249,7 @@ def test_events_soonest_expiry_parses_ttl_and_expiry() -> None:
 
 @patch("backend.services.recommender_service.get_storage")
 def test_user_has_genre_preferences_reads_from_storage(mock_get_storage: MagicMock) -> None:
+    "Test user has genre preferences reads from storage."
     store = MagicMock()
     store.get_user_books.return_value = {"genre_preferences": ["Fantasy"]}
     mock_get_storage.return_value = store
@@ -242,6 +260,7 @@ def test_user_has_genre_preferences_reads_from_storage(mock_get_storage: MagicMo
 
 @patch("backend.services.recommender_service.get_storage")
 def test_get_recommended_books_for_user_anonymous_and_no_prefs(mock_get_storage: MagicMock) -> None:
+    "Test get recommended books for user anonymous and no prefs."
     store = MagicMock()
     store.get_top50_review_books.return_value = [{"id": i} for i in range(60)]
     # User with no genre prefs
@@ -265,6 +284,7 @@ def test_get_recommended_books_for_user_anonymous_and_no_prefs(mock_get_storage:
 def test_get_recommended_books_for_user_recomputes_when_missing(
     mock_get_storage: MagicMock, mock_get_book_recs: MagicMock
 ) -> None:
+    "Test get recommended books for user recomputes when missing."
     store = MagicMock()
     store.get_top50_review_books.return_value = [{"id": i} for i in range(60)]
     store.get_user_books.return_value = {"genre_preferences": ["Fantasy"]}
@@ -288,6 +308,7 @@ def test_get_recommended_books_for_user_recomputes_when_missing(
 def test_get_recommended_events_for_user_refreshes_on_expiry(
     mock_get_storage: MagicMock, mock_get_event_recs: MagicMock, mock_time: MagicMock  # noqa: ARG001
 ) -> None:
+    "Test get recommended events for user refreshes on expiry."
     store = MagicMock()
     store.get_user_books.return_value = {"genre_preferences": ["Fantasy"]}
     # Existing rec with expired events_soonest_expiry
@@ -328,6 +349,7 @@ def test_refresh_and_save_recommendations_writes_books_and_events(
     mock_get_books: MagicMock,
     mock_time: MagicMock,  # noqa: ARG001
 ) -> None:
+    "Test refresh and save recommendations writes books and events."
     store = MagicMock()
     store.get_user_recommendations.return_value = {}
     mock_get_storage.return_value = store
@@ -390,6 +412,7 @@ def test_refresh_and_save_recommendations_writes_books_and_events(
 
 @patch("backend.services.recommender_service.get_storage")
 def test_ensure_default_recommendations_seeds_when_no_prefs_or_existing(mock_get_storage: MagicMock) -> None:
+    "Test ensure default recommendations seeds when no prefs or existing."
     store = MagicMock()
     # No genre prefs
     store.get_user_books.return_value = {"genre_preferences": []}
@@ -433,6 +456,7 @@ def test_ensure_default_recommendations_seeds_when_no_prefs_or_existing(mock_get
 
 @patch("backend.services.recommender_service.get_storage")
 def test_on_book_added_to_shelf_increments_and_triggers_recompute(mock_get_storage: MagicMock) -> None:
+    "Test on book added to shelf increments and triggers recompute."
     store = MagicMock()
     # Start below threshold; recompute should occur when threshold is reached.
     store.get_user_recommendations.return_value = {

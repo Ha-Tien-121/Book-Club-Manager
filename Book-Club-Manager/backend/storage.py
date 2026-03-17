@@ -304,6 +304,11 @@ def get_storage():
 
 
 def _default_books_record():
+    """Build a default user-books payload.
+
+    Returns:
+        dict: User books record with empty shelves and no genre preferences.
+    """
     return {"library": {"in_progress": [], "saved": [], "finished": []}, "genre_preferences": []}
 
 
@@ -356,6 +361,19 @@ class LocalStorage:
         return _load()
 
     def save_user_books(self, user_id_or_store, rec=None):
+        """Persist user books to local JSON storage.
+
+        Args:
+            user_id_or_store: Either a user ID (when `rec` is provided) or a full
+                store dict containing `books`.
+            rec: Optional per-user books record to save.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Downstream write failures are handled in user_store helpers.
+        """
         if rec is not None:
             store = self.load_user_store()
             store.setdefault("books", {})[str(user_id_or_store).strip().lower()] = rec
@@ -366,32 +384,99 @@ class LocalStorage:
             _save(user_id_or_store)
 
     def save_user_clubs(self, store):
+        """Persist all users' saved clubs from a combined store.
+
+        Args:
+            store: Combined store dict containing a `clubs` mapping.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Downstream write failures are handled in user_store helpers.
+        """
         from backend.user_store import save_user_clubs as _save
         _save(store)
 
     def save_user_forum(self, store):
+        """Persist all users' forum metadata from a combined store.
+
+        Args:
+            store: Combined store dict containing a `forum` mapping.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Downstream write failures are handled in user_store helpers.
+        """
         from backend.user_store import save_user_forum as _save
         _save(store)
 
     def get_user_account(self, user_id):
+        """Fetch a local user account by ID/email.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+
+        Returns:
+            dict | None: Account record when found; otherwise None.
+
+        Exceptions:
+            None.
+        """
         if not user_id:
             return None
         store = self.load_user_store()
         return ((store.get("accounts") or {}).get("users") or {}).get(str(user_id).strip().lower())
 
     def get_user_books(self, user_id):
+        """Fetch local user books/preferences, returning defaults when missing.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+
+        Returns:
+            dict | None: User books record, default record if absent, or None for
+            empty user IDs.
+
+        Exceptions:
+            None.
+        """
         if not user_id:
             return None
         store = self.load_user_store()
         return (store.get("books") or {}).get(str(user_id).strip().lower()) or _default_books_record()
 
     def save_user_account(self, record):
+        """Save a single local user account record.
+
+        Args:
+            record: Account payload containing at least user identifier fields.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Downstream write failures are handled in user_store helpers.
+        """
         store = self.load_user_store()
         store.setdefault("accounts", {}).setdefault("users", {})[record.get("user_id") or record.get("email", "").strip().lower()] = record
         from backend.user_store import save_user_accounts
         save_user_accounts(store)
 
     def get_user_events(self, user_id):
+        """Fetch saved event IDs for a local user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+
+        Returns:
+            dict | None: `{\"events\": [...]}` payload or None for empty user IDs.
+
+        Exceptions:
+            None.
+        """
         if not user_id:
             return None
         store = self.load_user_store()
@@ -399,6 +484,18 @@ class LocalStorage:
         return {"events": clubs.get("club_ids", [])}
 
     def save_user_events(self, user_id, data):
+        """Persist saved event IDs for a local user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+            data: Mapping that may contain an `events` list.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Invalid values are normalized/skipped.
+        """
         if not user_id:
             return
         store = self.load_user_store()
@@ -417,12 +514,35 @@ class LocalStorage:
         _save(store)
 
     def get_user_forums(self, user_id):
+        """Fetch local forum metadata for a user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+
+        Returns:
+            dict | None: User forum metadata or None for empty user IDs.
+
+        Exceptions:
+            None.
+        """
         if not user_id:
             return None
         store = self.load_user_store()
         return (store.get("forum") or {}).get(str(user_id).strip().lower()) or {}
 
     def save_user_forums(self, user_id, data):
+        """Persist local forum metadata for a user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+            data: Forum metadata payload to store.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Downstream write failures are handled in user_store helpers.
+        """
         if not user_id:
             return
         store = self.load_user_store()
@@ -431,16 +551,46 @@ class LocalStorage:
         _save(store)
 
     def load_forum_db(self):
+        """Load the forum database payload from local storage.
+
+        Returns:
+            dict: Forum database with `posts` and `next_post_id`.
+
+        Exceptions:
+            None. Store helpers provide safe defaults.
+        """
         from backend.forum_store import load_forum_store
         return load_forum_store([])
 
     def save_forum_db(self, db):
+        """Persist the forum database payload to local storage.
+
+        Args:
+            db: Forum database dict to persist.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Empty payloads are ignored.
+        """
         if not db:
             return
         from backend.forum_store import save_forum_store
         save_forum_store(db)
 
     def get_user_recommendations(self, user_id):
+        """Fetch locally cached recommendations for one user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+
+        Returns:
+            dict | None: Cached recommendation payload if available.
+
+        Exceptions:
+            None. Read/parse errors return None.
+        """
         if not user_id:
             return None
         from backend import config
@@ -464,6 +614,18 @@ class LocalStorage:
             return None
 
     def save_user_recommendations(self, user_id, rec):
+        """Persist locally cached recommendations for one user.
+
+        Args:
+            user_id: User identifier (typically normalized email).
+            rec: Recommendation payload to write.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Write/parse errors are swallowed to keep UI resilient.
+        """
         if not user_id:
             return
         from backend import config
@@ -493,6 +655,17 @@ class LocalStorage:
             return
 
     def get_soonest_events(self, limit=10):
+        """Return soonest local events sorted by ttl/expiry.
+
+        Args:
+            limit: Maximum number of events to return.
+
+        Returns:
+            list: Sorted event dicts (possibly empty).
+
+        Exceptions:
+            None. Invalid/missing data files return an empty list.
+        """
         from backend import config
 
         path = getattr(config, "PROCESSED_DIR", None) / "book_events_clean.json"
@@ -507,6 +680,17 @@ class LocalStorage:
         return items[: max(0, int(limit))]
 
     def get_book_metadata(self, parent_asin):
+        """Resolve local book metadata by parent ASIN/source ID.
+
+        Args:
+            parent_asin: Parent ASIN (or source ID) to look up.
+
+        Returns:
+            dict | None: Matching metadata payload when found.
+
+        Exceptions:
+            None.
+        """
         # Local metadata comes from the curated review list(s).
         pid = str(parent_asin or "").strip()
         if not pid:
@@ -522,6 +706,17 @@ class LocalStorage:
         return None
 
     def get_books_metadata_batch(self, parent_asins: list[str]) -> dict[str, dict]:
+        """Resolve local metadata for many parent ASINs.
+
+        Args:
+            parent_asins: Parent ASIN list to fetch.
+
+        Returns:
+            dict[str, dict]: Mapping of parent ASIN to metadata payload.
+
+        Exceptions:
+            None.
+        """
         ids = [str(x).strip() for x in (parent_asins or []) if str(x).strip()]
         if not ids:
             return {}
@@ -542,10 +737,32 @@ class LocalStorage:
         return out
 
     def get_book_details(self, parent_asin):
+        """Resolve local book details by delegating to metadata lookup.
+
+        Args:
+            parent_asin: Parent ASIN (or source ID) to look up.
+
+        Returns:
+            dict | None: Matching metadata/details payload.
+
+        Exceptions:
+            None.
+        """
         # Local details are limited; return metadata (no S3/parquet reads).
         return self.get_book_metadata(parent_asin)
 
     def get_event_details(self, event_id):
+        """Resolve one local event by event ID.
+
+        Args:
+            event_id: Event identifier.
+
+        Returns:
+            dict | None: Matching event payload when found.
+
+        Exceptions:
+            None.
+        """
         eid = str(event_id or "").strip()
         if not eid:
             return None
@@ -555,6 +772,17 @@ class LocalStorage:
         return None
 
     def get_events_by_city(self, city_state):
+        """Filter local events by exact `city_state`.
+
+        Args:
+            city_state: City/state string to match.
+
+        Returns:
+            list: Matching event payloads.
+
+        Exceptions:
+            None.
+        """
         city_state = str(city_state or "").strip()
         if not city_state:
             return []
@@ -566,12 +794,44 @@ class LocalStorage:
         return events
 
     def get_forum_post(self, post_id):
+        """Return one forum post by ID in local mode.
+
+        Args:
+            post_id: Forum post identifier.
+
+        Returns:
+            None: Local mode currently does not implement this lookup.
+
+        Exceptions:
+            None.
+        """
         return None
 
     def update_forum_post(self, post_id, post):
+        """Update one forum post in local mode.
+
+        Args:
+            post_id: Forum post identifier.
+            post: Updated post payload.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. This local placeholder is currently a no-op.
+        """
         pass
 
     def get_spl_top50_checkout_books(self):
+        """Load locally cached SPL top-checkout books.
+
+        Returns:
+            list: Book metadata list from `spl_top50_checkouts_in_books.json`
+            (or equivalent dict wrapper).
+
+        Exceptions:
+            None. Missing/invalid files return an empty list.
+        """
         from backend import config
 
         path = getattr(config, "PROCESSED_DIR", None) / "spl_top50_checkouts_in_books.json"
@@ -585,12 +845,46 @@ class LocalStorage:
         return []
 
     def get_forum_thread_for_book(self, parent_asin):
+        """Return forum posts linked to a book in local mode.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+
+        Returns:
+            list: Empty list (not implemented in local mode).
+
+        Exceptions:
+            None.
+        """
         return []
 
     def get_forum_thread(self, parent_asin):
+        """Return forum thread wrapper for a book in local mode.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+
+        Returns:
+            dict | None: None (not implemented in local mode).
+
+        Exceptions:
+            None.
+        """
         return None
 
     def get_events_for_book(self, parent_asin, limit=10):
+        """Return local events associated with a specific book.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+            limit: Maximum number of events to return.
+
+        Returns:
+            list: Matching event payloads, truncated to `limit`.
+
+        Exceptions:
+            None.
+        """
         pid = str(parent_asin or "").strip()
         if not pid:
             return []
@@ -606,14 +900,42 @@ class CloudStorage:
     """AWS-backed storage (S3, DynamoDB). Use APP_ENV=aws to develop against AWS."""
 
     def _dynamo(self):
+        """Create a DynamoDB resource client pinned to configured region.
+
+        Returns:
+            boto3.resources.base.ServiceResource: DynamoDB resource handle.
+
+        Exceptions:
+            boto3/botocore exceptions may be raised by client initialization.
+        """
         # Always pin region so local dev doesn't depend on AWS CLI default region.
         return boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
 
     def _s3(self):
+        """Create an S3 client pinned to configured region.
+
+        Returns:
+            botocore.client.BaseClient: S3 client handle.
+
+        Exceptions:
+            boto3/botocore exceptions may be raised by client initialization.
+        """
         # Always pin region (bucket is regional and credentials may have default region elsewhere).
         return boto3.client("s3", region_name=getattr(_config, "AWS_REGION", None))
 
     def _table(self, config_attr: str, env_fallback: str):
+        """Resolve and return a DynamoDB table object.
+
+        Args:
+            config_attr: Config attribute name containing the table name.
+            env_fallback: Fallback table name when config/env is unset.
+
+        Returns:
+            boto3.resources.factory.dynamodb.Table: DynamoDB table resource.
+
+        Exceptions:
+            boto3/botocore exceptions may be raised when creating the table handle.
+        """
         from backend import config
         name = getattr(config, config_attr, None) or os.getenv(config_attr, env_fallback)
         return self._dynamo().Table(name)
@@ -759,6 +1081,17 @@ class CloudStorage:
                 self.save_user_forums(str(uid).strip().lower(), data)
 
     def get_user_recommendations(self, user_id: str) -> Optional[dict]:
+        """Fetch a user's recommendation payload from DynamoDB.
+
+        Args:
+            user_id: User email/ID key used in `user_recommendations`.
+
+        Returns:
+            dict | None: Recommendation payload or None when missing/error.
+
+        Exceptions:
+            None. Errors are logged and converted to None.
+        """
         if not user_id:
             return None
         user_id = str(user_id).strip().lower()
@@ -772,6 +1105,18 @@ class CloudStorage:
             return None
 
     def save_user_recommendations(self, user_id: str, rec: dict) -> None:
+        """Persist a user's recommendation payload to DynamoDB.
+
+        Args:
+            user_id: User email/ID key used in `user_recommendations`.
+            rec: Recommendation payload to store.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Errors are logged and swallowed.
+        """
         if not user_id:
             return
         user_id = str(user_id).strip().lower()
@@ -813,7 +1158,19 @@ class CloudStorage:
         except Exception:
             return []
 
-    def get_book_metadata(self, parent_asin: str): return get_book_metadata(parent_asin)
+    def get_book_metadata(self, parent_asin: str):
+        """Fetch book metadata from the shared DynamoDB metadata helper.
+
+        Args:
+            parent_asin: Parent ASIN to look up.
+
+        Returns:
+            dict | None: Book metadata record when found.
+
+        Exceptions:
+            None. The delegated helper returns None on failures.
+        """
+        return get_book_metadata(parent_asin)
     def get_books_metadata_batch(self, parent_asins: list[str]) -> dict[str, dict]:
         """Batch fetch book metadata from DynamoDB by parent_asin.
 
@@ -850,6 +1207,7 @@ class CloudStorage:
                     deser = TypeDeserializer()
 
                     def _decode_item(it: dict) -> dict:
+                        """Decode one DynamoDB wire-format item to plain Python values."""
                         return {k: deser.deserialize(v) for k, v in it.items()}
 
                     decoded = [_decode_item(it) for it in items]
@@ -866,8 +1224,33 @@ class CloudStorage:
         except Exception as e:
             logging.warning("get_books_metadata_batch failed: %s", e)
         return out
-    def get_book_details(self, parent_asin: str): return get_book_details(parent_asin)
-    def get_event_details(self, event_id: str): return get_event_details(event_id)
+    def get_book_details(self, parent_asin: str):
+        """Fetch detailed book data from shared detail helper.
+
+        Args:
+            parent_asin: Parent ASIN to look up.
+
+        Returns:
+            dict | None: Book detail payload when found.
+
+        Exceptions:
+            RuntimeError: Propagated when required S3 configuration is missing.
+        """
+        return get_book_details(parent_asin)
+
+    def get_event_details(self, event_id: str):
+        """Fetch one event record by ID from shared helper.
+
+        Args:
+            event_id: Event identifier.
+
+        Returns:
+            dict | None: Event payload when found.
+
+        Exceptions:
+            None. The delegated helper returns None on failures.
+        """
+        return get_event_details(event_id)
 
     def get_events_by_city(self, city_state: str) -> list:
         """Query events by city_state using EVENTS_CITY_STATE_GSI if set."""
@@ -887,6 +1270,17 @@ class CloudStorage:
             return []
 
     def get_user_account(self, user_id: str) -> Optional[dict]:
+        """Fetch one user account record from DynamoDB.
+
+        Args:
+            user_id: User identifier/email matching configured account PK.
+
+        Returns:
+            dict | None: Account record when found.
+
+        Exceptions:
+            None. Errors return None.
+        """
         if not user_id:
             return None
         user_id = str(user_id).strip().lower()
@@ -900,6 +1294,17 @@ class CloudStorage:
             return None
 
     def save_user_account(self, record: dict) -> None:
+        """Persist one user account record to DynamoDB.
+
+        Args:
+            record: Account payload to store.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Errors are swallowed to keep writes non-fatal.
+        """
         if not record:
             return
         try:
@@ -914,6 +1319,17 @@ class CloudStorage:
             pass
 
     def get_user_events(self, user_id: str) -> Optional[dict]:
+        """Fetch saved events payload for one user from DynamoDB.
+
+        Args:
+            user_id: User identifier/email matching configured events PK.
+
+        Returns:
+            dict | None: Event payload when found.
+
+        Exceptions:
+            None. Errors return None.
+        """
         if not user_id:
             return None
         user_id = str(user_id).strip().lower()
@@ -927,6 +1343,18 @@ class CloudStorage:
             return None
 
     def save_user_events(self, user_id: str, data: dict) -> None:
+        """Persist saved events payload for one user to DynamoDB.
+
+        Args:
+            user_id: User identifier/email matching configured events PK.
+            data: Payload that may include an `events` collection.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Errors are logged and swallowed.
+        """
         if not user_id:
             return
         user_id = str(user_id).strip().lower()
@@ -1015,6 +1443,17 @@ class CloudStorage:
             logging.warning("save_forum_db failed: %s", e)
 
     def get_forum_post(self, post_id) -> Optional[dict]:
+        """Fetch one forum post from DynamoDB by post ID.
+
+        Args:
+            post_id: Post identifier convertible to int.
+
+        Returns:
+            dict | None: Forum post payload when found.
+
+        Exceptions:
+            None. Errors return None.
+        """
         try:
             pk = getattr(_config, "FORUM_POSTS_PK", "pk")
             sk = getattr(_config, "FORUM_POSTS_SK", "sk")
@@ -1031,6 +1470,18 @@ class CloudStorage:
             return None
 
     def update_forum_post(self, post_id, post: dict) -> None:
+        """Upsert one forum post in DynamoDB.
+
+        Args:
+            post_id: Post identifier convertible to int.
+            post: Post payload to persist.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Errors are logged and swallowed.
+        """
         try:
             pk = getattr(_config, "FORUM_POSTS_PK", "pk")
             sk = getattr(_config, "FORUM_POSTS_SK", "sk")
@@ -1045,6 +1496,17 @@ class CloudStorage:
             logging.warning("update_forum_post failed: %s", e)
 
     def get_user_forums(self, user_id: str) -> Optional[dict]:
+        """Fetch user forum metadata from DynamoDB.
+
+        Args:
+            user_id: User identifier/email.
+
+        Returns:
+            dict | None: User forum metadata when found.
+
+        Exceptions:
+            None. Errors return None.
+        """
         if not user_id:
             return None
         user_id = str(user_id).strip().lower()
@@ -1057,6 +1519,18 @@ class CloudStorage:
             return None
 
     def save_user_forums(self, user_id: str, data: dict) -> None:
+        """Persist user forum metadata to DynamoDB.
+
+        Args:
+            user_id: User identifier/email.
+            data: Forum metadata payload to store.
+
+        Returns:
+            None.
+
+        Exceptions:
+            None. Errors are swallowed.
+        """
         if not user_id:
             return
         user_id = str(user_id).strip().lower()
@@ -1082,6 +1556,17 @@ class CloudStorage:
         return data if isinstance(data, list) else data.get("books", data.get("items", []))
 
     def get_forum_thread_for_book(self, parent_asin: str) -> list:
+        """Fetch forum posts for a given book using the configured GSI.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+
+        Returns:
+            list: Matching forum post payloads (possibly empty).
+
+        Exceptions:
+            None. Missing GSI/errors return an empty list.
+        """
         gsi = getattr(_config, "FORUM_POSTS_GSI", None) or os.getenv("FORUM_POSTS_GSI", "").strip() or None
         if not gsi:
             return []
@@ -1097,10 +1582,33 @@ class CloudStorage:
             return []
 
     def get_forum_thread(self, parent_asin: str) -> Optional[dict]:
+        """Fetch a forum thread wrapper for one book.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+
+        Returns:
+            dict | None: `{\"posts\": [...]}` when posts exist, otherwise None.
+
+        Exceptions:
+            None.
+        """
         posts = self.get_forum_thread_for_book(parent_asin)
         return {"posts": posts} if posts else None
 
     def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list:
+        """Fetch upcoming events related to a book via events GSI.
+
+        Args:
+            parent_asin: Parent ASIN identifier.
+            limit: Maximum number of events to return.
+
+        Returns:
+            list: Matching event payloads (possibly empty).
+
+        Exceptions:
+            None. Missing GSI/errors return an empty list.
+        """
         gsi = getattr(_config, "EVENTS_PARENT_ASIN_GSI", None) or os.getenv("EVENTS_PARENT_ASIN_GSI", "").strip() or None
         if not gsi:
             return []

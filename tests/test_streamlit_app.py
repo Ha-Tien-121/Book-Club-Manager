@@ -29,6 +29,7 @@ class StreamlitAppTest(unittest.TestCase):
     timeout = 10
 
     def setUp(self) -> None:
+        "Helper for setUp."
         self.at = self._run_app()
 
     def _run_app(self, *, session_state: Optional[Dict[str, Any]] = None):
@@ -191,6 +192,7 @@ class StreamlitAppExploreEventsTest(unittest.TestCase):
     """Tests for Explore Events tab (tab label and presence)."""
 
     def setUp(self) -> None:
+        "Helper for setUp."
         self.at = AppTest.from_file(_app_path()).run(timeout=10)
 
     def test_explore_events_tab_label(self) -> None:
@@ -203,6 +205,7 @@ class StreamlitAppForumTest(unittest.TestCase):
     """Tests for Forum tab (tab label and presence)."""
 
     def setUp(self) -> None:
+        "Helper for setUp."
         self.at = AppTest.from_file(_app_path()).run(timeout=10)
 
     def test_forum_tab_label(self) -> None:
