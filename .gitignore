@@ -184,9 +184,8 @@ cython_debug/
 # Visual Studio Code
 #  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+#  and can be added to the global gitignore or merged into this file.
+.vscode/
 
 # Ruff stuff:
 .ruff_cache/
@@ -209,10 +208,24 @@ __marimo__/
 # macOS Finder metadata
 .DS_Store
 
-# Local app user accounts/state
-data/processed/user_accounts.json
-data/processed/forum_posts.json
+# Local app user accounts/state (inner project)
+Book-Club-Manager/data/processed/user_accounts.json
+Book-Club-Manager/data/processed/user_books.json
+Book-Club-Manager/data/processed/user_clubs.json
+Book-Club-Manager/data/processed/user_forum.json
+Book-Club-Manager/data/processed/user_recommendations.json
+Book-Club-Manager/data/processed/forum_posts.json
 
-# Generated parquet shard outputs
-data/shards/parent_asin/
-data/shards/test_parent_asin/
+# Generated parquet shard outputs (inner project)
+Book-Club-Manager/data/shards/parent_asin/
+Book-Club-Manager/data/shards/test_parent_asin/
+
+# Large generated datasets (do not commit) – inner project
+Book-Club-Manager/data/processed/books.db
+Book-Club-Manager/data/processed/*.npz
+Book-Club-Manager/data/processed/book_id_to_idx.json
+Book-Club-Manager/data/raw/
+
+# Streamlit local config (inner project)
+Book-Club-Manager/.streamlit/
+.pylint.d/

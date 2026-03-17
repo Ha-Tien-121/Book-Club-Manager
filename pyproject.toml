@@ -28,9 +28,10 @@ classifiers = [
 ]
 dependencies = []
 
-# to package whole repo set find = {}
-[tool.setuptools]
-packages = { find = { where = ["data/scripts"] } }
+# Discover Python packages from the inner project root.
+[tool.setuptools.packages.find]
+where = ["Book-Club-Manager"]
+include = ["*"]
 
 # Where can someone find out more about your project?
 [project.urls]

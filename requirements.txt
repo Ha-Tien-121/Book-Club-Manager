@@ -1,16 +1,20 @@
 # Project dependencies
-# Last updated: 2026-03-09
+# Last updated: 2026-03-15
 
+streamlit>=1.30.0
 boto3
 joblib
 pandas
+pyarrow>=18.0.0,<19.0.0  
 numpy
 scipy
 scikit-learn
 requests
 python-dotenv
+bcrypt
 isbnlib
 sodapy
+scikit-learn==1.8.0
 
 # Development tools
 pylint==4.0.4
