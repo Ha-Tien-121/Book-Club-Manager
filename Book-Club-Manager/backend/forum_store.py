@@ -57,4 +57,3 @@ def save_forum_store(store: dict) -> None:
     """Persist forum posts/comments store to disk."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     FORUM_DB_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
-

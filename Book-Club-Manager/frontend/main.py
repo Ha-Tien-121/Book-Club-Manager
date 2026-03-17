@@ -7,7 +7,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from backend import config
-from backend.data_loader import books_to_ui_shape, build_ui_bootstrap, load_data
+from backend.data_loader import books_to_ui_shape, build_ui_bootstrap
 from backend.services import books_service, events_service
 from backend.services.recommender_service import (
     get_recommended_books_for_user,
@@ -56,7 +56,7 @@ def _cached_aws_bootstrap():
             if aid and aid not in seen:
                 seen.add(aid)
                 raw_books.append(b)
-    except Exception:
+    except (ValueError, TypeError):
         pass
     events = events_service.get_explore_events(36) or []
     storage = get_storage()
@@ -120,7 +120,6 @@ def handle_query_navigation(
     """Handle deep-link query params for book detail and forum detail navigation."""
     open_val = st.query_params.get("open")
     source_id_param = (st.query_params.get("source_id") or "").strip()
-    # Allow deep-link to any source_id; detail page can fetch metadata on demand.
     if open_val == "detail" and source_id_param:
         st.session_state["selected_book_source_id"] = source_id_param
         st.session_state["selected_book_id"] = None

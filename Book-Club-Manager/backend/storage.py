@@ -25,7 +25,6 @@ def _from_dynamo(obj: Any) -> Any:
         return [_from_dynamo(v) for v in obj]
     return obj
 
-
 def _to_dynamo(obj: Any) -> Any:
     """Convert JSON data to DynamoDB types (float -> Decimal)."""
     if isinstance(obj, float):
@@ -36,7 +35,6 @@ def _to_dynamo(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_to_dynamo(v) for v in obj]
     return obj
-
 
 def _forum_post_to_item(post: dict, pk: str, sk: str, pk_value: str) -> dict:
     """Build a DynamoDB-put_item compatible dict. pk/sk are key attributes; table expects String (S) for both."""
@@ -52,13 +50,10 @@ def _forum_post_to_item(post: dict, pk: str, sk: str, pk_value: str) -> dict:
     item[sk] = str(post_id)
     return item
 
-
-# DynamoDB table names
 BOOKS_TABLE = os.getenv("BOOKS_TABLE", "books")
 EVENTS_TABLE = os.getenv("EVENTS_TABLE", "events")
 USER_LIBRARY_TABLE = os.getenv("USER_LIBRARY_TABLE", "user_library")
 
-# parent_asin prefixes with high book counts; these use 5-char shards instead of 4-char (add more as needed)
 HEAVY_SHARD_PREFIXES = {
     "0312",
     "0615",
@@ -72,7 +67,6 @@ HEAVY_SHARD_PREFIXES = {
     "b008",
 }
 
-
 def _get_shard_key(book_id: str) -> str:
     """Return shard key for a book_id, using 4-char prefix unless marked heavy (then 5-char)."""
     p4 = book_id[:4].lower()
@@ -80,8 +74,8 @@ def _get_shard_key(book_id: str) -> str:
         return book_id[:5].lower()
     return p4
 
-
-def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: str = "pyarrow") -> Optional[dict[str, Any]]:
+def get_book_details(parent_asin: str, local_dir: Optional[str] = None,
+                     engine: str = "pyarrow") -> Optional[dict[str, Any]]:
     """
     Get book with description. Intended for book details page.
     Fetches from shard parquet on S3 (using shard key from parent_asin prefix) or local_dir.
@@ -122,12 +116,10 @@ def get_book_details(parent_asin: str, local_dir: Optional[str] = None, engine: 
             pass
     return item
 
-
 def get_book_metadata(parent_asin: str) -> Optional[dict[str, Any]]:
     """
     Get book metadata without description from DynamoDB. Intended for homepage, library, etc.
     """
-    # Pin region so local dev doesn't depend on AWS default region.
     dynamodb = boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
     table = dynamodb.Table(BOOKS_TABLE)
     try:
@@ -140,7 +132,6 @@ def get_book_metadata(parent_asin: str) -> Optional[dict[str, Any]]:
     item["average_rating"] = float(item["average_rating"])
     return item
 
-
 def get_event_details(event_id: str) -> Optional[dict[str, Any]]:
     """
     Get all event details from DynamoDB.
@@ -149,13 +140,12 @@ def get_event_details(event_id: str) -> Optional[dict[str, Any]]:
     table = dynamodb.Table(EVENTS_TABLE)
     try:
         resp = table.get_item(Key={"event_id": event_id})
-    except Exception:
+    except (ValueError, TypeError):
         return None
     item = resp.get("Item")
     if item is None:
         return None
     return item
-
 
 def increment_library_actions_since_recs(
     user_id: str,
@@ -200,7 +190,6 @@ def increment_library_actions_since_recs(
         "should_run_recommender": count >= threshold,
     }
 
-
 def reset_library_actions_since_recs(
     user_id: str,
     counter_attr: str = "actions_since_recs",
@@ -221,7 +210,6 @@ def reset_library_actions_since_recs(
         return False
     return True
 
-
 def get_cached_event_recs(user_id: str) -> Optional[dict[str, Any]]:
     """
     Get cached event recommendations for a user.
@@ -235,66 +223,6 @@ def get_cached_event_recs(user_id: str) -> Optional[dict[str, Any]]:
     """
     return None
 
-
-def put_cached_event_recs(user_id: str, payload: dict[str, Any]) -> bool:
-    """
-    Store cached event recommendations for a user.
-
-    Intended to be called by recommender_service after recomputing the top 10
-    events. The `payload` should already contain `events`, `generated_at`, and
-    `next_expiry` fields.
-    """
-    return False
-
-
-def get_catalog(parent_asin: str) -> Optional[list[dict[str, Any]]]:
-    """
-    Get all catalog data matching the book.
-    """
-    return None
-
-
-def get_user_accounts(user_id: str) -> Optional[dict[str, Any]]:
-    """
-    Get user account data.
-    """
-    return None
-
-
-def get_user_books(user_id: str) -> Optional[list[dict[str, Any]]]:
-    """
-    Get user's books.
-    """
-    return None
-
-
-def get_user_clubs(user_id: str) -> Optional[list[dict[str, Any]]]:
-    """
-    Get user's clubs.
-    """
-    return None
-
-
-def get_user_forums(user_id: str) -> Optional[list[dict[str, Any]]]:
-    """
-    Get user's forum activity.
-    """
-    return None
-
-
-def get_form_thread(parent_asin: str) -> Optional[dict[str, Any]]:
-    """
-    Get forum thread for a book.
-    """
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Storage adapter: get_storage() returns LocalStorage or CloudStorage so the app
-# can use the same interface for local vs AWS. Book recommender fallback uses
-# get_top50_review_books() from here (local file vs S3).
-# ---------------------------------------------------------------------------
-
 def get_storage():
     """Return LocalStorage or CloudStorage based on APP_ENV (use cloud when APP_ENV=aws)."""
     from backend import config
@@ -302,14 +230,11 @@ def get_storage():
         return CloudStorage()
     return LocalStorage()
 
-
 def _default_books_record():
     return {"library": {"in_progress": [], "saved": [], "finished": []}, "genre_preferences": []}
 
-
 class LocalStorage:
     """Local file-backed storage. Delegates to user_store and forum_store for file I/O."""
-
     _cache: dict[str, Any] = {}
 
     def _load_json_file(self, path, *, cache_key: str) -> Any:
@@ -321,7 +246,6 @@ class LocalStorage:
                 self._cache[cache_key] = None
                 return None
             import json
-
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._cache[cache_key] = data
@@ -338,7 +262,6 @@ class LocalStorage:
         path = getattr(mod, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None) if mod else None
         if path is None:
             path = getattr(config, "REVIEWS_TOP50_BOOKS_LOCAL_PATH", None)
-        # Fall back to the smaller reviews_top25_books.json if top-50 isn't present locally.
         if not path or not path.exists():
             path = getattr(config, "PROCESSED_DIR", None) / "reviews_top25_books.json"
         data = self._load_json_file(path, cache_key=f"reviews::{str(path)}")
@@ -387,7 +310,8 @@ class LocalStorage:
 
     def save_user_account(self, record):
         store = self.load_user_store()
-        store.setdefault("accounts", {}).setdefault("users", {})[record.get("user_id") or record.get("email", "").strip().lower()] = record
+        store.setdefault("accounts",
+                         {}).setdefault("users",{})[record.get("user_id") or record.get("email", "").strip().lower()] = record
         from backend.user_store import save_user_accounts
         save_user_accounts(store)
 
@@ -403,7 +327,6 @@ class LocalStorage:
             return
         store = self.load_user_store()
         uid = str(user_id).strip().lower()
-        # Keep event identifiers as strings (event_id) so they can be joined to events.
         raw = data.get("events", [])
         events: list[str] = []
         for x in raw or []:
@@ -444,7 +367,6 @@ class LocalStorage:
         if not user_id:
             return None
         from backend import config
-
         path = getattr(config, "USER_RECOMMENDATIONS_PATH", None)
         if not path:
             return None
@@ -453,7 +375,6 @@ class LocalStorage:
             if not path.exists():
                 return None
             import json
-
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f) or {}
             if not isinstance(data, dict):
@@ -467,15 +388,12 @@ class LocalStorage:
         if not user_id:
             return
         from backend import config
-
         path = getattr(config, "USER_RECOMMENDATIONS_PATH", None)
         if not path:
             return
         uid = str(user_id).strip().lower()
         try:
             import json
-
-            # Ensure directory exists.
             path.parent.mkdir(parents=True, exist_ok=True)
             data: dict = {}
             if path.exists():
@@ -494,12 +412,10 @@ class LocalStorage:
 
     def get_soonest_events(self, limit=10):
         from backend import config
-
         path = getattr(config, "PROCESSED_DIR", None) / "book_events_clean.json"
         data = self._load_json_file(path, cache_key="book_events_clean")
         if not isinstance(data, list):
             return []
-        # Match CloudStorage semantics: return soonest by ttl (ascending).
         items = sorted(
             (e for e in data if isinstance(e, dict)),
             key=lambda x: int(x.get("ttl") or x.get("expiry") or 0),
@@ -507,15 +423,12 @@ class LocalStorage:
         return items[: max(0, int(limit))]
 
     def get_book_metadata(self, parent_asin):
-        # Local metadata comes from the curated review list(s).
         pid = str(parent_asin or "").strip()
         if not pid:
             return None
-        # Try reviews list first.
         for b in (self.get_top50_review_books() or []):
             if isinstance(b, dict) and str(b.get("parent_asin") or b.get("source_id") or "").strip() == pid:
                 return dict(b)
-        # Try SPL trending list (if available locally).
         for b in (self.get_spl_top50_checkout_books() or []):
             if isinstance(b, dict) and str(b.get("parent_asin") or b.get("source_id") or "").strip() == pid:
                 return dict(b)
@@ -542,7 +455,6 @@ class LocalStorage:
         return out
 
     def get_book_details(self, parent_asin):
-        # Local details are limited; return metadata (no S3/parquet reads).
         return self.get_book_metadata(parent_asin)
 
     def get_event_details(self, event_id):
@@ -558,11 +470,8 @@ class LocalStorage:
         city_state = str(city_state or "").strip()
         if not city_state:
             return []
-        events = [
-            e
-            for e in (self.get_soonest_events(500) or [])
-            if str(e.get("city_state") or "").strip() == city_state
-        ]
+        events = [e for e in (self.get_soonest_events(500) or [])
+                  if str(e.get("city_state") or "").strip() == city_state]
         return events
 
     def get_forum_post(self, post_id):
@@ -594,23 +503,17 @@ class LocalStorage:
         pid = str(parent_asin or "").strip()
         if not pid:
             return []
-        events = [
-            e
-            for e in (self.get_soonest_events(500) or [])
-            if str(e.get("parent_asin") or "").strip() == pid
-        ]
+        events = [e for e in (self.get_soonest_events(500) or [])
+                  if str(e.get("parent_asin") or "").strip() == pid]
         return events[: max(0, int(limit))]
-
 
 class CloudStorage:
     """AWS-backed storage (S3, DynamoDB). Use APP_ENV=aws to develop against AWS."""
 
     def _dynamo(self):
-        # Always pin region so local dev doesn't depend on AWS CLI default region.
         return boto3.resource("dynamodb", region_name=getattr(_config, "AWS_REGION", None))
 
     def _s3(self):
-        # Always pin region (bucket is regional and credentials may have default region elsewhere).
         return boto3.client("s3", region_name=getattr(_config, "AWS_REGION", None))
 
     def _table(self, config_attr: str, env_fallback: str):
@@ -649,7 +552,6 @@ class CloudStorage:
         books_rec = self.get_user_books(email) or _default_books_record()
         events_rec = self.get_user_events(email) or {}
         raw_club_ids = events_rec.get("events", events_rec.get("club_ids", []))
-        # Keep saved events as string event_ids.
         club_ids: list[str] = []
         for x in raw_club_ids or []:
             if x is None:
@@ -661,12 +563,10 @@ class CloudStorage:
         forum_rec = self.get_user_forums(email) or {}
         acc_ui = dict(acc)
         acc_ui.setdefault("password", "")
-        return {
-            "accounts": {"users": {email: acc_ui}},
+        return {"accounts": {"users": {email: acc_ui}},
             "books": {email: books_rec},
             "clubs": {email: {"club_ids": list(club_ids)}},
-            "forum": {email: forum_rec},
-        }
+            "forum": {email: forum_rec},}
 
     def get_user_books(self, user_id: str) -> Optional[dict]:
         """Get user library + genre_preferences from DynamoDB user_books table."""
@@ -682,9 +582,6 @@ class CloudStorage:
             if not item:
                 return None
             out = _from_dynamo(item)
-            # Normalize library shelf lists: keep original tokens as strings so we don't
-            # lose parent_asin-like IDs that happen to be numeric. Numeric IDs are
-            # still resolvable by casting back to int in the UI when needed.
             if isinstance(out, dict) and "library" in out and isinstance(out["library"], dict):
                 for shelf in ("in_progress", "saved", "finished"):
                     raw = out["library"].get(shelf)
@@ -715,7 +612,6 @@ class CloudStorage:
                 table = self._table("USER_BOOKS_TABLE", "user_books")
                 item = dict(rec)
                 item[pk] = user_id
-                # Ensure library and genre_preferences exist and are serializable.
                 item.setdefault("genre_preferences", [])
                 if "library" not in item or not isinstance(item["library"], dict):
                     item["library"] = {"in_progress": [], "saved": [], "finished": []}
@@ -801,14 +697,11 @@ class CloudStorage:
                     )
                     return _from_dynamo(resp.get("Items", []))
                 except Exception:
-                    # Fallback keeps Explore Events usable even when Query on GSI is denied.
                     pass
             resp = table.scan(Limit=min(limit * 3, 200))
             items = resp.get("Items", [])
-            items = sorted(
-                items,
-                key=lambda x: int(x.get("ttl") or x.get("expiry") or 0),
-            )[:limit]
+            items = sorted(items, key=lambda x: int(x.get("ttl") or x.get("expiry") or 0),
+                           )[:limit]
             return _from_dynamo(items)
         except Exception:
             return []
@@ -823,7 +716,6 @@ class CloudStorage:
         ids = [str(x).strip() for x in (parent_asins or []) if str(x).strip()]
         if not ids:
             return {}
-        # Deduplicate while preserving order (stable).
         ids = list(dict.fromkeys(ids))
         out: dict[str, dict] = {}
         try:
@@ -831,7 +723,6 @@ class CloudStorage:
                 "dynamodb", region_name=getattr(_config, "AWS_REGION", None)
             )
             table = self._table("BOOKS_TABLE", "books").name
-            # DynamoDB BatchGetItem limit: 100 keys.
             for i in range(0, len(ids), 100):
                 chunk = ids[i : i + 100]
                 req = {
@@ -841,9 +732,6 @@ class CloudStorage:
                 }
                 resp = client.batch_get_item(RequestItems=req)
                 items = (resp.get("Responses") or {}).get(table) or []
-                # items are in Dynamo wire format; reuse boto3 TypeDeserializer via resource
-                # by round-tripping through Table? We'll do lightweight manual decode via _from_dynamo
-                # by first converting attribute values with boto3.dynamodb.types.TypeDeserializer if available.
                 try:
                     from boto3.dynamodb.types import TypeDeserializer
 
@@ -854,7 +742,7 @@ class CloudStorage:
 
                     decoded = [_decode_item(it) for it in items]
                 except Exception:
-                    decoded = items  # best-effort; may already be plain dicts in some envs
+                    decoded = items
                 for it in decoded:
                     try:
                         meta = _from_dynamo(it)
@@ -906,7 +794,6 @@ class CloudStorage:
             pk = getattr(_config, "USER_ACCOUNTS_PK", "user_id")
             table = self._table("USER_ACCOUNTS_TABLE", "user_accounts")
             item = dict(record)
-            # Ensure partition key is in the item (table may use user_id or user_email).
             if pk not in item:
                 item[pk] = record.get("email") or record.get("user_id") or ""
             table.put_item(Item=item)
@@ -936,7 +823,6 @@ class CloudStorage:
             item = dict(data)
             if pk not in item:
                 item[pk] = user_id
-            # Ensure events list is JSON/DynamoDB-serializable (list of event_id strings).
             if "events" in item and item["events"] is not None:
                 cleaned: list[str] = []
                 for x in item["events"] or []:
@@ -960,13 +846,11 @@ class CloudStorage:
         next_sk = getattr(_config, "FORUM_POSTS_NEXT_ID_SK", "next_post_id")
         try:
             table = self._table("FORUM_POSTS_TABLE", "forum_posts")
-            # Get next_post_id from the counter row (pk=META, sk=next_post_id).
             next_id = 1
             try:
                 meta_resp = table.get_item(
                     Key={pk: str(meta_pk), sk_name: str(next_sk)},
-                    ConsistentRead=True,
-                )
+                    ConsistentRead=True,)
                 meta = _from_dynamo(meta_resp.get("Item"))
                 if meta:
                     next_id = int(meta.get("next_post_id") or meta.get("value") or 1)
@@ -1000,16 +884,11 @@ class CloudStorage:
             for post in (db.get("posts") or [])[:500]:
                 item = _forum_post_to_item(post, pk, sk, pk_value)
                 table.put_item(Item=item)
-            # Persist next_post_id as a row (pk=META, sk=next_post_id).
             next_id = db.get("next_post_id")
             if next_id is not None:
-                table.put_item(
-                    Item={
-                        pk: str(meta_pk),
+                table.put_item(Item={pk: str(meta_pk),
                         sk: str(next_sk),
-                        "next_post_id": int(next_id),
-                    }
-                )
+                        "next_post_id": int(next_id),})
         except Exception as e:
             import logging
             logging.warning("save_forum_db failed: %s", e)
@@ -1070,7 +949,8 @@ class CloudStorage:
         """Return SPL top-50 checkouts list from S3 (fallback for trending)."""
         from backend import config
         bucket = getattr(config, "DATA_BUCKET", None) or os.getenv("DATA_BUCKET")
-        key = getattr(config, "TOP50_BOOKS_S3_KEY", None) or os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
+        key = getattr(config, "TOP50_BOOKS_S3_KEY",
+                      None) or os.getenv("TOP50_BOOKS_S3_KEY", "books/spl_top50_checkouts_in_books.json")
         if not bucket:
             return []
         try:
@@ -1090,8 +970,7 @@ class CloudStorage:
             resp = table.query(
                 IndexName=gsi,
                 KeyConditionExpression=Key("parent_asin").eq(parent_asin),
-                Limit=50,
-            )
+                Limit=50,)
             return _from_dynamo(resp.get("Items", []))
         except Exception:
             return []
@@ -1101,7 +980,8 @@ class CloudStorage:
         return {"posts": posts} if posts else None
 
     def get_events_for_book(self, parent_asin: str, limit: int = 10) -> list:
-        gsi = getattr(_config, "EVENTS_PARENT_ASIN_GSI", None) or os.getenv("EVENTS_PARENT_ASIN_GSI", "").strip() or None
+        gsi = getattr(_config, "EVENTS_PARENT_ASIN_GSI",
+                      None) or os.getenv("EVENTS_PARENT_ASIN_GSI", "").strip() or None
         if not gsi:
             return []
         try:
@@ -1110,8 +990,7 @@ class CloudStorage:
                 IndexName=gsi,
                 KeyConditionExpression=Key("parent_asin").eq(parent_asin),
                 Limit=limit,
-                ScanIndexForward=True,
-            )
+                ScanIndexForward=True, )
             return _from_dynamo(resp.get("Items", []))
         except Exception:
             return []

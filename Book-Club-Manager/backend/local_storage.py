@@ -121,4 +121,3 @@ class LocalStorage(_BaseLocalStorage):
             return self._row_to_book_dict(row)
         # Fallback to base implementation (S3 Parquet, etc.)
         return super().get_book_details(parent_asin)
-

@@ -34,7 +34,7 @@ def _books_from_services_to_ui_shape(raw: list[dict], max_count: int = 50) -> li
         if isinstance(cats, str):
             try:
                 cats = ast.literal_eval(cats) if ("[" in cats or "{" in cats) else [cats]
-            except Exception:
+            except (ValueError, SyntaxError):
                 cats = [cats] if cats else []
         genres = [str(c).strip() for c in (cats if isinstance(cats, list) else [])[:3]] or ["General"]
         out.append({
@@ -46,8 +46,10 @@ def _books_from_services_to_ui_shape(raw: list[dict], max_count: int = 50) -> li
             "rating": round(rating, 1),
             "rating_count": rating_count,
             "genres": genres,
-            "description": str(b.get("description") or "No description available.").strip() or "No description available.",
-            "spl_available": False,
+            "description": str(b.get("description")
+                               or "No description available.").strip() or 
+                               "No description available.",
+                               "spl_available": False,
         })
     return out
 
@@ -199,7 +201,7 @@ def build_ui_bootstrap(
     }
     forum_posts_ui = _forum_posts_to_ui_shape(forum_posts)
     if not forum_posts_ui and books:
-        b0, b1 = books[0], (books[1] if len(books) > 1 else None)
+        b0, b1 = books[0], (books[1] if len(books) > 1 else {})
         forum_posts_ui = [
             {
                 "id": 1,
@@ -210,7 +212,8 @@ def build_ui_bootstrap(
                 "replies": 8,
                 "likes": 15,
                 "time_ago": "2 hours ago",
-                "preview": f"Share your thoughts about {b0['title']} by {b0['author']}." if b0 else "Share your thoughts.",
+                "preview": (f"Share your thoughts about {b0['title']} by {b0['author']}."
+                            if b0 else "Share your thoughts."),
             },
             {
                 "id": 2,
@@ -271,7 +274,7 @@ def load_data() -> dict:
                             continue
                         tmp.append({asin: b})
                     books_parent = tmp
-            except Exception:
+            except (AttributeError, TypeError):
                 books_parent = []
     catalog_isbns = _read_isbn_index_file(
         PROCESSED_DIR / "first_100_spl_catalog_by_isbn.json"
@@ -287,7 +290,7 @@ def load_data() -> dict:
         if isinstance(cats, str):
             try:
                 cats = ast.literal_eval(cats) if ("[" in cats or "{" in cats) else [cats]
-            except Exception:
+            except (ValueError, SyntaxError):
                 cats = [cats] if cats else []
         genres = [str(c).strip() for c in (cats if isinstance(cats, list) else [])[:3] if str(c).strip()] or ["General"]
         desc = meta.get("description") or []
@@ -396,7 +399,7 @@ def load_data() -> dict:
         "saved": [b["id"] for b in books[4:8]],
         "finished": [b["id"] for b in books[8:12]],
     }
-    b0, b1 = (books[0] if len(books) > 0 else None), (books[1] if len(books) > 1 else None)
+    b0, b1 = (books[0] if len(books) > 0 else {}), (books[1] if len(books) > 1 else {})
     forum_posts = [
         {
             "title": f"What do you think about {b0['title']}?" if b0 else "Join the discussion",
@@ -419,7 +422,8 @@ def load_data() -> dict:
             "replies": 5,
             "likes": 12,
             "time_ago": "1 day ago",
-            "preview": f"This week's recommendation highlight is {b1['title']}." if b1 else "Discover this week's highlights.",
+            "preview": (f"This week's recommendation highlight is {b1['title']}." 
+                        if b1 else "Discover this week's highlights."),
         },
     ]
     genres = sorted({g for b in books for g in b["genres"]})
@@ -438,4 +442,3 @@ def load_data() -> dict:
         "neighborhoods": neighborhoods,
         "user_club_ids": user_club_ids,
     }
-

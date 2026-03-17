@@ -45,7 +45,6 @@ def build_user_books_df(
 
 def get_recommendations(
     user_id: str,
-    user_genres_store: Dict[str, List[Dict[str, Any]]],
     user_books_read_store: Dict[str, List[str]],
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
