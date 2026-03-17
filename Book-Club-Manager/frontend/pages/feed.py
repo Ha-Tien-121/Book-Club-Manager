@@ -131,6 +131,7 @@ def _render_feed_tab(
         st.subheader("Recommended for you")
         recommendation_rows: list[dict] = []
         rec_updated_at = 0
+        user_email = ""
         if recommender_available:
             try:
                 user_email = (
