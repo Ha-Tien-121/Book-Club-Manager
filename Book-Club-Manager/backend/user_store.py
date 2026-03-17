@@ -33,6 +33,11 @@ def _save_json_store(path: Path, data: dict) -> None:
 
 
 def _default_books_record() -> dict:
+    """Build the default books record for a user.
+
+    Returns:
+        dict: Default books payload with empty shelves and no preferences.
+    """
     return {
         "library": {"in_progress": [], "saved": [], "finished": []},
         "genre_preferences": [],
@@ -40,10 +45,20 @@ def _default_books_record() -> dict:
 
 
 def _default_clubs_record() -> dict:
+    """Build the default clubs record for a user.
+
+    Returns:
+        dict: Default clubs payload with no saved club IDs.
+    """
     return {"club_ids": []}
 
 
 def _default_forum_record() -> dict:
+    """Build the default forum record for a user.
+
+    Returns:
+        dict: Default forum payload with empty authored/saved collections.
+    """
     return {"forum_posts": [], "saved_forum_post_ids": []}
 
 
@@ -131,18 +146,62 @@ def load_user_store() -> dict:
 
 
 def save_user_accounts(store: dict) -> None:
+    """Persist the accounts portion of the combined user store.
+
+    Args:
+        store: Combined store containing an `accounts` key.
+
+    Returns:
+        None.
+
+    Exceptions:
+        None. Any filesystem errors are handled by `_save_json_store`.
+    """
     _save_json_store(USER_ACCOUNTS_PATH, store["accounts"])
 
 
 def save_user_books(store: dict) -> None:
+    """Persist the books portion of the combined user store.
+
+    Args:
+        store: Combined store containing a `books` key.
+
+    Returns:
+        None.
+
+    Exceptions:
+        None. Any filesystem errors are handled by `_save_json_store`.
+    """
     _save_json_store(USER_BOOKS_PATH, store["books"])
 
 
 def save_user_clubs(store: dict) -> None:
+    """Persist the clubs portion of the combined user store.
+
+    Args:
+        store: Combined store containing a `clubs` key.
+
+    Returns:
+        None.
+
+    Exceptions:
+        None. Any filesystem errors are handled by `_save_json_store`.
+    """
     _save_json_store(USER_CLUBS_PATH, store["clubs"])
 
 
 def save_user_forum(store: dict) -> None:
+    """Persist the forum portion of the combined user store.
+
+    Args:
+        store: Combined store containing a `forum` key.
+
+    Returns:
+        None.
+
+    Exceptions:
+        None. Any filesystem errors are handled by `_save_json_store`.
+    """
     _save_json_store(USER_FORUM_PATH, store["forum"])
 
 
@@ -190,5 +249,3 @@ def create_user(store: dict, email: str, password: str) -> dict:
     save_user_clubs(store)
     save_user_forum(store)
     return users[email]
-
-

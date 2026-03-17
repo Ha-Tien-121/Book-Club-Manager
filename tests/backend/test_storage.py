@@ -47,13 +47,16 @@ def _stub_boto3_and_pandas() -> None:
 
         class _Key:
             def __init__(self, name: str):
+                "Support __init__ for test doubles."
                 self.name = name
 
             def eq(self, value: Any) -> tuple:
+                "Helper for eq."
                 return ("eq", self.name, value)
 
         class _FakeTable:
             def __init__(self):
+                "Support __init__ for test doubles."
                 self.get_item_calls: list[dict[str, Any]] = []
                 self.update_item_calls: list[dict[str, Any]] = []
                 self._next_get_item: dict[str, Any] = {}
@@ -63,35 +66,43 @@ def _stub_boto3_and_pandas() -> None:
                 self._name: str = "fake_table"
 
             def get_item(self, **kwargs: Any) -> dict[str, Any]:
+                "Helper for get item."
                 self.get_item_calls.append(kwargs)
                 if self.raise_on_get:
                     raise self.raise_on_get
                 return dict(self._next_get_item)
 
             def update_item(self, **kwargs: Any) -> dict[str, Any]:
+                "Helper for update item."
                 self.update_item_calls.append(kwargs)
                 if self.raise_on_update:
                     raise self.raise_on_update
                 return dict(self._next_update_item)
 
             def put_item(self, **kwargs: Any) -> dict[str, Any]:
+                "Helper for put item."
                 return {}
 
             def scan(self, **kwargs: Any) -> dict[str, Any]:
+                "Helper for scan."
                 return {"Items": []}
 
             def query(self, **kwargs: Any) -> dict[str, Any]:
+                "Helper for query."
                 return {"Items": []}
 
             @property
             def name(self) -> str:
+                "Helper for name."
                 return self._name
 
         class _FakeDynamo:
             def __init__(self):
+                "Support __init__ for test doubles."
                 self.tables: dict[str, _FakeTable] = {}
 
             def Table(self, name: str) -> _FakeTable:
+                "Helper for Table."
                 if name not in self.tables:
                     t = _FakeTable()
                     t._name = name
@@ -101,10 +112,12 @@ def _stub_boto3_and_pandas() -> None:
         _dynamo_singleton = _FakeDynamo()
 
         def resource(service_name: str, **kwargs: Any) -> Any:
+            "Helper for resource."
             assert service_name == "dynamodb"
             return _dynamo_singleton
 
         def client(service_name: str, **kwargs: Any) -> Any:
+            "Helper for client."
             return types.SimpleNamespace(batch_get_item=lambda **_kw: {})
 
         boto3_mod.resource = resource  # type: ignore[attr-defined]
@@ -122,6 +135,7 @@ def _stub_boto3_and_pandas() -> None:
         pd_mod = types.ModuleType("pandas")
 
         def _missing(*_a: Any, **_kw: Any) -> Any:
+            "Helper for  missing."
             raise AssertionError("pd.read_parquet should be patched in tests")
 
         pd_mod.read_parquet = _missing  # type: ignore[attr-defined]
@@ -133,6 +147,7 @@ _stub_boto3_and_pandas()
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
@@ -142,6 +157,7 @@ def _import_storage():
 # ---------------------------------------------------------------------------
 
 def test_from_dynamo_converts_decimals_recursively() -> None:
+    "Test from dynamo converts decimals recursively."
     storage = _import_storage()
     raw = {
         "a": Decimal("2"),
@@ -153,6 +169,7 @@ def test_from_dynamo_converts_decimals_recursively() -> None:
 
 
 def test_to_dynamo_converts_floats_recursively() -> None:
+    "Test to dynamo converts floats recursively."
     storage = _import_storage()
     raw = {"a": 1.25, "b": {"c": [2.5, 3]}}
     out = storage._to_dynamo(raw)
@@ -164,6 +181,7 @@ def test_to_dynamo_converts_floats_recursively() -> None:
 
 
 def test_forum_post_to_item_sets_keys_and_normalizes_id() -> None:
+    "Test forum post to item sets keys and normalizes id."
     storage = _import_storage()
     post = {"id": "7", "title": "T"}
     item = storage._forum_post_to_item(post, pk="pk", sk="sk", pk_value="POST")
@@ -179,6 +197,7 @@ def test_forum_post_to_item_sets_keys_and_normalizes_id() -> None:
 
 
 def test_get_shard_key_uses_heavy_prefixes() -> None:
+    "Test get shard key uses heavy prefixes."
     storage = _import_storage()
     # Heavy prefixes use 5 chars
     assert storage._get_shard_key("0312ABCDE") == "0312a"
@@ -194,35 +213,43 @@ def test_get_shard_key_uses_heavy_prefixes() -> None:
 def test_get_book_details_local_dir_reads_parquet_and_parses_rating(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    "Test get book details local dir reads parquet and parses rating."
     storage = _import_storage()
 
     class _ILoc:
         def __init__(self, item: dict):
+            "Support __init__ for test doubles."
             self._item = item
 
         def __getitem__(self, idx: int):
+            "Support __getitem__ for test doubles."
             assert idx == 0
             return types.SimpleNamespace(to_dict=lambda: dict(self._item))
 
     class _FakeDF:
         def __init__(self, rows: list[dict]):
+            "Support __init__ for test doubles."
             self._rows = rows
             self.columns = list(rows[0].keys()) if rows else []
 
         def __getitem__(self, _mask: Any):
+            "Support __getitem__ for test doubles."
             return self
 
         @property
         def empty(self) -> bool:
+            "Helper for empty."
             return not self._rows
 
         @property
         def iloc(self) -> _ILoc:
+            "Helper for iloc."
             return _ILoc(self._rows[0])
 
     captured: dict[str, Any] = {}
 
     def fake_read_parquet(path: str, engine: str = "pyarrow") -> _FakeDF:
+        "Helper for fake read parquet."
         captured["path"] = path
         captured["engine"] = engine
         return _FakeDF([{"parent_asin": "P1", "average_rating": "4.5"}])
@@ -238,6 +265,7 @@ def test_get_book_details_local_dir_reads_parquet_and_parses_rating(
 
 
 def test_get_book_metadata_reads_dynamo_and_casts_average_rating() -> None:
+    "Test get book metadata reads dynamo and casts average rating."
     storage = _import_storage()
     boto3_mod = sys.modules["boto3"]
     dynamo = boto3_mod.resource("dynamodb")
@@ -251,6 +279,7 @@ def test_get_book_metadata_reads_dynamo_and_casts_average_rating() -> None:
 
 
 def test_get_book_metadata_returns_none_on_exception() -> None:
+    "Test get book metadata returns none on exception."
     storage = _import_storage()
     boto3_mod = sys.modules["boto3"]
     dynamo = boto3_mod.resource("dynamodb")
@@ -262,6 +291,7 @@ def test_get_book_metadata_returns_none_on_exception() -> None:
 
 
 def test_increment_and_reset_library_actions_since_recs() -> None:
+    "Test increment and reset library actions since recs."
     storage = _import_storage()
     boto3_mod = sys.modules["boto3"]
     dynamo = boto3_mod.resource("dynamodb")
@@ -288,6 +318,7 @@ def test_increment_and_reset_library_actions_since_recs() -> None:
 
 
 def test_get_storage_chooses_local_or_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
+    "Test get storage chooses local or cloud."
     storage = _import_storage()
     import backend.config as cfg
 
@@ -319,6 +350,7 @@ def test_trivial_top_level_placeholders_return_defaults() -> None:
 def test_local_storage_top50_reviews_and_spl_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    "Test local storage top50 reviews and spl fallback."
     storage = _import_storage()
     from backend import config as cfg
 
@@ -354,6 +386,7 @@ def test_local_storage_top50_reviews_and_spl_fallback(
 def test_local_storage_get_soonest_events_and_helpers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    "Test local storage get soonest events and helpers."
     storage = _import_storage()
     from backend import config as cfg
 
@@ -391,6 +424,7 @@ def test_local_storage_get_soonest_events_and_helpers(
 def test_local_storage_user_recommendations_round_trip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    "Test local storage user recommendations round trip."
     storage = _import_storage()
     from backend import config as cfg
 
@@ -415,6 +449,7 @@ def test_local_storage_user_recommendations_round_trip(
 def test_cloud_storage_get_top50_review_books_and_spl_top50(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    "Test cloud storage get top50 review books and spl top50."
     storage = _import_storage()
     cs = storage.CloudStorage()
     from backend import config as cfg
@@ -428,6 +463,7 @@ def test_cloud_storage_get_top50_review_books_and_spl_top50(
     orig_client = getattr(boto3_mod, "client")
 
     def client_reviews(service_name: str, **kwargs: Any) -> Any:
+        "Helper for client reviews."
         body_bytes = _json.dumps({"books": [{"id": "R1"}]}).encode("utf-8")
         return types.SimpleNamespace(
             get_object=lambda **kw: {"Body": types.SimpleNamespace(read=lambda: body_bytes)}
@@ -438,6 +474,7 @@ def test_cloud_storage_get_top50_review_books_and_spl_top50(
     assert reviews == [{"id": "R1"}]
 
     def client_spl(service_name: str, **kwargs: Any) -> Any:
+        "Helper for client spl."
         body_bytes = _json.dumps({"items": [{"id": "S1"}]}).encode("utf-8")
         return types.SimpleNamespace(
             get_object=lambda **kw: {"Body": types.SimpleNamespace(read=lambda: body_bytes)}
@@ -453,6 +490,7 @@ def test_cloud_storage_get_top50_review_books_and_spl_top50(
 def test_cloud_storage_get_user_books_normalizes_shelves_and_handles_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    "Test cloud storage get user books normalizes shelves and handles missing."
     storage = _import_storage()
     cs = storage.CloudStorage()
     from backend import config as cfg
@@ -494,6 +532,7 @@ def test_cloud_storage_get_user_books_normalizes_shelves_and_handles_missing(
 def test_cloud_storage_get_and_save_user_recommendations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    "Test cloud storage get and save user recommendations."
     storage = _import_storage()
     cs = storage.CloudStorage()
     from backend import config as cfg
@@ -517,6 +556,7 @@ def test_cloud_storage_get_and_save_user_recommendations(
     captured: Dict[str, Any] = {}
 
     def put_item(**kwargs: Any) -> dict:
+        "Helper for put item."
         captured.update(kwargs)
         return {}
 
@@ -530,6 +570,7 @@ def test_cloud_storage_get_and_save_user_recommendations(
 def test_cloud_storage_get_events_by_city_and_for_book(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    "Test cloud storage get events by city and for book."
     storage = _import_storage()
     cs = storage.CloudStorage()
     from backend import config as cfg
@@ -547,6 +588,7 @@ def test_cloud_storage_get_events_by_city_and_for_book(
     table = dynamo.Table("events")
 
     def query(**kwargs: Any) -> dict:
+        "Helper for query."
         if kwargs.get("IndexName") == "CITY_GSI":
             return {"Items": [{"city_state": "Seattle, WA", "ttl": Decimal("10")}]}
         return {"Items": [{"parent_asin": "P1", "ttl": Decimal("20")}]}
@@ -562,6 +604,7 @@ def test_cloud_storage_get_events_by_city_and_for_book(
 
 
 def test_cloud_storage_forum_thread_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
+    "Test cloud storage forum thread helpers."
     storage = _import_storage()
     cs = storage.CloudStorage()
     from backend import config as cfg
@@ -579,6 +622,7 @@ def test_cloud_storage_forum_thread_helpers(monkeypatch: pytest.MonkeyPatch) -> 
     table = dynamo.Table("forum_posts")
 
     def query(**kwargs: Any) -> dict:
+        "Helper for query."
         return {"Items": [{"parent_asin": "P1", "id": Decimal("7")}]}
 
     table.query = query

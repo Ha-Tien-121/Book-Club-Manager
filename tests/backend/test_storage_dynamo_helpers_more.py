@@ -5,11 +5,13 @@ from decimal import Decimal
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_get_shard_key_heavy_prefix_uses_5_chars() -> None:
+    "Test get shard key heavy prefix uses 5 chars."
     storage = _import_storage()
     assert storage._get_shard_key("b000xyz") == "b000x"
     assert storage._get_shard_key("B000XYZ") == "b000x"
@@ -17,6 +19,7 @@ def test_get_shard_key_heavy_prefix_uses_5_chars() -> None:
 
 
 def test_get_book_metadata_success_none_and_exception() -> None:
+    "Test get book metadata success none and exception."
     storage = _import_storage()
 
     import boto3  # type: ignore
@@ -39,6 +42,7 @@ def test_get_book_metadata_success_none_and_exception() -> None:
 
 
 def test_get_event_details_success_none_and_exception() -> None:
+    "Test get event details success none and exception."
     storage = _import_storage()
 
     import boto3  # type: ignore

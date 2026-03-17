@@ -6,11 +6,13 @@ import types
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_cloud_storage_get_user_account_and_events_round_trip() -> None:
+    "Test cloud storage get user account and events round trip."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -33,6 +35,7 @@ def test_cloud_storage_get_user_account_and_events_round_trip() -> None:
 
 
 def test_cloud_storage_get_books_metadata_batch_empty_and_decode_fallback() -> None:
+    "Test cloud storage get books metadata batch empty and decode fallback."
     storage = _import_storage()
     cs = storage.CloudStorage()
 
@@ -46,6 +49,7 @@ def test_cloud_storage_get_books_metadata_batch_empty_and_decode_fallback() -> N
     orig_client = boto3.client
 
     def _client(service_name: str, **_kw: object):
+        "Helper for  client."
         assert service_name == "dynamodb"
         return types.SimpleNamespace(
             batch_get_item=lambda **_kw2: {
@@ -70,6 +74,7 @@ def test_cloud_storage_get_books_metadata_batch_empty_and_decode_fallback() -> N
 
 
 def test_cloud_storage_load_forum_db_meta_counter_and_posts() -> None:
+    "Test cloud storage load forum db meta counter and posts."
     storage = _import_storage()
     cs = storage.CloudStorage()
 

@@ -8,14 +8,17 @@ from typing import Any, Callable
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -29,13 +32,17 @@ class _FakeStreamlitRuntime:
         self.warnings: list[str] = []
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     def set_page_config(self, **_kw: Any) -> None:
+        "Helper for set page config."
         return None
 
     def cache_data(self, **_kw: Any):
+        "Helper for cache data."
         def _decorator(fn):
+            "Helper for  decorator."
             fn.clear = lambda: None  # type: ignore[attr-defined]
             return fn
 
@@ -43,37 +50,48 @@ class _FakeStreamlitRuntime:
 
     # output-ish
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for caption."
         return None
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def divider(self) -> None:
+        "Helper for divider."
         return None
 
     def image(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for image."
         return None
 
     def warning(self, msg: str, **_kw: Any) -> None:
+        "Helper for warning."
         self.warnings.append(str(msg))
 
     def info(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for info."
         return None
 
     def success(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for success."
         return None
 
     def selectbox(self, _label: str, *, options: list[str], index: int = 0, key: str | None = None, on_change: Callable[[], None] | None = None, **_kw: Any):  # type: ignore[override]
         # Store selected value into session_state to emulate Streamlit.
+        "Helper for selectbox."
         if key:
             try:
                 self.session_state[key] = options[index]
@@ -85,32 +103,40 @@ class _FakeStreamlitRuntime:
 
     # inputs
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
 
     def multiselect(self, *_a: Any, **_kw: Any) -> list[str]:
+        "Helper for multiselect."
         return []
 
     def columns(self, n: int | list[int], **_kw: Any):
+        "Helper for columns."
         if isinstance(n, list):
             n = len(n)
         return [_FakeCtx() for _ in range(int(n))]
 
     def form(self, _key: str):
+        "Helper for form."
         return _FakeCtx()
 
     def expander(self, *_a: Any, **_kw: Any):
+        "Helper for expander."
         return _FakeCtx()
 
     def text_area(self, _label: str, *, key: str, **_kw: Any) -> str:
+        "Helper for text area."
         return str(self._text_area_by_key.get(key, ""))
 
     def form_submit_button(self, label: str, **_kw: Any) -> bool:
+        "Helper for form submit button."
         return bool(self._form_submit_by_label.get(label, False))
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -153,6 +179,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_forums_helpers_preview_and_tag_filtering() -> None:
+    "Test forums helpers preview and tag filtering."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     forums = importlib.import_module("frontend.pages.forums")
@@ -171,6 +198,7 @@ def test_forums_helpers_preview_and_tag_filtering() -> None:
 
 
 def test_forums_render_detail_missing_resets_selection_and_warns() -> None:
+    "Test forums render detail missing resets selection and warns."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     forums = importlib.import_module("frontend.pages.forums")
@@ -197,6 +225,7 @@ def test_forums_render_detail_missing_resets_selection_and_warns() -> None:
 
 
 def test_feed_resolve_recommended_books_fast_path_and_fallback() -> None:
+    "Test feed resolve recommended books fast path and fallback."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     feed = importlib.import_module("frontend.pages.feed")
@@ -229,6 +258,7 @@ def test_feed_resolve_recommended_books_fast_path_and_fallback() -> None:
 
 
 def test_feed_render_book_detail_deeplink_builds_minimal_book() -> None:
+    "Test feed render book detail deeplink builds minimal book."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -241,6 +271,7 @@ def test_feed_render_book_detail_deeplink_builds_minimal_book() -> None:
     rt.session_state["signed_in"] = False
 
     def _fake_detail(_sid: str) -> dict:
+        "Helper for  fake detail."
         return {
             "parent_asin": "P1",
             "title": "Title",

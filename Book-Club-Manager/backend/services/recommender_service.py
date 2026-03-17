@@ -18,15 +18,17 @@ import json
 import logging
 import time
 
-from backend import storage
 from backend.config import (
     ADDS_BEFORE_BOOK_RERUN,
     RECOMMENDED_BOOKS_SIZE,
     RECOMMENDED_EVENTS_SIZE,
 )
-from backend.storage import get_storage
-from backend.recommender.book_recommender import BookRecommender
+from backend.recommender.book_recommender import (
+    BookRecommender,
+    _FallbackBookRecommender,
+)
 from backend.recommender.event_recommender import EventRecommender
+from backend.storage import get_storage
 
 
 def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
@@ -44,20 +46,28 @@ def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
             continue
         if r.get("cover") and r.get("title") and r.get("author"):
             continue
-        asin = str(r.get("parent_asin") or r.get("book_id") or r.get("source_id") or "").strip()
-        if asin and (not r.get("title") or not (r.get("author_name") or r.get("author")) or not (r.get("images") or r.get("cover"))):
+        asin = str(
+            r.get("parent_asin") or r.get("book_id") or r.get("source_id") or ""
+        ).strip()
+        missing_core_fields = (
+            not r.get("title")
+            or not (r.get("author_name") or r.get("author"))
+            or not (r.get("images") or r.get("cover"))
+        )
+        if asin and missing_core_fields:
             to_enrich.append(asin)
     meta_by_asin: dict[str, dict] = {}
     try:
         if to_enrich and hasattr(store, "get_books_metadata_batch"):
             meta_by_asin = store.get_books_metadata_batch(to_enrich) or {}
-    except Exception:
+    except (RuntimeError, ValueError, TypeError, KeyError):
         meta_by_asin = {}
     # Note: we intentionally do not fall back to S3-parquet detail fetch here.
     # That path reads large shards and is too slow to run synchronously when
     # saving recommendations (and would make every recommender run feel stuck).
 
     def _genres_from_raw(raw) -> list[str]:
+        """Normalize genre/category values into a clean list of strings."""
         if raw is None:
             return []
         if isinstance(raw, list):
@@ -71,7 +81,7 @@ def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
                     parsed = json.loads(s)
                     if isinstance(parsed, list):
                         return [str(x).strip() for x in parsed if x is not None and str(x).strip()]
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             return [s]
         return []
@@ -95,7 +105,9 @@ def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
             )
             continue
 
-        asin = str(r.get("parent_asin") or r.get("book_id") or r.get("source_id") or "").strip()
+        asin = str(
+            r.get("parent_asin") or r.get("book_id") or r.get("source_id") or ""
+        ).strip()
         if not asin:
             continue
         if meta_by_asin and asin in meta_by_asin:
@@ -108,16 +120,17 @@ def _ui_shape_recommended_books(rows: list[dict]) -> list[dict]:
         genres = _genres_from_raw(r.get("genres"))
         if not genres:
             genres = _genres_from_raw(r.get("categories"))
-        cover = (r.get("images") or r.get("image_url") or r.get("cover") or "").strip() if isinstance(r.get("images") or r.get("image_url") or r.get("cover"), str) else r.get("images") or r.get("image_url") or r.get("cover")
+        cover_source = r.get("images") or r.get("image_url") or r.get("cover")
+        cover = cover_source.strip() if isinstance(cover_source, str) else cover_source
         if not cover:
             cover = "https://placehold.co/220x330?text=Book"
         try:
             rating = float(r.get("average_rating") or r.get("rating") or 0)
-        except Exception:
+        except (TypeError, ValueError):
             rating = 0
         try:
             rating_count = int(r.get("rating_number") or r.get("rating_count") or 0)
-        except Exception:
+        except (TypeError, ValueError):
             rating_count = 0
         out.append(
             {
@@ -214,11 +227,9 @@ def _run_book_recommender(
             top_k=top_k,
         )
         return list(rows or []), "content", ""
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, KeyError) as e:
         logging.exception("BookRecommender failed; falling back. error=%s", e)
         try:
-            from backend.recommender.book_recommender import _FallbackBookRecommender
-
             rows = _FallbackBookRecommender().recommend_for_user(
                 user_email=user_id,
                 user_account=user_account,
@@ -226,7 +237,7 @@ def _run_book_recommender(
                 top_k=top_k,
             )
             return list(rows or []), "fallback", f"{type(e).__name__}: {e}"
-        except Exception as e2:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e2:
             logging.exception("FallbackBookRecommender failed. error=%s", e2)
             return [], "fallback", f"{type(e2).__name__}: {e2}"
 
@@ -322,7 +333,9 @@ def get_recommended_books_for_user(user_id: str | None = None) -> list[dict]:
 
     if not books:
         # Run book recommender once and cache result.
-        books = _ui_shape_recommended_books(get_book_recommendations(user_id))[:RECOMMENDED_BOOKS_SIZE]
+        books = _ui_shape_recommended_books(get_book_recommendations(user_id))[
+            :RECOMMENDED_BOOKS_SIZE
+        ]
         rec["recommended_books"] = books
         rec["book_updated_at"] = int(time.time())
         store.save_user_recommendations(user_id, rec)
@@ -412,8 +425,12 @@ def ensure_default_recommendations(user_id: str) -> None:
     rec = store.get_user_recommendations(user_id) or {}
     if rec.get("recommended_books") or rec.get("recommended_events"):
         return
-    rec["recommended_books"] = _ui_shape_recommended_books(store.get_top50_review_books())[:RECOMMENDED_BOOKS_SIZE]
-    rec["recommended_events"] = store.get_soonest_events(RECOMMENDED_EVENTS_SIZE)[:RECOMMENDED_EVENTS_SIZE]
+    rec["recommended_books"] = _ui_shape_recommended_books(
+        store.get_top50_review_books()
+    )[:RECOMMENDED_BOOKS_SIZE]
+    rec["recommended_events"] = store.get_soonest_events(RECOMMENDED_EVENTS_SIZE)[
+        :RECOMMENDED_EVENTS_SIZE
+    ]
     rec["events_soonest_expiry"] = _events_soonest_expiry(rec["recommended_events"])
     store.save_user_recommendations(user_id, rec)
 

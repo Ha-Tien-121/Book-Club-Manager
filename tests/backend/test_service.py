@@ -35,6 +35,7 @@ import backend.service as service  # noqa: E402  (import after sys.path tweak)
 
 
 def test_get_recommender_returns_book_recommender_instance() -> None:
+    "Test get recommender returns book recommender instance."
     with patch("backend.service.BookRecommender") as mock_cls:
         inst = MagicMock()
         mock_cls.return_value = inst
@@ -46,6 +47,7 @@ def test_get_recommender_returns_book_recommender_instance() -> None:
 
 
 def test_build_user_genres_df_empty_returns_expected_columns() -> None:
+    "Test build user genres df empty returns expected columns."
     store: Dict[str, List[Dict[str, Any]]] = {}
 
     df = service.build_user_genres_df("u1", store)
@@ -56,6 +58,7 @@ def test_build_user_genres_df_empty_returns_expected_columns() -> None:
 
 
 def test_build_user_genres_df_populated_creates_rows() -> None:
+    "Test build user genres df populated creates rows."
     store = {
         "u1": [
             {"genre": "Fantasy", "rank": 1},
@@ -72,6 +75,7 @@ def test_build_user_genres_df_populated_creates_rows() -> None:
 
 
 def test_build_user_books_df_empty_gives_single_row_with_empty_list() -> None:
+    "Test build user books df empty gives single row with empty list."
     store: Dict[str, List[str]] = {}
 
     df = service.build_user_books_df("u1", store)
@@ -83,6 +87,7 @@ def test_build_user_books_df_empty_gives_single_row_with_empty_list() -> None:
 
 
 def test_build_user_books_df_populated_uses_list_from_store() -> None:
+    "Test build user books df populated uses list from store."
     store = {"u1": ["b1", "b2"]}
 
     df = service.build_user_books_df("u1", store)
@@ -94,6 +99,7 @@ def test_build_user_books_df_populated_uses_list_from_store() -> None:
 
 
 def test_get_recommendations_passes_ids_and_top_k_to_recommender() -> None:
+    "Test get recommendations passes ids and top k to recommender."
     store = {"u1": ["b1", "b2"]}
     with patch("backend.service.BookRecommender") as mock_cls:
         inst = MagicMock()
@@ -108,6 +114,7 @@ def test_get_recommendations_passes_ids_and_top_k_to_recommender() -> None:
 
 
 def test_get_recommendations_empty_user_id_passes_empty_list() -> None:
+    "Test get recommendations empty user id passes empty list."
     with patch("backend.service.BookRecommender") as mock_cls:
         inst = MagicMock()
         mock_cls.return_value = inst
@@ -120,11 +127,13 @@ def test_get_recommendations_empty_user_id_passes_empty_list() -> None:
 
 
 def test_get_top_popular_books_non_positive_top_k_returns_empty_list() -> None:
+    "Test get top popular books non positive top k returns empty list."
     assert service.get_top_popular_books(0) == []
     assert service.get_top_popular_books(-1) == []
 
 
 def test_get_top_popular_books_calls_recommender_with_empty_library() -> None:
+    "Test get top popular books calls recommender with empty library."
     with patch("backend.service.BookRecommender") as mock_cls:
         inst = MagicMock()
         mock_cls.return_value = inst
@@ -137,6 +146,7 @@ def test_get_top_popular_books_calls_recommender_with_empty_library() -> None:
 
 
 def test_mark_book_as_read_creates_entry_and_avoids_duplicates() -> None:
+    "Test mark book as read creates entry and avoids duplicates."
     user_genres_store: Dict[str, List[Dict[str, Any]]] = {}
     user_books_read_store: Dict[str, List[str]] = {}
 
@@ -158,6 +168,7 @@ def test_mark_book_as_read_creates_entry_and_avoids_duplicates() -> None:
 
 
 def test_get_book_details_normalizes_full_record() -> None:
+    "Test get book details normalizes full record."
     books_store = {
         "b1": {
             "title": "Title",
@@ -179,6 +190,7 @@ def test_get_book_details_normalizes_full_record() -> None:
 
 
 def test_get_book_details_handles_missing_and_non_list_fields() -> None:
+    "Test get book details handles missing and non list fields."
     books_store = {
         "b2": {
             "title": "T2",
@@ -200,6 +212,7 @@ def test_get_book_details_handles_missing_and_non_list_fields() -> None:
 
 
 def test_get_book_details_missing_book_returns_defaults() -> None:
+    "Test get book details missing book returns defaults."
     books_store: Dict[str, Dict[str, Any]] = {}
 
     result = service.get_book_details("missing", books_store)

@@ -98,6 +98,15 @@ def _score_event(
 class EventRecommender:
     """Scoring-based event recommender operating on in-memory event dicts."""
 
+    def score_event(
+        self,
+        event: Dict[str, Any],
+        user_tags: List[str],
+        now: datetime | None = None,
+    ) -> tuple[float, int, float, float]:
+        """Expose event scoring for callers that need diagnostics."""
+        return _score_event(event, user_tags, now=now)
+
     def recommend(
         self,
         events: List[Dict[str, Any]],
@@ -133,6 +142,17 @@ class EventRecommender:
 
         # Sort by recency, city, overlap, score, then start_ts ascending
         def sort_key(ev: Dict[str, Any]) -> tuple:
+            """Build the primary ranking key for candidate events.
+
+            Args:
+                ev: Event payload augmented with intermediate score fields.
+
+            Returns:
+                tuple: Sort tuple used for descending priority ordering.
+
+            Exceptions:
+                None.
+            """
             return (
                 ev.get("_recency_score", 0.0),
                 ev.get("_tag_overlap", 0),
@@ -150,6 +170,17 @@ class EventRecommender:
         seen_links: set[str] = set()
 
         def get_link(ev: Dict[str, Any]) -> str:
+            """Return a stable deduplication key for an event.
+
+            Args:
+                ev: Event payload.
+
+            Returns:
+                str: Link if present, otherwise event_id, otherwise object fallback.
+
+            Exceptions:
+                None.
+            """
             return str(ev.get("link") or ev.get("event_id") or id(ev))
 
         explore_iter = iter(explore_pool)
@@ -191,6 +222,17 @@ class EventRecommender:
 
         # Final deterministic ordering by cumulative score, then earliest time
         def final_sort_key(ev: Dict[str, Any]) -> tuple:
+            """Build final stable sort key after diversification.
+
+            Args:
+                ev: Ranked event payload.
+
+            Returns:
+                tuple: Composite key of score then time signal.
+
+            Exceptions:
+                None.
+            """
             return (
                 ev.get("_score", 0.0),
                 ev.get("ttl") or ev.get("expiry") or ev.get("start_time") or 0,
@@ -198,4 +240,3 @@ class EventRecommender:
 
         results = sorted(results, key=final_sort_key, reverse=True)
         return results[:top_k]
-

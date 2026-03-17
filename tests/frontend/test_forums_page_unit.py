@@ -8,14 +8,17 @@ from typing import Any, Callable
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: dict[str, Any] = {}
         self.sidebar = self
@@ -34,69 +37,88 @@ class _FakeStreamlitRuntime:
         self.successes: list[str] = []
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     # layout/output
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def caption(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for caption."
         return None
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def divider(self) -> None:
+        "Helper for divider."
         return None
 
     def warning(self, msg: str, **_kw: Any) -> None:
+        "Helper for warning."
         self.warnings.append(str(msg))
 
     def success(self, msg: str, **_kw: Any) -> None:
+        "Helper for success."
         self.successes.append(str(msg))
 
     # containers/forms
     def container(self, **_kw: Any):
+        "Helper for container."
         return _FakeCtx()
 
     def columns(self, n: int | list[int], **_kw: Any):
+        "Helper for columns."
         if isinstance(n, list):
             n = len(n)
         return [_Column(self) for _ in range(int(n))]
 
     def expander(self, *_a: Any, **_kw: Any):
+        "Helper for expander."
         return _FakeCtx()
 
     def form(self, *_a: Any, **_kw: Any):
+        "Helper for form."
         return _FakeCtx()
 
     # inputs
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
 
     def text_input(self, label: str, *, key: str | None = None, **_kw: Any) -> str:
+        "Helper for text input."
         if key and key in self._text_input_by_key:
             return str(self._text_input_by_key[key])
         return str(self._text_input_by_label.get(label, ""))
 
     def text_area(self, _label: str, *, key: str, **_kw: Any) -> str:
+        "Helper for text area."
         return str(self._text_area_by_key.get(key, ""))
 
     def form_submit_button(self, label: str, **_kw: Any) -> bool:
+        "Helper for form submit button."
         return bool(self._form_submit_by_label.get(label, False))
 
     def radio(self, _label: str, options: list[str], **_kw: Any) -> str:
+        "Helper for radio."
         return self._radio_value if self._radio_value in options else options[0]
 
     def selectbox(self, _label: str, options: list[str], **_kw: Any) -> str:
+        "Helper for selectbox."
         return self._selectbox_value if self._selectbox_value in options else options[0]
 
 
@@ -104,22 +126,28 @@ class _Column:
     """Context-manager column that delegates interactive calls to runtime."""
 
     def __init__(self, rt: _FakeStreamlitRuntime) -> None:
+        "Support __init__ for test doubles."
         self._rt = rt
 
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
     def button(self, *a: Any, **kw: Any) -> bool:
+        "Helper for button."
         return self._rt.button(*a, **kw)
 
     def caption(self, *a: Any, **kw: Any) -> None:
+        "Helper for caption."
         return self._rt.caption(*a, **kw)
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -152,6 +180,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_forums_detail_signed_in_like_save_and_reply_paths() -> None:
+    "Test forums detail signed in like save and reply paths."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -166,9 +195,11 @@ def test_forums_detail_signed_in_like_save_and_reply_paths() -> None:
 
     class _Store:
         def save_forum_db(self, db: dict) -> None:
+            "Helper for save forum db."
             saved_forum_db.append(db)
 
         def save_user_forum(self, store: dict) -> None:
+            "Helper for save user forum."
             saved_user_forum.append(store)
 
     forums.get_storage = lambda: _Store()  # type: ignore[assignment]
@@ -225,6 +256,7 @@ def test_forums_detail_signed_in_like_save_and_reply_paths() -> None:
 
 
 def test_forums_detail_reply_empty_warns() -> None:
+    "Test forums detail reply empty warns."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -264,6 +296,7 @@ def test_forums_detail_reply_empty_warns() -> None:
 
 
 def test_forums_create_post_success_and_open_discussion_from_list() -> None:
+    "Test forums create post success and open discussion from list."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
 
@@ -295,6 +328,7 @@ def test_forums_create_post_success_and_open_discussion_from_list() -> None:
     cleared = {"called": 0}
 
     def _clear_cache() -> None:
+        "Helper for  clear cache."
         cleared["called"] += 1
 
     forums._render_forum_create_and_list(

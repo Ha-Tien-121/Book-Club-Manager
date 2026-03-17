@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.services import events_service
 from backend.storage import get_storage
 
 
@@ -125,14 +126,12 @@ def get_saved_events_with_details(user_id: str) -> list[dict[str, Any]]:
     Returns:
         List of event dicts (full schema), in the same order as saved.
     """
-    from backend.services.events_service import get_event_detail  # avoid circular import
-
     user_id = str(user_id).strip().lower()
     rec = get_user_events(user_id)
     event_ids = rec.get("events") or []
     out: list[dict[str, Any]] = []
     for eid in event_ids:
-        ev = get_event_detail(eid)
+        ev = events_service.get_event_detail(eid)
         if ev:
             out.append(ev)
     return out

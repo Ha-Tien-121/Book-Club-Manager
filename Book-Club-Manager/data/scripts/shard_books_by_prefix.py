@@ -145,6 +145,17 @@ def sanitize_payload(payload: dict, book_id: str) -> dict:
     out.setdefault("parent_asin", book_id)
 
     def as_str(val):
+        """Normalize any value to a string.
+
+        Args:
+            val: Input value of any type.
+
+        Returns:
+            str: Empty string for None, else stringified value.
+
+        Exceptions:
+            None.
+        """
         if val is None:
             return ""
         return str(val)
@@ -154,6 +165,17 @@ def sanitize_payload(payload: dict, book_id: str) -> dict:
     out["images"] = as_str(out.get("images", ""))
 
     def as_list_str(val):
+        """Normalize a scalar/sequence into list[str].
+
+        Args:
+            val: Value to normalize.
+
+        Returns:
+            list[str]: Empty list for None, list of strings otherwise.
+
+        Exceptions:
+            None.
+        """
         if val is None:
             return []
         if isinstance(val, (list, tuple)):
@@ -164,12 +186,34 @@ def sanitize_payload(payload: dict, book_id: str) -> dict:
     out["description"] = as_list_str(out.get("description", []))
 
     def as_int(val):
+        """Best-effort integer conversion.
+
+        Args:
+            val: Value to convert.
+
+        Returns:
+            int | None: Parsed integer, or None when conversion fails.
+
+        Exceptions:
+            None. Conversion errors are handled internally.
+        """
         try:
             return int(val)
         except (TypeError, ValueError, OverflowError):
             return None
 
     def as_float(val):
+        """Best-effort float conversion.
+
+        Args:
+            val: Value to convert.
+
+        Returns:
+            float | None: Parsed float, or None when conversion fails.
+
+        Exceptions:
+            None. Conversion errors are handled internally.
+        """
         try:
             return float(val)
         except (TypeError, ValueError, OverflowError):

@@ -7,11 +7,13 @@ import pandas as pd
 
 
 def _import_storage():
+    "Helper for  import storage."
     mod = importlib.import_module("backend.storage")
     return importlib.reload(mod)
 
 
 def test_get_book_details_branches_via_mocked_parquet(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    "Test get book details branches via mocked parquet."
     storage = _import_storage()
 
     # Empty parent_asin -> None
@@ -55,6 +57,7 @@ def test_get_book_details_branches_via_mocked_parquet(monkeypatch, tmp_path) -> 
 
 
 def test_increment_and_reset_library_actions_since_recs_success_and_exceptions() -> None:
+    "Test increment and reset library actions since recs success and exceptions."
     storage = _import_storage()
 
     import boto3  # type: ignore
@@ -86,6 +89,7 @@ def test_increment_and_reset_library_actions_since_recs_success_and_exceptions()
 
     # reset exception -> False
     def _bad_update_item(**_kw):  # type: ignore[no-untyped-def]
+        "Helper for  bad update item."
         raise RuntimeError("boom")
 
     table.update_item = _bad_update_item  # type: ignore[assignment]

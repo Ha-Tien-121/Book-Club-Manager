@@ -41,6 +41,7 @@ class TestGetTrendingBooksSpl(unittest.TestCase):
     """Tests for get_trending_books_spl."""
 
     def test_returns_spl_books_up_to_limit(self, mock_get_storage: MagicMock) -> None:
+        "Test returns spl books up to limit."
         store = MagicMock()
         store.get_spl_top50_checkout_books.return_value = [
             {"parent_asin": "A1", "title": "Book 1"},
@@ -55,6 +56,7 @@ class TestGetTrendingBooksSpl(unittest.TestCase):
         store.get_spl_top50_checkout_books.assert_called_once()
 
     def test_fallback_to_review_books_on_exception(self, mock_get_storage: MagicMock) -> None:
+        "Test fallback to review books on exception."
         store = MagicMock()
         store.get_spl_top50_checkout_books.side_effect = OSError("network")
         store.get_top50_review_books.return_value = [{"parent_asin": "B1", "title": "Review 1"}]
@@ -66,6 +68,7 @@ class TestGetTrendingBooksSpl(unittest.TestCase):
         store.get_top50_review_books.assert_called_once()
 
     def test_returns_empty_list_when_both_raise(self, mock_get_storage: MagicMock) -> None:
+        "Test returns empty list when both raise."
         store = MagicMock()
         store.get_spl_top50_checkout_books.side_effect = ValueError("bad")
         store.get_top50_review_books.side_effect = TypeError("bad")
@@ -75,6 +78,7 @@ class TestGetTrendingBooksSpl(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_none_spl_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test none spl returns empty list."
         store = MagicMock()
         store.get_spl_top50_checkout_books.return_value = None
         mock_get_storage.return_value = store
@@ -89,6 +93,7 @@ class TestGetTrendingBooksReviews(unittest.TestCase):
     """Tests for get_trending_books_reviews."""
 
     def test_returns_review_books_up_to_limit(self, mock_get_storage: MagicMock) -> None:
+        "Test returns review books up to limit."
         store = MagicMock()
         store.get_top50_review_books.return_value = [
             {"parent_asin": "R1"},
@@ -101,6 +106,7 @@ class TestGetTrendingBooksReviews(unittest.TestCase):
         self.assertEqual(result[0]["parent_asin"], "R1")
 
     def test_exception_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test exception returns empty list."
         store = MagicMock()
         store.get_top50_review_books.side_effect = OSError("network error")
         mock_get_storage.return_value = store
@@ -114,6 +120,7 @@ class TestGetBookDetail(unittest.TestCase):
     """Tests for get_book_detail."""
 
     def test_returns_full_details_when_available(self, mock_get_storage: MagicMock) -> None:
+        "Test returns full details when available."
         store = MagicMock()
         store.get_book_details.return_value = {"parent_asin": "X1", "title": "Full", "description": "Long"}
         mock_get_storage.return_value = store
@@ -124,6 +131,7 @@ class TestGetBookDetail(unittest.TestCase):
         store.get_book_details.assert_called_once_with("X1")
 
     def test_fallback_to_metadata_when_details_empty(self, mock_get_storage: MagicMock) -> None:
+        "Test fallback to metadata when details empty."
         store = MagicMock()
         store.get_book_details.return_value = None
         store.get_book_metadata.return_value = {"parent_asin": "Y1", "title": "Meta"}
@@ -135,6 +143,7 @@ class TestGetBookDetail(unittest.TestCase):
         store.get_book_metadata.assert_called_once_with("Y1")
 
     def test_empty_parent_asin_returns_empty_dict(self, mock_get_storage: MagicMock) -> None:
+        "Test empty parent asin returns empty dict."
         mock_get_storage.return_value = MagicMock()
 
         result = books_service.get_book_detail("")
@@ -143,6 +152,7 @@ class TestGetBookDetail(unittest.TestCase):
         self.assertEqual(result2, {})
 
     def test_exception_returns_empty_dict(self, mock_get_storage: MagicMock) -> None:
+        "Test exception returns empty dict."
         store = MagicMock()
         store.get_book_details.side_effect = OSError("fail")
         store.get_book_metadata.side_effect = ValueError("fail")
@@ -157,6 +167,7 @@ class TestGetBookForumThread(unittest.TestCase):
     """Tests for get_book_forum_thread."""
 
     def test_returns_thread_from_get_forum_thread_for_book(self, mock_get_storage: MagicMock) -> None:
+        "Test returns thread from get forum thread for book."
         store = MagicMock()
         store.get_forum_thread_for_book.return_value = [{"id": 1, "body": "Post 1"}]
         mock_get_storage.return_value = store
@@ -167,6 +178,7 @@ class TestGetBookForumThread(unittest.TestCase):
         store.get_forum_thread_for_book.assert_called_once_with("B123")
 
     def test_empty_parent_asin_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test empty parent asin returns empty list."
         mock_get_storage.return_value = MagicMock()
 
         result = books_service.get_book_forum_thread("")
@@ -175,6 +187,7 @@ class TestGetBookForumThread(unittest.TestCase):
         self.assertEqual(result2, [])
 
     def test_fallback_to_get_forum_thread_on_exception(self, mock_get_storage: MagicMock) -> None:
+        "Test fallback to get forum thread on exception."
         store = MagicMock()
         store.get_forum_thread_for_book.side_effect = OSError("fail")
         store.get_forum_thread.return_value = [{"id": 2, "body": "Fallback"}]
@@ -186,6 +199,7 @@ class TestGetBookForumThread(unittest.TestCase):
         store.get_forum_thread.assert_called_once_with("B456")
 
     def test_both_exceptions_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test both exceptions returns empty list."
         store = MagicMock()
         store.get_forum_thread_for_book.side_effect = ValueError("a")
         store.get_forum_thread.side_effect = TypeError("b")
@@ -207,6 +221,7 @@ class TestGetBookHub(unittest.TestCase):
         mock_get_forum: MagicMock,
         mock_get_events: MagicMock,
     ) -> None:
+        "Test returns combined payload."
         mock_get_detail.return_value = {"parent_asin": "H1", "title": "Hub Book"}
         mock_get_forum.return_value = [{"id": 1}]
         mock_get_events.return_value = [{"event_id": "e1"}]
@@ -229,6 +244,7 @@ class TestGetBookHub(unittest.TestCase):
 class TestGetBookRelatedEvents(unittest.TestCase):
     """Tests for get_book_related_events."""
     def test_returns_events_up_to_limit(self, mock_get_storage: MagicMock) -> None:
+        "Test returns events up to limit."
         store = MagicMock()
         store.get_events_for_book.return_value = [
             {"event_id": "ev1"},
@@ -241,6 +257,7 @@ class TestGetBookRelatedEvents(unittest.TestCase):
         store.get_events_for_book.assert_called_once_with("P1", limit=3)
 
     def test_empty_parent_asin_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test empty parent asin returns empty list."
         mock_get_storage.return_value = MagicMock()
         result = books_service.get_book_related_events("", limit=5)
         self.assertEqual(result, [])
@@ -248,6 +265,7 @@ class TestGetBookRelatedEvents(unittest.TestCase):
         self.assertEqual(result2, [])
 
     def test_limit_zero_or_negative_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test limit zero or negative returns empty list."
         mock_get_storage.return_value = MagicMock()
         result = books_service.get_book_related_events("P1", limit=0)
         self.assertEqual(result, [])
@@ -255,6 +273,7 @@ class TestGetBookRelatedEvents(unittest.TestCase):
         self.assertEqual(result2, [])
 
     def test_exception_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test exception returns empty list."
         store = MagicMock()
         store.get_events_for_book.side_effect = OSError("fail")
         mock_get_storage.return_value = store
@@ -262,6 +281,7 @@ class TestGetBookRelatedEvents(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_none_result_returns_empty_list(self, mock_get_storage: MagicMock) -> None:
+        "Test none result returns empty list."
         store = MagicMock()
         store.get_events_for_book.return_value = None
         mock_get_storage.return_value = store

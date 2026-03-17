@@ -8,50 +8,63 @@ from typing import Any, Callable
 
 class _FakeCtx:
     def __enter__(self):
+        "Support __enter__ for test doubles."
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        "Support __exit__ for test doubles."
         return False
 
 
 class _QueryParams(dict):
     def clear(self) -> None:  # match streamlit query_params API used by app
+        "Helper for clear."
         super().clear()
 
 
 class _FakeSidebar:
     def __init__(self, rt: "_FakeStreamlitRuntime") -> None:
+        "Support __init__ for test doubles."
         self._rt = rt
         self.errors: list[str] = []
         self.successes: list[str] = []
 
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def subheader(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for subheader."
         return None
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def caption(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for caption."
         return None
 
     def error(self, msg: str, **_kw: Any) -> None:
+        "Helper for error."
         self.errors.append(str(msg))
 
     def success(self, msg: str, **_kw: Any) -> None:
+        "Helper for success."
         self.successes.append(str(msg))
 
     def button(self, label: str, **_kw: Any) -> bool:
+        "Helper for button."
         return self._rt.button(label, **_kw)
 
     def form(self, *_a: Any, **_kw: Any):
+        "Helper for form."
         return _FakeCtx()
 
 
 class _FakeStreamlitRuntime:
     def __init__(self) -> None:
+        "Support __init__ for test doubles."
         self.session_state: dict[str, Any] = {}
         self.query_params: _QueryParams = _QueryParams()
         self.sidebar = _FakeSidebar(self)
@@ -63,13 +76,17 @@ class _FakeStreamlitRuntime:
         self.rerun_called = 0
 
     def rerun(self) -> None:
+        "Helper for rerun."
         self.rerun_called += 1
 
     def set_page_config(self, **_kw: Any) -> None:
+        "Helper for set page config."
         return None
 
     def cache_data(self, **_kw: Any):
+        "Helper for cache data."
         def _decorator(fn):
+            "Helper for  decorator."
             fn.clear = lambda: None  # type: ignore[attr-defined]
             return fn
 
@@ -77,51 +94,65 @@ class _FakeStreamlitRuntime:
 
     # layout/output
     def title(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for title."
         return None
 
     def caption(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for caption."
         return None
 
     def markdown(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for markdown."
         return None
 
     def write(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for write."
         return None
 
     def success(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for success."
         return None
 
     def error(self, *_a: Any, **_kw: Any) -> None:
+        "Helper for error."
         return None
 
     def checkbox(self, *_a: Any, **_kw: Any) -> bool:
+        "Helper for checkbox."
         return False
 
     def columns(self, n: int, **_kw: Any):
+        "Helper for columns."
         return [_FakeCtx() for _ in range(int(n))]
 
     def tabs(self, labels: list[str]):
+        "Helper for tabs."
         return [_FakeCtx() for _ in labels]
 
     # inputs
     def button(self, label: str, *, key: str | None = None, **_kw: Any) -> bool:
+        "Helper for button."
         if key and key in self._button_by_key:
             return bool(self._button_by_key[key])
         return bool(self._button_by_label.get(label, False))
 
     def text_input(self, _label: str, *, key: str | None = None, **_kw: Any) -> str:
+        "Helper for text input."
         if key:
             return str(self._text_input_by_key.get(key, ""))
         return ""
 
     def form(self, *_a: Any, **_kw: Any):
+        "Helper for form."
         return _FakeCtx()
 
     def form_submit_button(self, label: str, **_kw: Any) -> bool:
+        "Helper for form submit button."
         return bool(self._button_by_label.get(label, False))
 
 
 def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
+    "Helper for  install streamlit."
     st_mod = types.ModuleType("streamlit")
     st_mod.session_state = rt.session_state  # type: ignore[attr-defined]
     st_mod.query_params = rt.query_params  # type: ignore[attr-defined]
@@ -159,6 +190,7 @@ def _install_streamlit(rt: _FakeStreamlitRuntime) -> None:
 
 
 def test_auth_panel_sign_out_clears_session_and_reruns() -> None:
+    "Test auth panel sign out clears session and reruns."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     auth = importlib.import_module("frontend.pages.auth")
@@ -178,6 +210,7 @@ def test_auth_panel_sign_out_clears_session_and_reruns() -> None:
 
 
 def test_auth_panel_sign_in_validation_and_success_paths(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    "Test auth panel sign in validation and success paths."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     auth = importlib.import_module("frontend.pages.auth")
@@ -206,6 +239,7 @@ def test_auth_panel_sign_in_validation_and_success_paths(monkeypatch) -> None:  
 
 
 def test_main_create_account_early_return() -> None:
+    "Test main create account early return."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     main = importlib.import_module("frontend.main")
@@ -232,9 +266,11 @@ def test_main_create_account_early_return() -> None:
 
     class _Storage:
         def load_forum_db(self):  # type: ignore[no-untyped-def]
+            "Helper for load forum db."
             return {"posts": []}
 
         def load_user_store(self, _email=None):  # type: ignore[no-untyped-def]
+            "Helper for load user store."
             return {"accounts": {"users": {}}, "books": {}, "clubs": {}, "forum": {}}
 
     main.get_storage = lambda: _Storage()  # type: ignore[assignment]
@@ -247,6 +283,7 @@ def test_main_create_account_early_return() -> None:
 
 
 def test_main_restores_auth_user_from_query() -> None:
+    "Test main restores auth user from query."
     rt = _FakeStreamlitRuntime()
     _install_streamlit(rt)
     main = importlib.import_module("frontend.main")
@@ -272,9 +309,11 @@ def test_main_restores_auth_user_from_query() -> None:
 
     class _Storage:
         def load_forum_db(self):  # type: ignore[no-untyped-def]
+            "Helper for load forum db."
             return {"posts": []}
 
         def load_user_store(self, _email=None):  # type: ignore[no-untyped-def]
+            "Helper for load user store."
             return {"accounts": {"users": {"u@example.com": {"user_id": "u@example.com"}}}}
 
     main.get_storage = lambda: _Storage()  # type: ignore[assignment]

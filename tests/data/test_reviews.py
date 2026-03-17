@@ -42,6 +42,7 @@ if not SAMPLE_REVIEWS.exists() or not SAMPLE_IDX.exists():
     pytest.skip("reviews sample data not available", allow_module_level=True)
 
 def _make_temp_dir():
+    "Helper for  make temp dir."
     base = Path(__file__).resolve().parent / "_tmp"
     base.mkdir(exist_ok=True)
     temp_path = base / f"tmp_{uuid.uuid4().hex}"

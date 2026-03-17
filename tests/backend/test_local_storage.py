@@ -166,9 +166,11 @@ def test_row_to_book_dict_loads_or_empty_branches() -> None:
 
     class FakeRow:
         def __init__(self, mapping: Dict[str, Any]):
+            "Support __init__ for test doubles."
             self._m = mapping
 
         def __getitem__(self, k: str) -> Any:
+            "Support __getitem__ for test doubles."
             return self._m[k]
 
     row = FakeRow(
@@ -260,6 +262,7 @@ def test_get_book_details_reads_full_details_from_local_sqlite(tmp_path: Path) -
 
 
 def test_get_book_metadata_and_details_return_none_for_empty_parent_asin() -> None:
+    "Test get book metadata and details return none for empty parent asin."
     storage = _make_local_storage()
     assert storage.get_book_metadata("") is None
     assert storage.get_book_metadata("   ") is None
