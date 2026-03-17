@@ -12,16 +12,7 @@ Bookish is a Streamlit app that centralizes book club experiences in one place:
 - Participate in book discussions (forum)
 - Receive personalized book recommendations
 
----
-
-## Contributors
-
-- Ha Tien Nguyen
-- Sarah Mathison
-- Maanya Cola Bharath
-- Elsie Wang
-
----
+**Contributors:** Ha Tien Nguyen, Sarah Mathison, Maanya Cola Bharath, Elsie Wang
 
 ## What this project delivers
 
@@ -37,24 +28,14 @@ used by the app and recommendation workflows.
 
 ---
 
-## Data sources
+## Live Demo
 
-This project integrates multiple data sources:
+- Live app: [Bookish Web App](http://100.23.182.233/)
+- Demo walkthrough video: [Bookish Demo Video](https://drive.google.com/file/d/1UA0MJa7v9j6DMzDtYYou7BqiT5ZeTbzF/view?usp=sharing)
 
-1. **Amazon Books/Reviews Dataset** (McAuley Lab, 2023)
-2. **Seattle Public Library (SPL) data** (checkouts and catalog-derived popularity)
-3. **Seattle-area book events** (collected via SerpAPI/Google Events)
+---
 
-How each source is used:
-
-- **Amazon Books/Reviews** -> Primary catalog + recommendation backbone. We use fields such as `parent_asin`, title, author, categories/genres, ratings, image URL, and description to build `books.db`, Parquet shards, and recommender artifacts consumed by the feed/library views.  
-  Limitation: Coverage and recommendation quality depend on metadata completeness and review density.
-- **SPL data** -> Seattle-local demand signal. Checkout counts are joined against books to produce `spl_top50_checkouts_in_books.json`, which powers trending/local discovery and helps rank recommendations toward local relevance.  
-  Limitation: Reflects SPL circulation behavior and may not represent broader reader preferences.
-- **Book events (SerpAPI/Google Events)** -> Event discovery and personalization source. Event title, venue, date/time, description, and links are normalized and tagged for explore-events pages and event recommendation candidates.  
-  Limitation: Freshness/completeness depends on third-party event listings and scraping/API availability.
-
-## Project structure (what’s where)
+## Project Structure
 
 Top-level:
 
@@ -77,6 +58,23 @@ Entrypoint shim:
 
 - `streamlit_app.py` (repo root): a small shim that loads `Book-Club-Manager/streamlit_app.py`
   - This is helpful for CI/test tooling and deployments that expect an app entrypoint at repo root.
+
+## Data sources
+
+This project integrates multiple data sources:
+
+1. **Amazon Books/Reviews Dataset** (McAuley Lab, 2023)
+2. **Seattle Public Library (SPL) data** (checkouts and catalog-derived popularity)
+3. **Seattle-area book events** (collected via SerpAPI/Google Events)
+
+How each source is used:
+
+- **Amazon Books/Reviews** -> Primary catalog + recommendation backbone. We use fields such as `parent_asin`, title, author, categories/genres, ratings, image URL, and description to build `books.db`, Parquet shards, and recommender artifacts consumed by the feed/library views.  
+  Limitation: Coverage and recommendation quality depend on metadata completeness and review density.
+- **SPL data** -> Seattle-local demand signal. Checkout counts are joined against books to produce `spl_top50_checkouts_in_books.json`, which powers trending/local discovery and helps rank recommendations toward local relevance.  
+  Limitation: Reflects SPL circulation behavior and may not represent broader reader preferences.
+- **Book events (SerpAPI/Google Events)** -> Event discovery and personalization source. Event title, venue, date/time, description, and links are normalized and tagged for explore-events pages and event recommendation candidates.  
+  Limitation: Freshness/completeness depends on third-party event listings and scraping/API availability.
 
 ## Documentation
 
