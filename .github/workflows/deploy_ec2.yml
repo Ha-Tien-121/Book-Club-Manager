@@ -53,8 +53,37 @@ jobs:
             sudo systemctl restart bookclub-v2
             sudo systemctl is-active --quiet bookclub-v2
 
-            # Quick smoke check from localhost through nginx.
-            curl -fsS "http://127.0.0.1/" > /dev/null
+            # Wait for Streamlit health endpoint before checking nginx.
+            READY=0
+            for i in {1..30}; do
+              if curl -fsS "http://127.0.0.1:8501/_stcore/health" > /dev/null; then
+                READY=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$READY" -ne 1 ]; then
+              echo "Streamlit did not become healthy in time"
+              sudo systemctl status bookclub-v2 --no-pager -l || true
+              sudo journalctl -u bookclub-v2 -n 120 --no-pager || true
+              exit 1
+            fi
+
+            # Smoke check from localhost through nginx with short retry.
+            READY=0
+            for i in {1..10}; do
+              if curl -fsS "http://127.0.0.1/" > /dev/null; then
+                READY=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$READY" -ne 1 ]; then
+              echo "Nginx localhost smoke check failed"
+              sudo systemctl status bookclub-v2 --no-pager -l || true
+              sudo journalctl -u bookclub-v2 -n 120 --no-pager || true
+              exit 1
+            fi
 
             # Additional check: runtime storage mode should be cloud on EC2.
             cd "$INNER_APP_DIR"
