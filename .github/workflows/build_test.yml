@@ -95,8 +95,10 @@ jobs:
       # to package whole repo replace data with .
       - name: Unit tests
         run: |
-          export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
-          coverage run --source=data -m unittest discover -s tests -p "test*.py"
+          export PYTHONPATH="${{ github.workspace }}/Book-Club-Manager:$PYTHONPATH"
+          coverage run --source=Book-Club-Manager/data,Book-Club-Manager/backend -m unittest \
+            tests.sample_data.test_books_recommender_backend \
+            tests.test_book_recommender_fitting
           coverage report
           coverage lcov -o coverage.lcov
 
@@ -106,7 +108,7 @@ jobs:
       # to lint entire repo remove data/scripts/ below
       - name: Lint with pylint
         run: |
-          pylint data/scripts/**/*.py
+          pylint Book-Club-Manager/data/scripts/**/*.py
 
       - name: Debug lcov
         run: cat coverage.lcov | head -30
