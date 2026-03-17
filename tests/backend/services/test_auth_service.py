@@ -31,22 +31,18 @@ if "boto3" not in sys.modules:
     sys.modules["boto3.dynamodb"] = MagicMock()
     sys.modules["boto3.dynamodb.conditions"] = _conditions
 
-# Mock backend.services.recommender_service (auth_service imports from here).
-if "backend.services.recommender_service" not in sys.modules:
-    _rec_mod = types.ModuleType("backend.services.recommender_service")
-    _rec_mod.ensure_default_recommendations = MagicMock()
-    sys.modules["backend.services.recommender_service"] = _rec_mod
-
-# Import after mocks so auth_service gets mocked deps; we patch get_storage where it is used.
+# Import after boto3 stub; we patch `ensure_default_recommendations` where it is used
+# (auth_service imports it directly).
 from backend.services import auth_service  # noqa: E402
 
 
+@patch("backend.services.auth_service.ensure_default_recommendations")
 @patch("backend.services.auth_service.get_storage")
 class TestCreateUser(unittest.TestCase):
     """Tests for create_user."""
 
     def test_create_user_success_returns_sanitized_record(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {}
@@ -62,11 +58,10 @@ class TestCreateUser(unittest.TestCase):
         self.assertNotIn("password_hash", result)
         store.save_user_account.assert_called_once()
         store.save_user_books.assert_called_once()
-        import backend.services.recommender_service as _rec
-        _rec.ensure_default_recommendations.assert_called_with("alice@example.com")
+        mock_ensure_defaults.assert_called_with("alice@example.com")
 
     def test_create_user_normalizes_email_lowercase(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {}
@@ -78,7 +73,7 @@ class TestCreateUser(unittest.TestCase):
         self.assertEqual(result["name"], "alice")
 
     def test_create_user_empty_email_raises(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
         mock_get_storage.return_value = MagicMock()
 
@@ -87,7 +82,7 @@ class TestCreateUser(unittest.TestCase):
         self.assertIn("Email and Password required", str(ctx.exception))
 
     def test_create_user_empty_password_raises(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {}
@@ -98,7 +93,7 @@ class TestCreateUser(unittest.TestCase):
         self.assertIn("Email and Password required", str(ctx.exception))
 
     def test_create_user_email_taken_raises(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {"user_id": "existing@example.com"}
@@ -110,7 +105,7 @@ class TestCreateUser(unittest.TestCase):
         store.save_user_account.assert_not_called()
 
     def test_create_user_skips_save_user_books_when_library_exists(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {}
@@ -123,11 +118,10 @@ class TestCreateUser(unittest.TestCase):
         auth_service.create_user("bob@example.com", "pass")
         store.save_user_account.assert_called_once()
         store.save_user_books.assert_not_called()
-        import backend.services.recommender_service as _rec
-        _rec.ensure_default_recommendations.assert_called_with("bob@example.com")
+        mock_ensure_defaults.assert_called_with("bob@example.com")
 
     def test_create_user_handles_get_user_books_non_dict(
-        self, mock_get_storage: MagicMock
+        self, mock_get_storage: MagicMock, mock_ensure_defaults: MagicMock  # noqa: ARG002
     ) -> None:
         store = MagicMock()
         store.get_user_account.return_value = {}

@@ -15,7 +15,8 @@ from backend.recommender.book_recommender import BookRecommender, GENRE_VOCAB
 
 @pytest.fixture()
 def fitted_recommender() -> BookRecommender:
-    br = BookRecommender(data_dir=None)
+    # Instantiate with current constructor; tests inject their own data.
+    br = BookRecommender()
 
     parent_asins = [f"A{str(i).zfill(3)}" for i in range(1, 11)]
     titles = [f"Book {i}" for i in range(1, 11)]
