@@ -108,7 +108,7 @@ jobs:
       # to lint entire repo remove data/scripts/ below
       - name: Lint with pylint
         run: |
-          pylint Book-Club-Manager/data/scripts/**/*.py
+          pylint Book-Club-Manager/**/*.py
 
       - name: Debug lcov
         run: cat coverage.lcov | head -30
