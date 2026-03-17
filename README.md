@@ -1,5 +1,5 @@
 [![CI](https://github.com/Ha-Tien-121/Book-Club-Manager/actions/workflows/build_test.yml/badge.svg)](https://github.com/Ha-Tien-121/Book-Club-Manager/actions/workflows/build_test.yml)
-[![Coverage Status](https://coveralls.io/repos/github/Ha-Tien-121/Book-Club-Manager/badge.svg?branch=main)](https://coveralls.io/github/Ha-Tien-121/Book-Club-Manager?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/Ha-Tien-121/Book-Club-Manager/badge.svg?branch=main&kill_cache=1)](https://coveralls.io/github/Ha-Tien-121/Book-Club-Manager?branch=main)
 
 # Bookish: A Book Club Manager
 
@@ -194,6 +194,7 @@ streamlit run streamlit_app.py
 ```
 
 Local mode behavior:
+
 - Uses local processed artifacts/files where available.
 - Does not require DynamoDB/S3 for normal local development.
 
@@ -226,6 +227,7 @@ python data/scripts/loaders/load_reviews_top50_to_s3.py
 ```
 
 Set deployment environment variables so runtime uses cloud storage:
+
 - `APP_ENV=aws`
 - `AWS_REGION=us-west-2`
 - `DATA_BUCKET=<your bucket>`
