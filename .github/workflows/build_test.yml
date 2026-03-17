@@ -96,7 +96,7 @@ jobs:
       - name: Unit tests
         run: |
           export PYTHONPATH="${{ github.workspace }}/Book-Club-Manager:$PYTHONPATH"
-          coverage run --source=Book-Club-Manager/data,Book-Club-Manager/backend -m unittest \
+          coverage run --source=Book-Club-Manager/.,Book-Club-Manager/backend -m unittest \
             tests.sample_data.test_books_recommender_backend \
             tests.test_book_recommender_fitting
           coverage report
@@ -108,7 +108,7 @@ jobs:
       # to lint entire repo remove data/scripts/ below
       - name: Lint with pylint
         run: |
-          pylint Book-Club-Manager/data/scripts/**/*.py
+          pylint Book-Club-Manager/**/*.py
 
       - name: Debug lcov
         run: cat coverage.lcov | head -30
