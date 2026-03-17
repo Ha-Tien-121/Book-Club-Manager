@@ -5,11 +5,10 @@ channels:
 
 dependencies:
   - python=3.11
-  - scikit-learn=1.8.0
+  - scikit-learn
   - pandas
   - numpy
   - scipy
-  - scikit-learn
   - requests
   - python-dotenv
   - pip

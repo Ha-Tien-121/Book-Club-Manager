@@ -88,14 +88,11 @@ jobs:
             # Additional check: verify service runtime is configured for AWS mode.
             SERVICE_ENV="$(sudo systemctl show bookclub-v2 -p Environment --value || true)"
             echo "bookclub-v2 Environment: $SERVICE_ENV"
-            case " $SERVICE_ENV " in
-              *" APP_ENV=aws "*) ;;
-              *)
-                echo "bookclub-v2 missing APP_ENV=aws in systemd environment"
-                sudo systemctl cat bookclub-v2 || true
-                exit 1
-                ;;
-            esac
+            if [[ " $SERVICE_ENV " != *" APP_ENV=aws "* ]]; then
+              echo "bookclub-v2 missing APP_ENV=aws in systemd environment"
+              sudo systemctl cat bookclub-v2 || true
+              exit 1
+            fi
 
             # Validate storage wiring under AWS env (without relying on SSH shell env).
             cd "$INNER_APP_DIR"
