@@ -72,7 +72,7 @@ def create_post(
                 meta = store.get_book_metadata(pa)
                 if meta and meta.get("title"):
                     bt = str(meta["title"]).strip()
-            except Exception:
+            except (RuntimeError, ValueError, TypeError, KeyError):
                 pass
         if bt:
             key_bt = bt.lower()
@@ -404,4 +404,3 @@ def get_saved_posts_with_details(user_id: str) -> list[dict]:
         if post:
             out.append(post)
     return out
-

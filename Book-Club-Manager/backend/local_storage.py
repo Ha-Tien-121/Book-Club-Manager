@@ -21,6 +21,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
+from backend import config
 from backend.storage import LocalStorage as _BaseLocalStorage
 
 
@@ -29,14 +30,9 @@ class LocalStorage(_BaseLocalStorage):
 
     def _books_db_path(self) -> Path:
         """Return path to local books.db (data/processed/books.db by default)."""
-        try:
-            from backend import config
-
-            processed_dir = getattr(config, "PROCESSED_DIR", None)
-            if processed_dir is not None:
-                return Path(processed_dir) / "books.db"
-        except Exception:
-            pass
+        processed_dir = getattr(config, "PROCESSED_DIR", None)
+        if processed_dir is not None:
+            return Path(processed_dir) / "books.db"
         return Path("data") / "processed" / "books.db"
 
     def _fetch_book_row(self, parent_asin: str) -> Optional[sqlite3.Row]:
@@ -132,4 +128,3 @@ class LocalStorage(_BaseLocalStorage):
             return self._row_to_book_dict(row)
         # Fallback to base implementation (S3 Parquet, etc.)
         return super().get_book_details(parent_asin)
-

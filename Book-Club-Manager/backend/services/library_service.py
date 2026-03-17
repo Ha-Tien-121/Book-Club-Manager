@@ -5,7 +5,9 @@ This module is responsible for:
 - Adding, moving, and removing books from a user's shelves (saved, in_progress, finished).
 - Reading the user's library (shelf → list of book IDs) and genre preferences.
 - UI helpers: is_book_in_library, get_shelf_for_book, get_library_with_details (shelves with full book detail dicts).
-- Updating the user's genre preferences (used by the recommender). When a book is added to the library, any of that book's categories not already in preferences are appended.
+- Updating the user's genre preferences (used by the recommender). When a book
+  is added to the library, any of that book's categories not already in
+  preferences are appended.
 
 All persistence goes through the storage abstraction (`get_storage()`), so the same
 logic works in local JSON mode and AWS/DynamoDB mode. The empty library shape is
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.services.books_service import get_book_detail
 from backend.storage import get_storage
 from backend.services.recommender_service import on_book_added_to_shelf
 
@@ -51,7 +54,7 @@ def _merge_book_genres_into_preferences(rec: dict[str, Any], parent_asin: str, s
     """Fetch book categories, merge into genre_preferences, and increment genre_counts."""
     try:
         meta = store.get_book_metadata(parent_asin)
-    except Exception:
+    except (RuntimeError, ValueError, TypeError, KeyError):
         return
     if not meta:
         return
@@ -132,10 +135,14 @@ def add_book_to_library(
 def _drop_genres_only_from_removed_book(
     rec: dict[str, Any], removed_book_key: str, store: Any
 ) -> None:
-    """Decrement genre_counts for the removed book's categories; remove from preferences if count hits 0. O(1) metadata calls."""
+    """Decrement genre_counts and remove exhausted preference genres.
+
+    This only touches categories from the removed book and performs O(1)
+    metadata reads.
+    """
     try:
         meta = store.get_book_metadata(removed_book_key)
-    except Exception:
+    except (RuntimeError, ValueError, TypeError, KeyError):
         return
     if not meta:
         return
@@ -266,8 +273,6 @@ def get_library_with_details(user_id: str) -> dict[str, list[dict[str, Any]]]:
         Dict with keys saved, in_progress, finished; each value is a list of
         book detail dicts (same shape as books_service.get_book_detail).
     """
-    from backend.services.books_service import get_book_detail  # avoid circular import
-
     store = get_storage()
     user_id = str(user_id).strip().lower()
     rec = store.get_user_books(user_id) or {}

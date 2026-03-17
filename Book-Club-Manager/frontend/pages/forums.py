@@ -94,8 +94,8 @@ def _render_forum_tab(
     store: dict,
     forum_store: dict,
     forum_posts_data: list[dict],
-    can_view_forum_post: Callable[[dict, dict | None], bool],
-    build_post_tags: Callable[[dict], list[str]],
+    can_view_forum_post_fn: Callable[[dict, dict | None], bool],
+    build_post_tags_fn: Callable[[dict], list[str]],
     format_post_time: Callable[[dict], str],
     format_comment_time: Callable[[dict], str],
     forum_preview_text: Callable[[str], str],
@@ -116,8 +116,8 @@ def _render_forum_tab(
                 store=store,
                 forum_store=forum_store,
                 forum_posts_data=forum_posts_data,
-                can_view_forum_post=can_view_forum_post,
-                build_post_tags=build_post_tags,
+                can_view_forum_post_fn=can_view_forum_post_fn,
+                build_post_tags_fn=build_post_tags_fn,
                 format_post_time=format_post_time,
                 format_comment_time=format_comment_time,
             )
@@ -127,7 +127,7 @@ def _render_forum_tab(
             current_user=current_user,
             forum_store=forum_store,
             forum_posts_data=forum_posts_data,
-            build_post_tags=build_post_tags,
+            build_post_tags_fn=build_post_tags_fn,
             format_post_time=format_post_time,
             forum_preview_text=forum_preview_text,
             clear_aws_bootstrap_cache=clear_aws_bootstrap_cache,
@@ -141,8 +141,8 @@ def _render_forum_detail(
     store: dict,
     forum_store: dict,
     forum_posts_data: list[dict],
-    can_view_forum_post: Callable[[dict, dict | None], bool],
-    build_post_tags: Callable[[dict], list[str]],
+    can_view_forum_post_fn: Callable[[dict, dict | None], bool],
+    build_post_tags_fn: Callable[[dict], list[str]],
     format_post_time: Callable[[dict], str],
     format_comment_time: Callable[[dict], str],
 ) -> None:
@@ -151,7 +151,7 @@ def _render_forum_detail(
         (p for p in forum_posts_data if int(p.get("id", -1)) == int(selected_post_id)),
         None,
     )
-    if selected_post is None or not can_view_forum_post(selected_post, current_user):
+    if selected_post is None or not can_view_forum_post_fn(selected_post, current_user):
         st.session_state["selected_forum_post_id"] = None
         st.warning("Discussion not found or not accessible.")
         return
@@ -162,7 +162,7 @@ def _render_forum_detail(
         st.rerun()
     st.markdown(f"## {selected_post['title']}")
     st.caption(f"{selected_post.get('author', 'User')} | {format_post_time(selected_post)}")
-    render_pill_tags(build_post_tags(selected_post))
+    render_pill_tags(build_post_tags_fn(selected_post))
     st.write(selected_post.get("preview", ""))
 
     c1, c2 = st.columns(2)
@@ -270,7 +270,7 @@ def _render_forum_create_and_list(
     current_user: dict | None,
     forum_store: dict,
     forum_posts_data: list[dict],
-    build_post_tags: Callable[[dict], list[str]],
+    build_post_tags_fn: Callable[[dict], list[str]],
     format_post_time: Callable[[dict], str],
     forum_preview_text: Callable[[str], str],
     clear_aws_bootstrap_cache: Callable[[], None],
@@ -343,7 +343,7 @@ def _render_forum_create_and_list(
             posts = [p for p in posts if int(p.get("id", -1)) in saved_ids]
     query = tag_query.strip().lower()
     if query:
-        posts = [p for p in posts if query in " ".join(build_post_tags(p)).lower()]
+        posts = [p for p in posts if query in " ".join(build_post_tags_fn(p)).lower()]
     # Sort: newest (created_at desc), oldest (created_at asc), most liked (likes desc)
     if sort_by == "Newest first":
         posts = sorted(posts, key=lambda p: int(p.get("created_at") or 0), reverse=True)
@@ -359,7 +359,7 @@ def _render_forum_create_and_list(
         with st.container(height=560):
             for post in posts:
                 st.markdown(f"### {post['title']}")
-                tags = build_post_tags(post)
+                tags = build_post_tags_fn(post)
                 st.caption(f"{post['author']} | {format_post_time(post)}")
                 render_pill_tags(tags)
                 st.write(forum_preview_text(post.get("preview", "")))

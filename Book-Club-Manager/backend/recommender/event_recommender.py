@@ -98,6 +98,15 @@ def _score_event(
 class EventRecommender:
     """Scoring-based event recommender operating on in-memory event dicts."""
 
+    def score_event(
+        self,
+        event: Dict[str, Any],
+        user_tags: List[str],
+        now: datetime | None = None,
+    ) -> tuple[float, int, float, float]:
+        """Expose event scoring for callers that need diagnostics."""
+        return _score_event(event, user_tags, now=now)
+
     def recommend(
         self,
         events: List[Dict[str, Any]],
@@ -231,4 +240,3 @@ class EventRecommender:
 
         results = sorted(results, key=final_sort_key, reverse=True)
         return results[:top_k]
-

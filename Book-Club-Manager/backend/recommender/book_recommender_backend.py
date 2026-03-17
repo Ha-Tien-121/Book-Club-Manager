@@ -160,4 +160,3 @@ class BookRecommender:
         ]
 
         return [dict(zip(columns, r)) for r in rows]
-    

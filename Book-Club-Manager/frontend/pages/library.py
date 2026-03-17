@@ -36,7 +36,7 @@ def _resolve_library_book(
     if isinstance(bid, str) and bid and not bid.isdigit():
         try:
             detail = storage_get_book_details(bid)
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError):
             detail = None
         if detail:
             # Normalize to the same UI shape render_book_card expects.

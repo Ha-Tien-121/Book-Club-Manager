@@ -14,9 +14,12 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
+from io import BytesIO
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+import importlib
 
 import numpy as np
 import pandas as pd
@@ -26,11 +29,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 
 from backend.config import (
-    PROCESSED_DIR,
+    AWS_REGION,
     BOOK_TFIDF_S3_KEY,
     BOOK_ID_TO_IDX_ARTIFACT_S3_KEY,
     BOOK_RATING_NORMS_S3_KEY,
+    DATA_BUCKET,
+    IS_AWS,
+    ML_ARTIFACTS_BUCKET,
+    PROCESSED_DIR,
 )
+from backend.storage import get_storage
 
 GENRE_VOCAB: List[str] = [
     "Literature & Fiction",
@@ -101,24 +109,24 @@ class RecommenderWeights:
 
 def _safe_json_loads(value: Any) -> Any:
     """Best-effort JSON parse that preserves original values on failure."""
+    parsed_input = value
     if value is None:
-        return None
-    if isinstance(value, (list, dict)):
-        return value
-    if isinstance(value, (bytes, bytearray)):
+        return parsed_input
+    if isinstance(value, (list, dict, str)):
+        parsed_input = value
+    elif isinstance(value, (bytes, bytearray)):
         try:
-            value = value.decode("utf-8", errors="ignore")
-        except Exception:
+            parsed_input = value.decode("utf-8", errors="ignore")
+        except (ValueError, TypeError, AttributeError):
             return value
-    if isinstance(value, str):
-        s = value.strip()
-        if not s:
-            return None
+    s = parsed_input.strip() if isinstance(parsed_input, str) else ""
+    if s:
+        parsed_input = s
         try:
             return json.loads(s)
-        except Exception:
-            return value
-    return value
+        except (ValueError, TypeError):
+            pass
+    return parsed_input
 
 
 def _normalize_whitespace(s: str) -> str:
@@ -133,6 +141,17 @@ def _infer_column(df: pd.DataFrame, candidates: Sequence[str]) -> Optional[str]:
         if cand.lower() in lower_to_actual:
             return lower_to_actual[cand.lower()]
     return None
+
+
+def _map_genre_name(raw_genre: str) -> str:
+    """Map free-form genre labels to the canonical recommender vocabulary."""
+    if raw_genre in GENRE_VOCAB:
+        return raw_genre
+    genre_lower = raw_genre.lower()
+    for official, keywords in GENRE_KEYWORDS.items():
+        if official in GENRE_VOCAB and any(keyword in genre_lower for keyword in keywords):
+            return official
+    return ""
 
 
 class ContentBasedBookRecommender:
@@ -151,10 +170,11 @@ class ContentBasedBookRecommender:
         self.book_id_to_idx: Optional[Dict[str, int]] = None
         self.tfidf_vectorizer: Optional[TfidfVectorizer] = None
         self.book_tfidf: Optional[sparse.csr_matrix] = None
-        self.scalers: Dict[str, MinMaxScaler] = {}
-        # Precomputed path (full catalog): no DataFrame, query books.db for metadata
-        self._rating_norm: Optional[np.ndarray] = None
-        self._rating_number_norm: Optional[np.ndarray] = None
+        # Precomputed path (full catalog): no DataFrame, query books.db for metadata.
+        self._rating_norms: Dict[str, Optional[np.ndarray]] = {
+            "average_rating": None,
+            "rating_number": None,
+        }
 
     def fit(self) -> None:
         """Load from precomputed artifacts (local, or S3 when AWS) or from JSON and build in memory."""
@@ -166,11 +186,10 @@ class ContentBasedBookRecommender:
             return
         # AWS: try loading content-based artifacts from S3 (e.g. s3://bucket/books/book_recommender/).
         try:
-            from backend import config
-            if getattr(config, "IS_AWS", False):
+            if IS_AWS:
                 self._load_precomputed_from_s3()
                 return
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, OSError):
             pass
         self._fit_from_json()
 
@@ -185,24 +204,18 @@ class ContentBasedBookRecommender:
         with idx_path.open("r", encoding="utf-8") as f:
             self.book_id_to_idx = json.load(f)
         data = np.load(norms_path)
-        self._rating_norm = data["average_rating_norm"]
-        self._rating_number_norm = data["rating_number_norm"]
+        self._rating_norms["average_rating"] = data["average_rating_norm"]
+        self._rating_norms["rating_number"] = data["rating_number_norm"]
         self.books_df = None
         self.tfidf_vectorizer = None
-        self.scalers = {}
 
     def _load_precomputed_from_s3(self) -> None:
         """Load precomputed artifacts from S3 (e.g. s3://bucket/books/book_recommender/)."""
-        from io import BytesIO
-
-        from backend import config
-
-        bucket = getattr(config, "DATA_BUCKET", None) or getattr(config, "ML_ARTIFACTS_BUCKET", None)
-        region = getattr(config, "AWS_REGION", None)
+        bucket = DATA_BUCKET or ML_ARTIFACTS_BUCKET
+        region = AWS_REGION
         if not bucket:
             raise RuntimeError("DATA_BUCKET / ML_ARTIFACTS_BUCKET not set for S3 artifact load")
-        import boto3
-
+        boto3 = importlib.import_module("boto3")
         s3 = boto3.client("s3", region_name=region)
         tfidf_resp = s3.get_object(Bucket=bucket, Key=BOOK_TFIDF_S3_KEY)
         self.book_tfidf = sparse.load_npz(BytesIO(tfidf_resp["Body"].read()))
@@ -210,11 +223,10 @@ class ContentBasedBookRecommender:
         self.book_id_to_idx = json.loads(idx_resp["Body"].read().decode("utf-8"))
         norms_resp = s3.get_object(Bucket=bucket, Key=BOOK_RATING_NORMS_S3_KEY)
         data = np.load(BytesIO(norms_resp["Body"].read()))
-        self._rating_norm = data["average_rating_norm"]
-        self._rating_number_norm = data["rating_number_norm"]
+        self._rating_norms["average_rating"] = data["average_rating_norm"]
+        self._rating_norms["rating_number"] = data["rating_number_norm"]
         self.books_df = None
         self.tfidf_vectorizer = None
-        self.scalers = {}
 
     def _fetch_metadata_for_asins(self, asin_list: List[str]) -> List[Dict[str, Any]]:
         """Fetch metadata for parent_asins from books.db (local) or storage (AWS). Returns list of dicts."""
@@ -223,41 +235,7 @@ class ContentBasedBookRecommender:
         # AWS / no local DB: use storage.get_books_metadata_batch (DynamoDB or S3).
         db_path = self.data_dir / "books.db"
         if not db_path.exists():
-            try:
-                from backend.storage import get_storage
-
-                store = get_storage()
-                if hasattr(store, "get_books_metadata_batch"):
-                    batch = store.get_books_metadata_batch(asin_list) or {}
-                    out = []
-                    for asin in asin_list:
-                        m = batch.get(str(asin))
-                        if not m:
-                            continue
-                        cats = m.get("categories") or m.get("categories_list") or []
-                        if isinstance(cats, str):
-                            try:
-                                cats = _safe_json_loads(cats) or []
-                            except Exception:
-                                cats = []
-                        if not isinstance(cats, list):
-                            cats = []
-                        out.append({
-                            "parent_asin": str(asin),
-                            "title": m.get("title") or "",
-                            "author_name": m.get("author_name") or m.get("author"),
-                            "average_rating": float(m.get("average_rating") or 0),
-                            "rating_number": int(m.get("rating_number") or m.get("rating_count") or 0),
-                            "images": m.get("images"),
-                            "categories": m.get("categories"),
-                            "categories_list": [str(x) for x in cats],
-                        })
-                    return out
-            except Exception:
-                pass
-            return []
-
-        import sqlite3
+            return self._fetch_metadata_from_storage(asin_list)
 
         placeholders = ",".join(["?"] * len(asin_list))
         query = f"""
@@ -267,7 +245,7 @@ class ContentBasedBookRecommender:
         try:
             with sqlite3.connect(str(db_path)) as conn:
                 rows = conn.execute(query, asin_list).fetchall()
-        except Exception:
+        except sqlite3.Error:
             return []
         columns = [
             "parent_asin", "title", "author_name",
@@ -283,19 +261,103 @@ class ContentBasedBookRecommender:
                     d["categories_list"] = (
                         [str(x) for x in parsed] if isinstance(parsed, list) else []
                     )
-                except Exception:
+                except (ValueError, TypeError):
                     d["categories_list"] = []
             else:
                 d["categories_list"] = d.get("categories_list") or []
             out.append(d)
         return out
 
+    def _fetch_metadata_from_storage(self, asin_list: List[str]) -> List[Dict[str, Any]]:
+        """Fetch metadata via storage backend when local sqlite is unavailable."""
+        try:
+            store = get_storage()
+            if not hasattr(store, "get_books_metadata_batch"):
+                return []
+            batch = store.get_books_metadata_batch(asin_list) or {}
+        except (RuntimeError, ValueError, TypeError, KeyError):
+            return []
+        out: list[dict[str, Any]] = []
+        for asin in asin_list:
+            metadata = batch.get(str(asin))
+            if not metadata:
+                continue
+            categories = metadata.get("categories") or metadata.get("categories_list") or []
+            if isinstance(categories, str):
+                parsed_categories = _safe_json_loads(categories) or []
+                categories = parsed_categories if isinstance(parsed_categories, list) else []
+            if not isinstance(categories, list):
+                categories = []
+            out.append(
+                {
+                    "parent_asin": str(asin),
+                    "title": metadata.get("title") or "",
+                    "author_name": metadata.get("author_name") or metadata.get("author"),
+                    "average_rating": float(metadata.get("average_rating") or 0),
+                    "rating_number": int(
+                        metadata.get("rating_number")
+                        or metadata.get("rating_count")
+                        or 0
+                    ),
+                    "images": metadata.get("images"),
+                    "categories": metadata.get("categories"),
+                    "categories_list": [str(x) for x in categories],
+                }
+            )
+        return out
+
+    def _build_genres_vector(
+        self,
+        user_id: str,
+        user_genres_df: Optional[pd.DataFrame],
+    ) -> tuple[np.ndarray, bool]:
+        """Build weighted genre preference vector from user preference rows."""
+        genres_vec = np.zeros(len(GENRE_VOCAB), dtype=float)
+        if user_genres_df is None or user_genres_df.empty:
+            return genres_vec, False
+        genres_df = user_genres_df
+        uid_col = _infer_column(genres_df, ["user_id", "user", "uid"])
+        if uid_col is not None:
+            genres_df = genres_df[genres_df[uid_col].astype(str) == str(user_id)]
+        genre_col = _infer_column(
+            genres_df, ["genre", "category", "categories", "preference", "name"]
+        )
+        rank_col = _infer_column(
+            genres_df, ["rank", "preference_rank", "order", "priority"]
+        )
+        if genre_col is None or genres_df.empty:
+            return genres_vec, False
+        has_genres = False
+        for _, row in genres_df.iterrows():
+            raw_genre = row.get(genre_col)
+            if raw_genre is None:
+                continue
+            genre_name = str(raw_genre).strip()
+            if not genre_name:
+                continue
+            genre_name = _map_genre_name(genre_name)
+            if not genre_name:
+                continue
+            rank_val = row.get(rank_col) if rank_col is not None else None
+            weight = 1.0
+            try:
+                rank = int(rank_val)
+                if rank == 1:
+                    weight = 3.0
+                elif rank == 2:
+                    weight = 2.0
+            except (TypeError, ValueError):
+                weight = 1.0
+            genres_vec[GENRE_VOCAB.index(genre_name)] += weight
+            has_genres = True
+        return genres_vec, has_genres
+
     def _fit_from_json(self) -> None:
         """Load book catalog from existing JSON files and build TF-IDF + scalers."""
         reviews_path = self.data_dir / "reviews_top25_books.json"
         spl_path = self.data_dir / "spl_top50_checkouts_in_books.json"
-        self._rating_norm = None
-        self._rating_number_norm = None
+        self._rating_norms["average_rating"] = None
+        self._rating_norms["rating_number"] = None
 
         def _load_json(path: Path) -> list:
             """Load a JSON list file; return empty list when missing/unusable."""
@@ -369,10 +431,7 @@ class ContentBasedBookRecommender:
         books_df["rating_number_norm"] = rating_num_scaler.fit_transform(
             rating_num_vals
         ).reshape(-1)
-        self.scalers = {
-            "average_rating": rating_scaler,
-            "rating_number": rating_num_scaler,
-        }
+        _ = rating_scaler, rating_num_scaler
 
         self.books_df = books_df
 
@@ -486,59 +545,7 @@ class ContentBasedBookRecommender:
         if self.tfidf_vectorizer is None or self.book_tfidf is None:
             raise RuntimeError("Call fit() before building user profiles.")
 
-        genres_vec = np.zeros(len(GENRE_VOCAB), dtype=float)
-        has_genres = False
-
-        if user_genres_df is not None and not user_genres_df.empty:
-            genres_df = user_genres_df
-            uid_col = _infer_column(genres_df, ["user_id", "user", "uid"])
-            if uid_col is not None:
-                genres_df = genres_df[genres_df[uid_col].astype(str) == str(user_id)]
-
-            genre_col = _infer_column(
-                genres_df,
-                ["genre", "category", "categories", "preference", "name"],
-            )
-            rank_col = _infer_column(
-                genres_df,
-                ["rank", "preference_rank", "order", "priority"],
-            )
-            if genre_col is not None and not genres_df.empty:
-                for _, row in genres_df.iterrows():
-                    raw_genre = row.get(genre_col)
-                    if raw_genre is None:
-                        continue
-                    genre_name = str(raw_genre).strip()
-                    if not genre_name:
-                        continue
-                    if genre_name not in GENRE_VOCAB:
-                        genre_lower = genre_name.lower()
-                        mapped = None
-                        for official, keywords in GENRE_KEYWORDS.items():
-                            if official in GENRE_VOCAB and any(
-                                keyword in genre_lower for keyword in keywords
-                            ):
-                                mapped = official
-                                break
-                        if mapped is None:
-                            continue
-                        genre_name = mapped
-
-                    rank_val = row.get(rank_col) if rank_col is not None else None
-                    weight = 1.0
-                    try:
-                        r = int(rank_val)
-                        if r == 1:
-                            weight = 3.0
-                        elif r == 2:
-                            weight = 2.0
-                        else:
-                            weight = 1.0
-                    except Exception:
-                        weight = 1.0
-
-                    genres_vec[GENRE_VOCAB.index(genre_name)] += weight
-                    has_genres = True
+        genres_vec, has_genres = self._build_genres_vector(user_id, user_genres_df)
 
         if has_genres and np.linalg.norm(genres_vec) > 0:
             genres_vec = genres_vec / (np.linalg.norm(genres_vec) + 1e-12)
@@ -600,8 +607,8 @@ class ContentBasedBookRecommender:
                 idx = self.book_id_to_idx.get(str(asin))
                 if idx is not None:
                     exclude_mask[idx] = True
-            rating_norm = self._rating_norm
-            rating_number_norm = self._rating_number_norm
+            rating_norm = self._rating_norms["average_rating"]
+            rating_number_norm = self._rating_norms["rating_number"]
         if rating_norm is None or rating_number_norm is None:
             raise RuntimeError("Rating norms not loaded.")
 
@@ -769,8 +776,6 @@ class _FallbackBookRecommender:
         Exceptions:
             None. Storage errors are handled by fallback list retrieval.
         """
-        from backend.storage import get_storage
-
         store = get_storage()
         books = store.get_top50_review_books() or []
         owned = {str(b) for b in (user_book_ids or [])}
@@ -801,6 +806,7 @@ class _FallbackBookRecommender:
         Exceptions:
             None.
         """
+        _ = user_email, user_genres
         library = user_account.get("library") or {}
         finished = library.get("finished") or []
         saved = library.get("saved") or []
@@ -809,22 +815,20 @@ class _FallbackBookRecommender:
         return self.recommend(user_book_ids, top_k=top_k)
 
 
-_cached_recommender: Optional[ContentBasedBookRecommender] = None
-_using_fallback = True
+_RECOMMENDER_CACHE: dict[str, Any] = {"instance": None, "using_fallback": True}
 
 
 def _get_recommender() -> tuple[Any, bool]:
     """Return (recommender instance, is_fallback)."""
-    global _cached_recommender, _using_fallback
-    if _cached_recommender is not None:
-        return _cached_recommender, False
+    if _RECOMMENDER_CACHE["instance"] is not None:
+        return _RECOMMENDER_CACHE["instance"], False
     try:
         rec = ContentBasedBookRecommender()
         rec.fit()
-        _cached_recommender = rec
-        _using_fallback = False
+        _RECOMMENDER_CACHE["instance"] = rec
+        _RECOMMENDER_CACHE["using_fallback"] = False
         return rec, False
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
         logging.warning(
             "Content-based recommender failed to load (missing books.db?); using fallback. %s",
             e,
@@ -832,7 +836,37 @@ def _get_recommender() -> tuple[Any, bool]:
         return _FallbackBookRecommender(), True
 
 
-def BookRecommender() -> Any:
-    """Return recommender instance (content-based if books.db exists, else fallback)."""
-    rec, _ = _get_recommender()
-    return rec
+class BookRecommender:
+    """Compatibility proxy around the active recommender implementation."""
+
+    def __init__(self) -> None:
+        """Create a proxy that delegates to content-based or fallback recommender."""
+        self._delegate, _ = _get_recommender()
+
+    def recommend(
+        self,
+        user_book_ids: List[str],
+        top_k: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Delegate simple recommend calls to the active recommender."""
+        return self._delegate.recommend(user_book_ids, top_k=top_k)
+
+    def recommend_for_user(
+        self,
+        user_email: str,
+        user_account: Dict[str, Any],
+        user_genres: Optional[List[Dict[str, Any]]],
+        top_k: int = 40,
+    ) -> List[Dict[str, Any]]:
+        """Delegate account-based recommendations to the active recommender."""
+        return self._delegate.recommend_for_user(
+            user_email=user_email,
+            user_account=user_account,
+            user_genres=user_genres,
+            top_k=top_k,
+        )
+
+    @classmethod
+    def using_fallback(cls) -> bool:
+        """Return whether the cached recommender currently uses fallback mode."""
+        return bool(_RECOMMENDER_CACHE.get("using_fallback"))
