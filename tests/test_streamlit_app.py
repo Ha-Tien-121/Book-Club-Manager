@@ -11,6 +11,7 @@ See: https://docs.streamlit.io/library/advanced-features/app-testing
 from pathlib import Path
 import unittest
 from uuid import uuid4
+from typing import Optional, Dict, Any
 
 from streamlit.testing.v1 import AppTest
 from backend.services.auth_service import create_user
@@ -30,7 +31,7 @@ class StreamlitAppTest(unittest.TestCase):
     def setUp(self) -> None:
         self.at = self._run_app()
 
-    def _run_app(self, *, session_state: dict | None = None):
+    def _run_app(self, *, session_state: Optional[Dict[str, Any]] = None):
         """Run app with optional seed session state."""
         at = AppTest.from_file(_app_path())
         for key, value in (session_state or {}).items():
@@ -156,7 +157,24 @@ class StreamlitAppTest(unittest.TestCase):
 
     def test_forum_detail_page_renders_for_selected_post(self) -> None:
         """Selected forum post id routes into discussion detail UI."""
-        forum_posts = get_storage().load_forum_db().get("posts", [])
+        store = get_storage()
+        forum_posts = (store.load_forum_db() or {}).get("posts", [])
+        if not forum_posts:
+            # Seed a minimal forum DB so the UI can render a detail page deterministically.
+            store.save_forum_db(
+                {
+                    "posts": [
+                        {
+                            "id": 1,
+                            "parent_asin": "P1",
+                            "title": "Test post",
+                            "content": "Hello",
+                        }
+                    ],
+                    "next_post_id": 2,
+                }
+            )
+            forum_posts = (store.load_forum_db() or {}).get("posts", [])
         self.assertGreater(len(forum_posts), 0, "Expected at least one forum post fixture")
         post_id = int(forum_posts[0]["id"])
 

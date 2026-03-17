@@ -1,129 +1,192 @@
 # Component Specifications
+
 ## Software Components
 
-**Component 1:** Book Recommender
+### Component 1: Book Recommender
 
-What it does: Helps users find new books they might be interested in reading based on personal preferences and public sentiment.
- 
-Input: User preferred genres (optional), user reading history (optional), book rating, book number of reviews, number of checkouts at SPL, number of bookclubs reading book
+**Description:**  
+Generates personalized book recommendations based on user preferences and popularity signals.
 
-Outputs: Ranking of what books most likely will appeal to the user.
+**Inputs:**
 
-**Component 2:** Bookclub Recommender
+- User preferred genres (optional)
+- User reading history (optional)
+- Book ratings and number of reviews
+- SPL checkout data (when available)
+- Book club/event associations (when available)
 
-What it does: Helps users find new bookclubs they might be interested in joining based on personal preferences.
- 
-Input: User preferred genres (optional), location, availability
+**Outputs:**
 
-Outputs: Ranking of what bookclubs most likely will appeal to the user.
+- Ranked list of recommended books
 
-**Component 3:** My Clubs / Individual bookclub pages
+**Implementation:**
 
-What it does: Organizes bookclubs user is in, placing them all in one centralized location to access.
+- `backend/recommender/book_recommender.py`
+- `backend/services/recommender_service.py`
 
-Input: The bookclubs the user is part of as well as information specific to the books clubs such as schedule, location, and book being read.
+---
 
-Output: Page displaying bookclubs user is part of where they can see current book they are reading, schedule, location and click on specific bookclubs to access private bookclub forum discussion.
+### Component 2: Book Club / Event Recommender
 
-**Component 4:** Library
+**Description:**  
+Recommends book clubs and events based on user preferences and context.
 
-What it does: Tracks user reading history and bookmarked books. 
+**Inputs:**
 
-Input: What books the user has read, is currently reading, and is interested in reading in the future.
+- User preferred genres (optional)
+- Location / neighborhood
+- Event metadata (tags, genres, date/time, TTL)
 
-Output: Centralized area where user can reference and edit their reading history. Information used by book recommender to give personalized book recommendations. 
+**Outputs:**
 
-**Component 5:** Forum
+- Ranked list of recommended book clubs/events
 
-What it does: Provides space for users to discuss books and coordinate bookclub logistics. 
+**Implementation:**
 
-Input: 
-- Public -  title, genre (optional), book (optional), bookclub (optional) 
-- Private - bookclub + members, title genre (optional), book (optional)  
+- `backend/recommender/event_recommender.py`
+- `backend/services/recommender_service.py`
 
-Output: Tool for people on Bookish to connect and coordinate. 
+---
 
-**Component 7:** Individual Book Page
+### Component 3: My Events / Book Club Pages
 
-What it does: Provides more detailed  information about specific book including: description, SPL branches available at, bookclubs reading book if any. Note this is in addition to preview information showing title, cover image, rating, and genre. 
+**Description:**  
+Displays and manages book clubs and events a user has joined.
 
-Input: Book meta data information, book SPL catalog data, and events data.
+**Inputs:**
 
-Output: Comprehensive overview of book so that users can quickly assess whether they are interested in the book. 
+- User event memberships
+- Event metadata (schedule, location, book)
 
+**Outputs:**
 
-## Interactions
+- Centralized dashboard of joined events
+- Access to individual book club pages and discussions
 
-### Use Case 1: Find and join an active book club/event
+**Implementation:**
 
-1. User opens Bookish and optionally signs in.  
-2. User enters preferences: genres/topics, neighborhood/location, and availability.  
-3. System fetches clubs/events from the Bookclubs Recommender, which queries the Data Manager:
-   - SerpAPI event listings (what, when, where, links, thumbnails)
-   - Club metadata stored in Bookish (if available)  
-4. System ranks results and displays descriptions.  
-5. User clicks a club/event to view details.  
-6. User taps Join (for Bookish-hosted clubs) or opens an external link for non-hosted clubs.  
-7. System updates My Clubs and optionally prompts for notification/calendar preferences.  
+- `backend/services/user_events_service.py`
+- `backend/storage.py`
 
-```mermaid
+---
+
+### Component 4: Library
+
+**Description:**  
+Tracks user reading activity and preferences.
+
+**Inputs:**
+
+- Saved books
+- Reading status (Saved / In Progress / Finished)
+- User genre preferences
+
+**Outputs:**
+
+- Personal reading dashboard
+- Input signals for recommendation engine
+
+**Implementation:**
+
+- `backend/services/library_service.py`
+- `backend/local_storage.py`
+- `backend/storage.py`
+
+---
+
+### Component 5: Forum
+
+**Description:**  
+Supports discussions for both public and private book communities.
+
+**Inputs:**
+
+- Public: title, genre (optional), book (optional)
+- Private: book club, members, title, genre
+
+**Outputs:**
+
+- Discussion threads (global and book club-specific)
+
+**Implementation:**
+
+- `backend/forum_store.py`
+- `backend/services/forum_service.py`
+- `backend/storage.py` (DynamoDB / local)
+
+---
+
+### Component 6: Individual Book Page
+
+**Description:**  
+Displays detailed information about a specific book.
+
+**Inputs:**
+
+- Book metadata (Amazon dataset)
+- SPL availability (when available)
+- Related events/book clubs
+
+**Outputs:**
+
+- Book details view (description, ratings, availability)
+- Option to save to Library
+
+**Implementation:**
+
+- `backend/data_loader.py`
+- `backend/local_storage.py`
+- `backend/storage.py`
+
+---
+
+## Component Interactions
+
+### Use Case 1: Find and Join a Book Club/Event
+
+1. User opens Bookish (optional login)
+2. User enters preferences (genre, location, availability)
+3. System retrieves events from:
+   - Local processed data OR
+   - Cloud storage (DynamoDB)
+4. Event Recommender ranks results
+5. User views event details
+6. User joins event or follows external link
+7. System updates “My Events”
+
+````mermaid
 flowchart LR
-    A[User] --> B[Web UI]
-    B --> C[Bookclubs Recommender]
-    C --> D[Data Manager]
-    D --> E[SerpAPI Data]
+    A[User] --> B[Frontend UI]
+    B --> C[Event Recommender Service]
+    C --> D[Storage Layer]
+    D --> E[Event Data]
     C --> B
-    B --> F[Club Page]
-    F --> G[Group Manager]
-    G --> H[My Clubs]
-```
+    B --> F[Event Page]
+    F --> G[User Events Service]
+    G --> H[My Events]```
 
+### Use Case 2: Book Recommendations and Library
 
-
-### Use Case 2: Get personalized book recommendations and save to Library
-
-1. User visits the Feed tab.  
-2. User optionally selects genres/topics and/or imports reading history (or starts with none).  
-3. System requests recommendations from the Book Recommender, which combines:
-   - Amazon metadata (title, average_rating, rating_number, categories, images)
-   - SPL checkout trends (Title, Subjects, Checkouts, PublicationYear)
-   - Optional: books currently read by clubs the user follows  
-4. Recommender suggests ranked books.  
-5. User opens an Individual Book Page and clicks Save, choosing a status: Saved / In Progress / Finished.  
-6. System updates the Library, which feeds back into future recommendations.  
+1. User visits Feed
+2. User provides preferences (optional)
+3. System generates recommendations using:
+   - Amazon metadata
+   - SPL data (optional)
+   - User activity
+4. Recommendations are displayed as UI cards
+5. User views book details
+6. User saves book with a status (Saved / In Progress / Finished)
+7. Library updates and improves future recommendations
 
 ```mermaid
 flowchart LR
-    A[User] --> B[Web UI]
-    B --> C[Book Recommender]
-    C --> D[Data Manager]
-    D --> E[Amazon Data]
-    D --> F[SPL Data]
+    A[User] --> B[Feed Page]
+    B --> C[Recommender Service]
+    C --> D[Book Recommender]
+    D --> E[Data Sources]
+    E --> F[Amazon + SPL Data]
     C --> B
     B --> G[Book Page]
-    G --> H[Library]
-```
-
-
-
-### (Extra Implementation) Use Case 3: Coordinate a club reading plan (vote, schedule, and track progress)
-
-1. User opens My Clubs and selects a club.  
-2. On the club page, user navigates to Book Vote and proposes a book (search/select from Bookish catalog).  
-3. System records votes, shows the current tally, and optionally sets a voting deadline.  
-4. After voting ends, an admin confirms the selected book.  
-5. User sets or edits the reading schedule (chapters per week and meeting dates).  
-6. System writes events to the Calendar component and posts the plan to the club Forum.  
-7. Members update reading progress; the club page surfaces aggregate progress to reduce confusion.  
-
-```mermaid
-flowchart LR
-    A[User] --> B[Web UI]
-    B --> C[My Clubs]
-    C --> D[Club Page]
-    D --> E[Group Manager]
-    E --> F[Data Manager]
-    D --> G[Calendar]
-    D --> H[Forum]
-    E --> D
-```
+    G --> H[Library Service]
+    H --> I[User Library]```
+````
