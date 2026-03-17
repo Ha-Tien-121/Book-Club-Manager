@@ -32,6 +32,7 @@ used by the app and recommendation workflows.
 
 - Live app: [Bookish Web App](http://100.23.182.233/)
 - Demo walkthrough video: [Bookish Demo Video](https://drive.google.com/file/d/1UA0MJa7v9j6DMzDtYYou7BqiT5ZeTbzF/view?usp=sharing)
+- For best UI rendering, use Streamlit **Light** theme mode when viewing the app/demo.
 
 ---
 
