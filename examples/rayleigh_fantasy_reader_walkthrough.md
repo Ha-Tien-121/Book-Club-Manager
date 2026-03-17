@@ -33,19 +33,20 @@ location and in the "Fantasy" genre.
 - Her library and reading status are updated.
 - She can participate in discussion and track upcoming meetings in one app.
 
-## Package/Service calls that support this flow
+## Functional touchpoints and UI design rationale
 
-- Event discovery and detail:
-  - `backend.services.events_service.search_events()`
-  - `backend.services.events_service.get_event_detail()`
-  - `backend.services.events_service.get_upcoming_events()`
+- Event discovery and filtering:
+  - `search_events()`, `get_event_detail()`, `get_upcoming_events()`
+  - UI rationale: the Explore Events view combines location and genre filters so users can narrow results in-place instead of jumping across pages.
+
 - Personalized recommendations:
-  - `backend.services.recommender_service.recommend_all_for_user()`
-  - `backend.services.recommender_service.recommend_books_for_user()`
-- Book pages and library updates:
-  - `backend.services.books_service.get_book_with_description()`
-  - `backend.services.library_service.save_book_to_library()`
-  - `backend.services.library_service.set_book_status()`
-- Discussion/forum:
-  - `backend.services.forum_service.get_thread_for_book()`
-  - `backend.services.forum_service.add_post_to_thread()`
+  - `recommend_all_for_user()`, `recommend_books_for_user()`
+  - UI rationale: recommendations are in feed to keep discovery in the first page.
+
+- Library as progress state:
+  - `save_book_to_library()`, `set_book_status()`
+  - UI rationale: a single status control (Saved -> In Progress -> Finished) makes tracking easy and makes progress explicit at a glance.
+
+- Discussion attached to reading context:
+  - `get_thread_for_book()`, `add_post_to_thread()`
+  - UI rationale: placing discussion entry points on the book detail page reduces page switching and keeps conversation tied to the current title.

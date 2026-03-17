@@ -17,4 +17,4 @@ Each walkthrough is based on user personas from `docs/Functional_spec.md`.
 
 1. Pick the persona closest to your intended user.
 2. Follow each step in order to simulate realistic usage.
-3. Use the "Package/Service calls" sections to trace implementation touchpoints in the codebase.
+3. Use the "Functional touchpoints and UI design rationale" sections to understand the packages associated to each action and why the interface is structured that way.

@@ -28,20 +28,20 @@
 - He receives useful recommendations tied to his interests.
 - His activity (save/status updates/discussion) feeds a stronger personalized experience over time.
 
-## Package/Service calls that support this flow
+## Functional touchpoints and UI design rationale
 
 - Club/event search and filtering:
-  - `backend.services.events_service.search_events()`
-  - `backend.services.events_service.get_events_by_tag()`
-  - `backend.services.events_service.get_event_detail()`
+  - `search_events()`, `get_events_by_tag()`, `get_event_detail()`
+  - UI rationale: combining search + tag filters supports both "I know what I want" and "let me browse quickly" behaviors for busy users.
+
 - Recommendations:
-  - `backend.services.recommender_service.recommend_books_for_user()`
-  - `backend.services.recommender_service.recommend_all_for_user()`
-- Book detail and user library:
-  - `backend.services.books_service.get_book_with_description()`
-  - `backend.services.library_service.save_book_to_library()`
-  - `backend.services.library_service.set_book_status()`
-  - `backend.services.library_service.acknowledge_recommendations_ran()`
+  - `recommend_books_for_user()`, `recommend_all_for_user()`
+  - UI rationale: a dedicated "Recommended for you" section in Feed gives a place to check tailored picks each session.
+
+- Book detail and library state updates:
+  - `get_book_with_description()`, `save_book_to_library()`, `set_book_status()`, `acknowledge_recommendations_ran()`
+  - UI rationale: placing the library status selector on the book detail page lets users act immediately after evaluating a book, reducing extra clicks.
+
 - Forum participation:
-  - `backend.services.forum_service.get_thread_for_book()`
-  - `backend.services.forum_service.add_post_to_thread()`
+  - `get_thread_for_book()`, `add_post_to_thread()`
+  - UI rationale: forum access from book details page keeps peer discussion integrated with discovery and progress tracking, rather than separate.
