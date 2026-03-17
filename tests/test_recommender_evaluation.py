@@ -65,8 +65,10 @@ def _run(n_users, n_books, ground_truth, library_pairs=None,
     scaler = _make_scaler()
     lib = _sparse_library(n_users, n_books, library_pairs or [])
     sim = _identity_sim(n_books)
-    avg_ratings = np.ones(n_books, dtype=np.float32)
-    num_ratings = np.ones(n_books, dtype=np.float32)
+    # Use non-uniform popularity signals so top-K selection is deterministic.
+    # Make book 0 the most "popular" and ensure it ranks in top-K when unmasked.
+    avg_ratings = np.linspace(5.0, 1.0, n_books, dtype=np.float32)
+    num_ratings = np.linspace(1000.0, 1.0, n_books, dtype=np.float32)
     
     kwargs = dict(
         clf=clf,
